@@ -29,6 +29,7 @@ subdirectories =
  MSP430
  Mips
  NVPTX
+ Patmos
  PowerPC
  RISCV
  Sparc
