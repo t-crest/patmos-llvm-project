@@ -301,12 +301,6 @@ def PSEUDO_PREG_RELOAD : PseudoInst<(outs PRegs:$pd),
                                     (ins RRegs:$ra, i32imm:$imm),
                                     "#PSEUDO_PREG_RELOAD", "", []>;
 
-def PSEUDO_LOOPBOUND : PseudoInst<(outs), (ins i32imm:$minv, i32imm:$maxv),
-                          "#PSEUDO_LOOPBOUND", "[$minv,$maxv]",
-                          [(loopbound (i32 imm:$minv), (i32 imm:$maxv))]>;
-
-
-
 //===----------------------------------------------------------------------===//
 //  Control Flow Instructions...
 //===----------------------------------------------------------------------===//
