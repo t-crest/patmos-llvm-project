@@ -26,7 +26,7 @@ class SDTCisI32<int OpNum> : SDTCisVT<OpNum, i32>;
 //===----------------------------------------------------------------------===//
 
 def SDT_PatmosCall         : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
-def SDT_PatmosCallSeqStart : SDCallSeqStart<[SDTCisI32<0>]>;
+def SDT_PatmosCallSeqStart : SDCallSeqStart<[SDTCisI32<0>, SDTCisI32<1>]>;
 def SDT_PatmosCallSeqEnd   : SDCallSeqEnd<[SDTCisI32<0>, SDTCisI32<1>]>;
 
 def SDT_PatmosMul          : SDTypeProfile<0, 2, [SDTCisInt<0>,
@@ -282,9 +282,9 @@ def nor    : PatFrag<(ops node:$lhs, node:$rhs),
 // Pessimistically assume ADJCALLSTACKDOWN / ADJCALLSTACKUP will become
 // sub / add which can clobber SP.
 let Defs = [RFP, RSP], Uses = [RFP, RSP] in {
-def ADJCALLSTACKDOWN : PseudoInst<(outs), (ins i32imm:$amt),
+def ADJCALLSTACKDOWN : PseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                     "#ADJCALLSTACKDOWN", "",
-                                    [(PatmosCallseqStart timm:$amt)]>;
+                                    [(PatmosCallseqStart timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKUP   : PseudoInst<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                     "#ADJCALLSTACKUP", "",
                                     [(PatmosCallseqEnd timm:$amt1, timm:$amt2)]>;

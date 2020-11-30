@@ -546,7 +546,7 @@ PatmosTargetLowering::LowerCCCCallTo(CallLoweringInfo &CLI,
   unsigned NumBytes = CCInfo.getNextStackOffset();
 
   Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes,
-                                                      getPointerTy(), true), dl);
+                                                      getPointerTy(), true), 0, dl);
 
   SmallVector<std::pair<unsigned, SDValue>, 4> RegsToPass;
   SmallVector<SDValue, 12> MemOpChains;
