@@ -184,5 +184,9 @@ def PatmosGenericModel : SchedMachineModel {
     let IssueWidth = 2;
     let Itineraries = PatmosGenericItineraries;
     let LoadLatency = 1;
+	
+    // This flag is set to allow the scheduler to assign a default model to
+    // unrecognized opcodes.
+    let CompleteModel = 0;
 }
 
