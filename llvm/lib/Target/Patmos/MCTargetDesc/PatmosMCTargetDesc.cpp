@@ -15,7 +15,6 @@
 #include "PatmosMCAsmInfo.h"
 #include "PatmosTargetStreamer.h"
 #include "InstPrinter/PatmosInstPrinter.h"
-#include "llvm/MC/MCCodeGenInfo.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -60,16 +59,6 @@ static MCSubtargetInfo *createPatmosMCSubtargetInfo(StringRef TT, StringRef CPU,
     CPU = "generic";
   }
   InitPatmosMCSubtargetInfo(X, TT, CPU, FS);
-  return X;
-}
-
-static MCCodeGenInfo *createPatmosMCCodeGenInfo(StringRef TT, Reloc::Model RM,
-                                                CodeModel::Model CM,
-                                                CodeGenOpt::Level L) {
-  MCCodeGenInfo *X = new MCCodeGenInfo();
-  if (CM == CodeModel::Default)
-    CM = CodeModel::Small;
-  X->InitMCCodeGenInfo(RM, CM, L);
   return X;
 }
 
@@ -118,10 +107,6 @@ static MCInstPrinter *createPatmosMCInstPrinter(const Target &T,
 extern "C" void LLVMInitializePatmosTargetMC() {
   // Register the MC asm info.
   TargetRegistry::RegisterMCAsmInfo(ThePatmosTarget, createPatmosMCAsmInfo);
-
-  // Register the MC codegen info.
-  TargetRegistry::RegisterMCCodeGenInfo(ThePatmosTarget,
-                                        createPatmosMCCodeGenInfo);
 
   // Register the MC instruction info.
   TargetRegistry::RegisterMCInstrInfo(ThePatmosTarget, createPatmosMCInstrInfo);
