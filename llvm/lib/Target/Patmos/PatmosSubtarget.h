@@ -15,8 +15,8 @@
 #define _LLVM_TARGET_PATMOS_SUBTARGET_H_
 
 #include "PatmosInstrInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 
 #define GET_SUBTARGETINFO_HEADER
 #include "PatmosGenSubtargetInfo.inc"

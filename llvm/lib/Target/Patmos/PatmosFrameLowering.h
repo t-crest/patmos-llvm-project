@@ -15,7 +15,7 @@
 #define _PATMOS_FRAMEINFO_H_
 
 #include "Patmos.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
   class BitVector;

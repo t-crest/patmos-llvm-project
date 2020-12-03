@@ -10,7 +10,7 @@
 #include "PatmosInstrInfo.h"
 #include "InstPrinter/PatmosInstPrinter.h"
 #include "MCTargetDesc/PatmosTargetStreamer.h"
-#include "llvm/MC/MCTargetAsmParser.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/ADT/StringSwitch.h"

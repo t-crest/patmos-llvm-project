@@ -15,7 +15,7 @@
 #define _LLVM_TARGET_PATMOS_INSTRINFO_H_
 
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"

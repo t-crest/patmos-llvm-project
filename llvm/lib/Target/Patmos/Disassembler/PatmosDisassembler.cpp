@@ -14,7 +14,7 @@
 #include "Patmos.h"
 #include "PatmosSubtarget.h"
 #include "MCTargetDesc/PatmosBaseInfo.h"
-#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/MC/MCFixedLenDisassembler.h"
 #include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/TargetRegistry.h"
