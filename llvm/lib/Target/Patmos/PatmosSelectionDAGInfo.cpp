@@ -16,7 +16,7 @@
 using namespace llvm;
 
 PatmosSelectionDAGInfo::PatmosSelectionDAGInfo(const PatmosTargetMachine &TM)
-  : TargetSelectionDAGInfo(TM) {
+  : SelectionDAGTargetInfo(TM) {
 }
 
 PatmosSelectionDAGInfo::~PatmosSelectionDAGInfo() {

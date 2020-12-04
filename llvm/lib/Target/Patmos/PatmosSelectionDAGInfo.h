@@ -7,20 +7,20 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the Patmos subclass for TargetSelectionDAGInfo.
+// This file defines the Patmos subclass for SelectionDAGTargetInfo.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef _PATMOS_SELECTIONDAGINFO_H_
 #define _PATMOS_SELECTIONDAGINFO_H_
 
-#include "llvm/Target/TargetSelectionDAGInfo.h"
+#include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 
 namespace llvm {
 
 class PatmosTargetMachine;
 
-class PatmosSelectionDAGInfo : public TargetSelectionDAGInfo {
+class PatmosSelectionDAGInfo : public SelectionDAGTargetInfo {
 public:
   explicit PatmosSelectionDAGInfo(const PatmosTargetMachine &TM);
   ~PatmosSelectionDAGInfo();
