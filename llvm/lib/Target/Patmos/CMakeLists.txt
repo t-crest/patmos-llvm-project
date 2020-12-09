@@ -37,6 +37,7 @@ add_llvm_target(PatmosCodeGen
   PatmosPMLProfileImport.cpp
   PatmosEnsureAlignment.cpp
   PatmosUtil.cpp
+  MachineModulePass.cpp
   )
 
 add_dependencies(LLVMPatmosCodeGen intrinsics_gen)
