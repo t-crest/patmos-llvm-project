@@ -33,8 +33,8 @@ bool PatmosInstPrinter::isBundled(const MCInst *MI) const {
   return MI->getOperand(MI->getNumOperands()-1).getImm() > 0;
 }
 
-void PatmosInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
-                                  StringRef Annot)
+void PatmosInstPrinter::printInst(const MCInst *MI, uint64_t Address,
+                                  raw_ostream &O, StringRef Annot)
 {
   // Prints bundle marker '{' and/or guard predicate.
   // This is a workaround. They cannot be printed before the mnemonic by
@@ -43,7 +43,7 @@ void PatmosInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
   // the rest of the instruction.
   printInstPrefix(MI, O);
 
-  printInstruction(MI, O);
+  printInstruction(MI, Address, O);
 
   // Last instruction in bundle must not have the bundle bit set.
   if (!isBundled(MI) && InBundle) {
