@@ -12,8 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "PatmosTargetStreamer.h"
-#include "llvm/MC/MCELF.h"
-#include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCSymbolELF.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 
