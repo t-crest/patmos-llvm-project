@@ -16,7 +16,6 @@
 #include "MCTargetDesc/PatmosBaseInfo.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/MC/MCFixedLenDisassembler.h"
-#include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCInst.h"
@@ -48,7 +47,7 @@ public:
   /// getInstruction - See MCDisassembler.
   DecodeStatus getInstruction(MCInst &instr,
                               uint64_t &size,
-                              const MemoryObject &region,
+                              ArrayRef<uint8_t> Bytes,
                               uint64_t address,
                               raw_ostream &vStream,
                               raw_ostream &cStream) const;
@@ -98,14 +97,12 @@ static DecodeStatus DecodePredRegisterClass(MCInst &Inst, unsigned RegNo, uint64
 #include "PatmosGenDisassemblerTables.inc"
 
 /// readInstruction - read four bytes from the MemoryObject
-static DecodeStatus readInstruction32(const MemoryObject &region,
+static DecodeStatus readInstruction32(ArrayRef<uint8_t> Bytes,
                                       uint64_t address,
                                       uint64_t &size,
                                       uint32_t &insn) {
-  uint8_t Bytes[4];
-
   // We want to read exactly 4 Bytes of data.
-  if (region.readBytes(address, 4, (uint8_t*)Bytes) == -1) {
+  if (Bytes.size() < 4) {
     return MCDisassembler::Fail;
   }
 
@@ -123,7 +120,7 @@ static DecodeStatus readInstruction32(const MemoryObject &region,
 DecodeStatus
 PatmosDisassembler::getInstruction(MCInst &instr,
                                  uint64_t &Size,
-                                 const MemoryObject &Region,
+                                 ArrayRef<uint8_t> Bytes,
                                  uint64_t Address,
                                  raw_ostream &vStream,
                                  raw_ostream &cStream) const {
@@ -131,7 +128,7 @@ PatmosDisassembler::getInstruction(MCInst &instr,
 
   Size = 0;
 
-  DecodeStatus Result = readInstruction32(Region, Address, Size, Insn);
+  DecodeStatus Result = readInstruction32(Bytes, Address, Size, Insn);
   if (Result == MCDisassembler::Fail)
     return MCDisassembler::Fail;
 
@@ -149,7 +146,7 @@ PatmosDisassembler::getInstruction(MCInst &instr,
 
     uint32_t InsnL;
 
-    Result = readInstruction32(Region, Address + 4, Size, InsnL);
+    Result = readInstruction32(Bytes, Address + 4, Size, InsnL);
     if (Result == MCDisassembler::Fail) {
       return MCDisassembler::Fail;
     }
