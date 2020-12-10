@@ -91,8 +91,8 @@ static cl::opt<PatmosSubtarget::CFLType> PatmosCFLType("mpatmos-cfl",
                                            "Emit both delayed and non-delayed branches and calls"),
                                 clEnumValN(PatmosSubtarget::CFL_NON_DELAYED,
                                            "non-delayed",
-                                           "Emit only non-delayed branches and calls"),
-                                clEnumValEnd));
+                                           "Emit only non-delayed branches and calls")
+                                ));
 
 PatmosSubtarget::PatmosSubtarget(const std::string &TT,
                                  const std::string &CPU,

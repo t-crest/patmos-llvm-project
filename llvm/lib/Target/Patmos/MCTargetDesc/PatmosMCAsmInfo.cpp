@@ -21,8 +21,7 @@ static cl::opt<PrintBytesLevel> PrintBytes("fpatmos-print-bytes",
     cl::values(
       clEnumValN(PrintAsEncoded,   "none",  "Print immediates as stored"),
       clEnumValN(PrintCallAsBytes, "call",  "Print call immediates in bytes"),
-      clEnumValN(PrintAllAsBytes,  "all",   "Print all immediates in bytes"),
-      clEnumValEnd
+      clEnumValN(PrintAllAsBytes,  "all",   "Print all immediates in bytes")
     ));
 
 
