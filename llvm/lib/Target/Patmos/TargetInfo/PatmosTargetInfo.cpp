@@ -7,14 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Patmos.h"
-#include "llvm/IR/Module.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/Support/TargetRegistry.h"
 using namespace llvm;
 
-Target llvm::ThePatmosTarget;
+Target &llvm::getThePatmosTarget() {
+  static Target ThePatmosTarget;
+  return ThePatmosTarget;
+}
 
-extern "C" void LLVMInitializePatmosTargetInfo() { 
-  RegisterTarget<Triple::patmos> 
-    X(ThePatmosTarget, "patmos", "Patmos [experimental]");
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetInfo() {
+  RegisterTarget<Triple::patmos> X(getThePatmosTarget(), "patmos",
+                                   "Patmos [experimental]", "Patmos");
 }

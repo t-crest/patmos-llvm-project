@@ -27,12 +27,11 @@ static cl::opt<PrintBytesLevel> PrintBytes("fpatmos-print-bytes",
 
 PatmosMCAsmInfo::PatmosMCAsmInfo(StringRef TT)
 {
-  PointerSize = 4;
+  CodePointerSize = 4;
   IsLittleEndian = false;
   StackGrowsUp = false;
   SeparatorString = ";";
   CommentString = "#";
-  CommentColumn = 45;
   LabelSuffix = ":";
   PrivateGlobalPrefix = ".L";
   AlignmentIsInBytes = true;

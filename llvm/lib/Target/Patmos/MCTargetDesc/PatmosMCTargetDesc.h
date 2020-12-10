@@ -28,8 +28,6 @@ class Target;
 class StringRef;
 class raw_ostream;
 
-extern Target ThePatmosTarget;
-
 MCCodeEmitter *createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
 					 const MCRegisterInfo &MRI,
                                          const MCSubtargetInfo &STI,

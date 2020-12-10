@@ -16,6 +16,7 @@
 #include "SinglePath/PatmosSinglePathInfo.h"
 #include "PatmosSchedStrategy.h"
 #include "PatmosStackCacheAnalysis.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/PassManager.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
@@ -30,10 +31,9 @@
 
 using namespace llvm;
 
-
-extern "C" void LLVMInitializePatmosTarget() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTarget() {
   // Register the target.
-  RegisterTargetMachine<PatmosTargetMachine> X(ThePatmosTarget);
+  RegisterTargetMachine<PatmosTargetMachine> X(getThePatmosTarget());
 }
 
 static ScheduleDAGInstrs *createPatmosVLIWMachineSched(MachineSchedContext *C) {

@@ -20,6 +20,7 @@
 #include "PatmosUtil.h"
 #include "InstPrinter/PatmosInstPrinter.h"
 #include "MCTargetDesc/PatmosTargetStreamer.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -324,6 +325,6 @@ bool PatmosAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI, unsigned Op
 ////////////////////////////////////////////////////////////////////////////////
 
 // Force static initialization.
-extern "C" void LLVMInitializePatmosAsmPrinter() {
-  RegisterAsmPrinter<PatmosAsmPrinter> X(ThePatmosTarget);
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosAsmPrinter() {
+  RegisterAsmPrinter<PatmosAsmPrinter> X(getThePatmosTarget());
 }

@@ -15,6 +15,7 @@
 #include "PatmosMCAsmInfo.h"
 #include "PatmosTargetStreamer.h"
 #include "InstPrinter/PatmosInstPrinter.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -104,39 +105,41 @@ static MCInstPrinter *createPatmosMCInstPrinter(const Target &T,
   return new PatmosInstPrinter(MAI, MII, MRI);
 }
 
-extern "C" void LLVMInitializePatmosTargetMC() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetMC() {
   // Register the MC asm info.
-  TargetRegistry::RegisterMCAsmInfo(ThePatmosTarget, createPatmosMCAsmInfo);
+  TargetRegistry::RegisterMCAsmInfo(getThePatmosTarget(), 
+                                    createPatmosMCAsmInfo);
 
   // Register the MC instruction info.
-  TargetRegistry::RegisterMCInstrInfo(ThePatmosTarget, createPatmosMCInstrInfo);
+  TargetRegistry::RegisterMCInstrInfo(getThePatmosTarget(), 
+                                      createPatmosMCInstrInfo);
 
   // Register the MC register info.
-  TargetRegistry::RegisterMCRegInfo(ThePatmosTarget,
+  TargetRegistry::RegisterMCRegInfo(getThePatmosTarget(),
                                     createPatmosMCRegisterInfo);
 
   // Register the MC subtarget info.
-  TargetRegistry::RegisterMCSubtargetInfo(ThePatmosTarget,
+  TargetRegistry::RegisterMCSubtargetInfo(getThePatmosTarget(),
                                           createPatmosMCSubtargetInfo);
 
   // Register the MCInstPrinter.
-  TargetRegistry::RegisterMCInstPrinter(ThePatmosTarget,
+  TargetRegistry::RegisterMCInstPrinter(getThePatmosTarget(),
                                         createPatmosMCInstPrinter);
 
   // Register the MC code emitter
-  TargetRegistry::RegisterMCCodeEmitter(ThePatmosTarget,
+  TargetRegistry::RegisterMCCodeEmitter(getThePatmosTarget(),
                                         createPatmosMCCodeEmitter);
 
   // Register the asm backend
-  TargetRegistry::RegisterMCAsmBackend(ThePatmosTarget,
+  TargetRegistry::RegisterMCAsmBackend(getThePatmosTarget(),
                                        createPatmosAsmBackend);
 
   // Register the asm streamer
-  TargetRegistry::RegisterAsmStreamer(ThePatmosTarget,
+  TargetRegistry::RegisterAsmStreamer(getThePatmosTarget(),
                                       createPatmosMCAsmStreamer);
 
   // Register the object streamer
-  TargetRegistry::RegisterMCObjectStreamer(ThePatmosTarget,
+  TargetRegistry::RegisterMCObjectStreamer(getThePatmosTarget(),
                                            createPatmosMCStreamer);
 
 }

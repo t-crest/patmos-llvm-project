@@ -14,6 +14,7 @@
 #include "Patmos.h"
 #include "PatmosSubtarget.h"
 #include "MCTargetDesc/PatmosBaseInfo.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/MC/MCFixedLenDisassembler.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -238,20 +239,15 @@ static DecodeStatus DecodePredRegisterClass(MCInst &Inst, unsigned RegNo, uint64
   return MCDisassembler::Success;
 }
 
-
-namespace llvm {
-extern Target ThePatmosTarget;
-}
-
 static MCDisassembler *createPatmosDisassembler(
                        const Target &T,
                        const MCSubtargetInfo &STI) {
   return new PatmosDisassembler(T, STI);
 }
 
-extern "C" void LLVMInitializePatmosDisassembler() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosDisassembler() {
   // Register the disassembler.
-  TargetRegistry::RegisterMCDisassembler(ThePatmosTarget,
+  TargetRegistry::RegisterMCDisassembler(getThePatmosTarget,
                                          createPatmosDisassembler);
 }
 

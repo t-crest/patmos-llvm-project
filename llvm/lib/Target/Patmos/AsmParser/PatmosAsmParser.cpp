@@ -10,6 +10,7 @@
 #include "PatmosInstrInfo.h"
 #include "InstPrinter/PatmosInstPrinter.h"
 #include "MCTargetDesc/PatmosTargetStreamer.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -994,7 +995,7 @@ void PatmosAsmParser::EatToEndOfStatement() {
 }
 
 
-extern "C" void LLVMInitializePatmosAsmParser() {
-  RegisterMCAsmParser<PatmosAsmParser> X(ThePatmosTarget);
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosAsmParser() {
+  RegisterMCAsmParser<PatmosAsmParser> X(getThePatmosTarget());
 }
 
