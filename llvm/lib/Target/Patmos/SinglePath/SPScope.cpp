@@ -10,9 +10,9 @@
 
 #include "SPScope.h"
 #include "Patmos.h"
-#include "PatmosUtil.h"
 #include "PatmosSinglePathInfo.h"
 #include "PatmosSPBundling.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/MachineFunction.h"
 

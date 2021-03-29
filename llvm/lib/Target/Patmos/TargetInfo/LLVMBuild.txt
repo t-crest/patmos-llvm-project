@@ -19,5 +19,14 @@
 type = Library
 name = PatmosInfo
 parent = Patmos
-required_libraries = MC Support Target
+required_libraries = 
+  Analysis 
+  AsmPrinter 
+  CodeGen 
+  Core 
+  MC 
+  SelectionDAG 
+  Support 
+  Target 
+  GlobalISel
 add_to_library_groups = Patmos

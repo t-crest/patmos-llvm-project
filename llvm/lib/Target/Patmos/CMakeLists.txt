@@ -3,15 +3,14 @@ set(LLVM_TARGET_DEFINITIONS Patmos.td)
 tablegen(LLVM PatmosGenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM PatmosGenInstrInfo.inc -gen-instr-info)
 tablegen(LLVM PatmosGenMCCodeEmitter.inc -gen-emitter)
-#tablegen(LLVM PatmosGenMCPseudoLowering.inc -gen-pseudo-lowering)
 tablegen(LLVM PatmosGenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM PatmosGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM PatmosGenDAGISel.inc -gen-dag-isel)
 tablegen(LLVM PatmosGenCallingConv.inc -gen-callingconv)
 tablegen(LLVM PatmosGenSubtargetInfo.inc -gen-subtarget)
 tablegen(LLVM PatmosGenDFAPacketizer.inc -gen-dfa-packetizer)
-#tablegen(LLVM PatmosGenIntrinsics.inc -gen-tgt-intrinsic)
 tablegen(LLVM PatmosGenDisassemblerTables.inc -gen-disassembler)
+
 add_public_tablegen_target(PatmosCommonTableGen)
 
 add_llvm_target(PatmosCodeGen
@@ -36,11 +35,8 @@ add_llvm_target(PatmosCodeGen
   PatmosSchedStrategy.cpp
   PatmosPMLProfileImport.cpp
   PatmosEnsureAlignment.cpp
-  PatmosUtil.cpp
   MachineModulePass.cpp
   )
-
-add_dependencies(LLVMPatmosCodeGen intrinsics_gen)
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)

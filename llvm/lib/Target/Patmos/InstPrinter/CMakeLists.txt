@@ -1,7 +1,3 @@
-include_directories( ${CMAKE_CURRENT_BINARY_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/.. )
-
-add_llvm_library(LLVMPatmosAsmPrinter
+add_llvm_component_library(LLVMPatmosAsmPrinter
   PatmosInstPrinter.cpp
   )
-
-add_dependencies(LLVMPatmosAsmPrinter PatmosCommonTableGen)

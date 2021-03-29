@@ -30,5 +30,17 @@ has_disassembler = 1
 type = Library
 name = PatmosCodeGen
 parent = Patmos
-required_libraries = PatmosDisassembler PatmosAsmPrinter PatmosDesc PatmosInfo PatmosSinglePath Analysis AsmPrinter CodeGen Core MC SelectionDAG Support Target 
+required_libraries = 
+  PatmosDesc 
+  PatmosInfo 
+  PatmosSinglePath 
+  Analysis 
+  AsmPrinter 
+  CodeGen 
+  Core 
+  MC 
+  SelectionDAG 
+  Support 
+  Target 
+  GlobalISel
 add_to_library_groups = Patmos

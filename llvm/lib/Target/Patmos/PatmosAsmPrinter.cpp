@@ -17,7 +17,7 @@
 #include "PatmosMCInstLower.h"
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosTargetMachine.h"
-#include "PatmosUtil.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "InstPrinter/PatmosInstPrinter.h"
 #include "MCTargetDesc/PatmosTargetStreamer.h"
 #include "TargetInfo/PatmosTargetInfo.h"

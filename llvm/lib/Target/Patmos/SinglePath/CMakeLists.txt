@@ -1,4 +1,4 @@
-add_llvm_library(LLVMPatmosSinglePath
+add_llvm_component_library(LLVMPatmosSinglePath
   PatmosSinglePathInfo.cpp
   PatmosSPClone.cpp
   PatmosSPMark.cpp
@@ -10,5 +10,3 @@ add_llvm_library(LLVMPatmosSinglePath
   SPScheduler.cpp
   PredicateDefinition.cpp
   )
-
-add_dependencies(LLVMPatmosSinglePath PatmosCommonTableGen)

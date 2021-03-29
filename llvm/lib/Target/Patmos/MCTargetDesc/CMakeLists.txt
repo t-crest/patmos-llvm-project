@@ -1,4 +1,4 @@
-add_llvm_library(LLVMPatmosDesc
+add_llvm_component_library(LLVMPatmosDesc
   PatmosMCTargetDesc.cpp
   PatmosMCAsmInfo.cpp
   PatmosAsmBackend.cpp
@@ -6,8 +6,3 @@ add_llvm_library(LLVMPatmosDesc
   PatmosELFObjectWriter.cpp
   PatmosTargetStreamer.cpp
   )
-
-add_dependencies(LLVMPatmosDesc PatmosCommonTableGen)
-
-# Hack: we need to include 'main' target directory to grab private headers
-#include_directories(${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_BINARY_DIR}/..)
