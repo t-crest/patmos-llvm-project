@@ -364,7 +364,7 @@ PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MI.getOperand(FIOperandNum+1).ChangeToImmediate(Offset);
 }
 
-unsigned PatmosRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+Register PatmosRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = TM.getFrameLowering();
 
   return TFI->hasFP(MF) ? Patmos::RFP : Patmos::RSP;

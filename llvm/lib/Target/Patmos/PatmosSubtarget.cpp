@@ -151,27 +151,27 @@ PatmosSubtarget::CFLType PatmosSubtarget::getCFLType() const {
   return PatmosCFLType;
 }
 
-unsigned PatmosSubtarget::getDelaySlotCycles(const MachineInstr *MI) const {
-  if (MI->isBundle()) {
-    const MachineBasicBlock *MBB = MI->getParent();
-    MachineBasicBlock::const_instr_iterator I = MI, E = MBB->instr_end();
+unsigned PatmosSubtarget::getDelaySlotCycles(const MachineInstr &MI) const {
+  if (MI.isBundle()) {
+    const MachineBasicBlock *MBB = MI.getParent();
+    auto I = MI, E = MBB->instr_end();
     unsigned delay = 0;
-    while ((++I != E) && I->isInsideBundle()) {
+    while ((++I != E) && I.isInsideBundle()) {
       delay = std::max(delay, getDelaySlotCycles(I));
     }
     return delay;
   }
-  else if (MI->isCall() || MI->isReturn() ||
-           MI->getOpcode() == Patmos::BRCFu ||
-           MI->getOpcode() == Patmos::BRCF ||
-           MI->getOpcode() == Patmos::BRCFRu ||
-           MI->getOpcode() == Patmos::BRCFR ||
-           MI->getOpcode() == Patmos::BRCFTu ||
-           MI->getOpcode() == Patmos::BRCFT)
+  else if (MI.isCall() || MI.isReturn() ||
+           MI.getOpcode() == Patmos::BRCFu ||
+           MI.getOpcode() == Patmos::BRCF ||
+           MI.getOpcode() == Patmos::BRCFRu ||
+           MI.getOpcode() == Patmos::BRCFR ||
+           MI.getOpcode() == Patmos::BRCFTu ||
+           MI.getOpcode() == Patmos::BRCFT)
   {
     return getCFLDelaySlotCycles(false);
   }
-  else if (MI->isBranch()) {
+  else if (MI.isBranch()) {
     return getCFLDelaySlotCycles(true);
   } else {
     return 0;

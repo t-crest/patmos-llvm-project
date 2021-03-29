@@ -108,29 +108,29 @@ def pcreltarget : Operand<OtherVT> {
 // Transformation Function - shift right by one/two bits
 def shrOne : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getSExtValue() >> 1,
+              N->getSExtValue() >> 1, SDLoc(N),
               MVT::i32 );
 }]>;
 def shrTwo : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getSExtValue() >> 2,
+              N->getSExtValue() >> 2, SDLoc(N),
               MVT::i32 );
 }]>;
 
 // Transformation Function - mask low 7/8/9 bits
 def maskSeven : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getSExtValue() & (-1 << 7),
+              N->getSExtValue() & (-1 << 7), SDLoc(N),
               MVT::i32 );
 }]>;
 def maskEight : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getSExtValue() & (-1 << 8),
+              N->getSExtValue() & (-1 << 8), SDLoc(N),
               MVT::i32 );
 }]>;
 def maskNine : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getSExtValue() & (-1 << 9),
+              N->getSExtValue() & (-1 << 9), SDLoc(N),
               MVT::i32 );
 }]>;
 
@@ -138,14 +138,14 @@ def maskNine : SDNodeXForm<imm, [{
 // Transformation Function - count trailing zeros.
 def trailingZeros : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getAPIntValue().countTrailingZeros(),
+              N->getAPIntValue().countTrailingZeros(), SDLoc(N),
               MVT::i32 );
 }]>;
 
 // Transformation Function - count trailing zeros.
 def trailingOnes : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              N->getAPIntValue().countTrailingOnes(),
+              N->getAPIntValue().countTrailingOnes(), SDLoc(N),
               MVT::i32 );
 }]>;
 
@@ -155,7 +155,7 @@ def trailingOnes : SDNodeXForm<imm, [{
 // Transformation Function - negate
 def negate : SDNodeXForm<imm, [{
  return CurDAG->getTargetConstant(
-              -N->getAPIntValue(),
+              -N->getAPIntValue(), SDLoc(N),
               MVT::i32 );
 }]>;
 

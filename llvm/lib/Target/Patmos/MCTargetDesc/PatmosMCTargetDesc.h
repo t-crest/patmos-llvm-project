@@ -16,27 +16,30 @@
 
 #include "llvm/Support/DataTypes.h"
 
+#include <memory>
+
 namespace llvm {
 class MCAsmBackend;
-class MCContext;
 class MCCodeEmitter;
-class MCRegisterInfo;
+class MCContext;
 class MCInstrInfo;
-class MCObjectWriter;
+class MCObjectTargetWriter;
+class MCRegisterInfo;
 class MCSubtargetInfo;
-class Target;
+class MCTargetOptions;
 class StringRef;
-class raw_ostream;
+class Target;
+class Triple;
 
 MCCodeEmitter *createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
-					 const MCRegisterInfo &MRI,
-                                         const MCSubtargetInfo &STI,
+                                         const MCRegisterInfo &MRI,
                                          MCContext &Ctx);
+										 
+MCAsmBackend *createPatmosAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                     const MCRegisterInfo &MRI,
+                                     const MCTargetOptions &Options);
 
-MCAsmBackend *createPatmosAsmBackend(const Target &T, const MCRegisterInfo &MRI,
-                                     StringRef TT, StringRef CPU);
-
-MCObjectWriter *createPatmosELFObjectWriter(raw_ostream &OS, uint8_t OSABI);
+std::unique_ptr<MCObjectTargetWriter> createPatmosELFObjectWriter(const Triple &TT);
 
 } // End llvm namespace
 

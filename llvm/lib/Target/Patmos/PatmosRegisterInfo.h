@@ -105,7 +105,7 @@ public:
 		                   RegScavenger *RS = NULL) const;
 
   // Debug information queries.
-  unsigned getFrameRegister(const MachineFunction &MF) const;
+  Register getFrameRegister(const MachineFunction &MF) const override;
 
 };
 

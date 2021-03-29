@@ -21,8 +21,11 @@ using namespace llvm;
 // pin vtable to this file
 void PatmosTargetStreamer::anchor() {}
 
-PatmosTargetAsmStreamer::PatmosTargetAsmStreamer(formatted_raw_ostream &OS)
-    : OS(OS) {}
+PatmosTargetStreamer::PatmosTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
+
+PatmosTargetAsmStreamer::PatmosTargetAsmStreamer(MCStreamer &S,
+                                                 formatted_raw_ostream &OS)
+    : PatmosTargetStreamer(S), OS(OS) {}
 
 void PatmosTargetAsmStreamer::EmitFStart(const MCSymbol *Start, 
                                const MCExpr* Size, unsigned Alignment)
@@ -30,9 +33,8 @@ void PatmosTargetAsmStreamer::EmitFStart(const MCSymbol *Start,
   OS << "\t.fstart\t" << *Start << ", " << *Size << ", " << Alignment << "\n";
 }
 
-MCELFStreamer &PatmosTargetELFStreamer::getStreamer() {
-  return static_cast<MCELFStreamer &>(*Streamer);
-}
+PatmosTargetELFStreamer::PatmosTargetELFStreamer(MCStreamer &S)
+    : PatmosTargetStreamer(S) {}
 
 void PatmosTargetELFStreamer::EmitFStart(const MCSymbol *Start, 
 	      const MCExpr* Size, unsigned Alignment) 
@@ -53,8 +55,8 @@ void PatmosTargetELFStreamer::EmitFStart(const MCSymbol *Start,
   // or add an EmitAlignedSymbol function to MCStreamer
   //getStreamer().insert(AF);
 
-  getStreamer().EmitCodeAlignment(Alignment);
-  getStreamer().EmitValue(Size, 4);
+  getStreamer().emitCodeAlignment(Alignment);
+  getStreamer().emitValue(Size, 4);
 
 }
 

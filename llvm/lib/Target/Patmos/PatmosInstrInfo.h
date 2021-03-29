@@ -42,100 +42,60 @@ class PatmosInstrAnalyzer : public MCStreamer {
   unsigned size;
   bool call;
 public:
-  PatmosInstrAnalyzer(MCContext &ctx)
-    : MCStreamer(ctx, 0), MII(*ctx.getInstrInfo()), count(0), size(0),
-      call(false)
-    {
-    }
+  PatmosInstrAnalyzer(MCContext &Ctx, const MCInstrInfo &MII)
+    :  MCStreamer(Ctx), MII(MII), count(0), size(0), call(false) {}
 
-  // The following are copied from llvm/lib/mc/MCNullStreamer.cpp
-  virtual void InitToTextSection() {
-      }
-
-  virtual void InitSections() {
-  }
-
-  virtual void ChangeSection(const MCSection *Section,
-			   const MCExpr *Subsection) {
-  }
-
-  virtual void EmitLabel(MCSymbol *Symbol) {
+  void changeSection(MCSection *Section, const MCExpr *Subsection) override {}
+  void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override {
     assert(Symbol->isUndefined() && "Cannot define a symbol twice!");
     assert(getCurrentSection().first && "Cannot emit before setting section!");
-    AssignSection(Symbol, getCurrentSection().first);
+    AssignFragment(Symbol, &getCurrentSection().first->getDummyFragment());
   }
-
-  virtual void EmitDebugLabel(MCSymbol *Symbol) {
-    EmitLabel(Symbol);
-  }
-
-  virtual void EmitAssemblerFlag(MCAssemblerFlag Flag) {}
-  virtual void EmitThumbFunc(MCSymbol *Func) {}
-
-  virtual void EmitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
-  virtual void EmitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol){}
-  virtual void EmitDwarfAdvanceLineAddr(int64_t LineDelta,
-					const MCSymbol *LastLabel,
-					const MCSymbol *Label,
-					unsigned PointerSize) {}
-
-  virtual bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute){
+  void emitAssemblerFlag(MCAssemblerFlag Flag) override {}
+  void emitThumbFunc(MCSymbol *Func) override {}
+  void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override {}
+  void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override {}
+  bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override {
     return true;
   }
-
-  virtual void EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {}
-
-  virtual void BeginCOFFSymbolDef(const MCSymbol *Symbol) {}
-  virtual void EmitCOFFSymbolStorageClass(int StorageClass) {}
-  virtual void EmitCOFFSymbolType(int Type) {}
-  virtual void EndCOFFSymbolDef() {}
-  virtual void EmitCOFFSecRel32(MCSymbol const *Symbol) {}
-
-  virtual void EmitELFSize(MCSymbol *Symbol, const MCExpr *Value) {}
-  virtual void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-				unsigned ByteAlignment) {}
-  virtual void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-				     unsigned ByteAlignment) {}
-  virtual void EmitZerofill(const MCSection *Section, MCSymbol *Symbol = 0,
-			    uint64_t Size = 0, unsigned ByteAlignment = 0) {}
-  virtual void EmitTBSSSymbol(const MCSection *Section, MCSymbol *Symbol,
-			      uint64_t Size, unsigned ByteAlignment) {}
-  virtual void EmitBytes(StringRef Data) {}
-
-  virtual void EmitValueImpl(const MCExpr *Value, unsigned Size) {}
-  virtual void EmitULEB128Value(const MCExpr *Value) {}
-  virtual void EmitSLEB128Value(const MCExpr *Value) {}
-  virtual void EmitGPRel32Value(const MCExpr *Value) {}
-  virtual void EmitValueToAlignment(unsigned ByteAlignment, int64_t Value = 0,
+  void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override {}
+  void BeginCOFFSymbolDef(const MCSymbol *Symbol) override {}
+  void EmitCOFFSymbolStorageClass(int StorageClass) override {}
+  void EmitCOFFSymbolType(int Type) override {}
+  void EndCOFFSymbolDef() override {}
+  void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override {}
+  void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override {}
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+				unsigned ByteAlignment) override {}
+  void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+				     unsigned ByteAlignment) override {}
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+			    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                SMLoc Loc = SMLoc()) override {}
+  void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
+			      uint64_t Size, unsigned ByteAlignment = 0) override {}
+  void emitBytes(StringRef Data) override {}
+  void emitValueImpl(const MCExpr *Value, unsigned Size,
+                             SMLoc Loc = SMLoc()) override {}
+  void emitULEB128Value(const MCExpr *Value) override {}
+  void emitSLEB128Value(const MCExpr *Value) override {}
+  void emitGPRel32Value(const MCExpr *Value) override {}
+  void emitValueToAlignment(unsigned ByteAlignment, int64_t Value = 0,
 				    unsigned ValueSize = 1,
-				    unsigned MaxBytesToEmit = 0) {}
-
-  virtual void EmitCodeAlignment(unsigned ByteAlignment,
-				 unsigned MaxBytesToEmit = 0) {}
-
-  virtual bool EmitValueToOffset(const MCExpr *Offset,
-				 unsigned char Value = 0) { return false; }
-
-  virtual void EmitFileDirective(StringRef Filename) {}
-  virtual bool EmitDwarfFileDirective(unsigned FileNo, StringRef Directory,
-				      StringRef Filename, unsigned CUID = 0) {
-    return false;
-  }
-  virtual void EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
+				    unsigned MaxBytesToEmit = 0) override {}
+  void emitCodeAlignment(unsigned ByteAlignment,
+				 unsigned MaxBytesToEmit = 0) override {}
+  void emitValueToOffset(const MCExpr *Offset,  unsigned char Value,
+                         SMLoc Loc) override {}
+  void emitFileDirective(StringRef Filename) override {}
+  void emitDwarfLocDirective(unsigned FileNo, unsigned Line,
 				     unsigned Column, unsigned Flags,
 				     unsigned Isa, unsigned Discriminator,
-				     StringRef FileName) {}
-
-  virtual void EmitBundleAlignMode(unsigned AlignPow2) {}
-  virtual void EmitBundleLock(bool AlignToEnd) {}
-  virtual void EmitBundleUnlock() {}
-
-  virtual void FinishImpl() {}
-
-  virtual void EmitCFIEndProcImpl(MCDwarfFrameInfo &Frame) {
-    RecordProcEnd(Frame);
-  }
-  // Copy end.
+				     StringRef FileName) override {}
+  void emitBundleAlignMode(unsigned AlignPow2) override {}
+  void emitBundleLock(bool AlignToEnd) override {}
+  void emitBundleUnlock() override {}
+  void finishImpl() override {}
 
   void reset() {
     count = 0;
@@ -149,7 +109,7 @@ public:
 
   bool hasCall() const { return call; }
 
-  virtual void EmitInstruction(const MCInst &Inst) {
+  void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override {
     const MCInstrDesc &MID = MII.get(Inst.getOpcode());
     count++;
     size += MID.getSize();
@@ -164,8 +124,6 @@ class PatmosInstrInfo : public PatmosGenInstrInfo {
 public:
   explicit PatmosInstrInfo(PatmosTargetMachine &TM);
 
-  virtual ~PatmosInstrInfo() {}
-
   /// getRegisterInfo - TargetInstrInfo is a superset of MRegister info.  As
   /// such, whenever a client has an instance of instruction info, it should
   /// always be able to get register info as well (through this method).
@@ -177,8 +135,8 @@ public:
   /// findCommutedOpIndices - If specified MI is commutable, return the two
   /// operand indices that would swap value. Return false if the instruction
   /// is not in a form which this routine understands.
-  virtual bool findCommutedOpIndices(MachineInstr *MI, unsigned &SrcOpIdx1,
-                                     unsigned &SrcOpIdx2) const;
+  bool findCommutedOpIndices(const MachineInstr &MI, unsigned &SrcOpIdx1,
+                             unsigned &SrcOpIdx2) const override;
 
   void copyPhysReg(MachineBasicBlock &MBB,
                    MachineBasicBlock::iterator I, DebugLoc DL,
@@ -215,8 +173,8 @@ public:
 
   /// insertNoop - Insert a noop into the instruction stream at the specified
   /// point.
-  virtual void insertNoop(MachineBasicBlock &MBB,
-                          MachineBasicBlock::iterator MI) const;
+  void insertNoop(MachineBasicBlock &MBB,
+                  MachineBasicBlock::iterator MI) const override;
 
 
   /// expandPostRAPseudo - This function is called for all pseudo instructions
@@ -225,23 +183,22 @@ public:
   /// into real instructions. The target can edit MI in place, or it can insert
   /// new instructions and erase MI. The function should return true if
   /// anything was changed.
-  virtual bool expandPostRAPseudo(MachineBasicBlock::iterator MI) const;
+  bool expandPostRAPseudo(MachineInstr &MI) const override;
 
   /// isSchedulingBoundary - Test if the given instruction should be
   /// considered a scheduling boundary.
-  virtual bool isSchedulingBoundary(const MachineInstr *MI,
-                                              const MachineBasicBlock *MBB,
-                                              const MachineFunction &MF) const;
+  bool isSchedulingBoundary(const MachineInstr &MI,
+                            const MachineBasicBlock *MBB,
+                            const MachineFunction &MF) const override;
 
-  virtual DFAPacketizer*
-  CreateTargetScheduleState(const TargetMachine *TM,
-                            const ScheduleDAG *DAG) const;
+  DFAPacketizer*
+  CreateTargetScheduleState(const TargetSubtargetInfo &STI) const override;
 
   /// fixOpcodeForGuard - If the MCID opcode is for an unconditional
   /// instruction (e.g. by the isBarrier flag), but the predicate says
   /// otherwise (and vice versa), rewrite the instruction accordingly.
   /// Returns true iff the instruction was rewritten.
-  bool fixOpcodeForGuard(MachineInstr *MI) const;
+  bool fixOpcodeForGuard(MachineInstr &MI) const;
 
   /// findPrevDelaySlotEnd - Find the end of the previous delay slot, if any.
   /// \param II - The instruction from where to start, will be set to the last
@@ -271,7 +228,7 @@ public:
   bool moveTo(MachineBasicBlock &MBB,
               MachineBasicBlock::iterator &Target,
               MachineBasicBlock::iterator &Source,
-              SmallVectorImpl<MachineOperand> *Pred = NULL,
+              ArrayRef<MachineOperand> Cond,
               bool Negate = false) const;
 
   /// moveUp - Move an instruction up by its delay slot cycles.
@@ -297,20 +254,14 @@ public:
 
   /// getMemType - Return the type for Patmos' typed memory accesses.
   /// MI must be either a load or a store instruction.
-  PatmosII::MemType getMemType(const MachineInstr *MI) const;
+  PatmosII::MemType getMemType(const MachineInstr &MI) const;
 
   /// isPseudo - check if the given machine instruction is emitted, i.e.,
   /// if the instruction is either inline asm or has some FU assigned to it.
-  bool isPseudo(const MachineInstr *MI) const;
+  bool isPseudo(const MachineInstr &MI) const;
 
   /// skipPseudos - Increment II to the next non-pseudo instruction if II is a
   /// pseudo instruction.
-  void skipPseudos(MachineBasicBlock &MBB,
-                   MachineBasicBlock::instr_iterator &II) const;
-
-  /// skipPseudos - Increment II to the next non-pseudo instruction if II is a
-  /// pseudo instruction. This assumes that bundles contain at least one
-  /// non-pseudo instruction.
   void skipPseudos(MachineBasicBlock &MBB,
                    MachineBasicBlock::iterator &II) const;
 
@@ -348,7 +299,8 @@ public:
   // getFirstMI - Return MI or the first 'real' instruction if MI is a bundle.
   const MachineInstr* getFirstMI(const MachineInstr *MI) const;
 
-  PatmosInstrAnalyzer *createPatmosInstrAnalyzer(MCContext &Ctx) const;
+  std::unique_ptr<PatmosInstrAnalyzer> createPatmosInstrAnalyzer(MCContext &Ctx,
+                                                 const MCInstrInfo &MII) const;
 
   /// getInstrSize - get the size of an instruction.
   /// Correctly deals with inline assembler and bundles.
@@ -373,11 +325,11 @@ public:
 
   /// getCallee - try to get the called function, or null if this is not a
   /// call, if the call target is unknown or if there is more than one callee.
-  const Function *getCallee(const MachineInstr *MI) const;
+  const Function *getCallee(const MachineInstr &MI) const;
 
   /// getCallees - add all known call targets of an instruction or a bundle.
   /// \return false if there might be additional call targets.
-  bool getCallees(const MachineInstr *MI,
+  bool getCallees(const MachineInstr &MI,
                   SmallSet<const Function*,2> &Callees) const;
 
   /// getIssueWidth - Get the number of slots required for this instruction.
@@ -390,14 +342,14 @@ public:
 
   bool canIssueInSlot(const MachineInstr *MI, unsigned Slot) const;
 
-  virtual int getOperandLatency(const InstrItineraryData *ItinData,
-                                const MachineInstr *DefMI, unsigned DefIdx,
-                                const MachineInstr *UseMI,
-                                unsigned UseIdx) const;
+  int getOperandLatency(const InstrItineraryData *ItinData,
+                                const MachineInstr &DefMI, unsigned DefIdx,
+                                const MachineInstr &UseMI,
+                                unsigned UseIdx) const override;
 
-  virtual int getDefOperandLatency(const InstrItineraryData *ItinData,
-                                   const MachineInstr *DefMI,
-                                   unsigned DefIdx) const;
+  int getDefOperandLatency(const InstrItineraryData *ItinData,
+                           const MachineInstr &DefMI,
+                           unsigned DefIdx) const;
 
   /////////////////////////////////////////////////////////////////////////////
   // Branch handling
@@ -410,39 +362,21 @@ public:
   /// mayFalltrough - Check if the block might fall through to the next block.
   bool mayFallthrough(MachineBasicBlock &MBB) const;
 
-  /// AnalyzeBranch - Analyze the branching code at the end of MBB, returning
-  /// true if it cannot be understood (e.g. it's a switch dispatch or isn't
-  /// implemented for a target).
-  /// \see TargetInstrInfo::AnalyzeBranch
-  virtual bool AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
-                             MachineBasicBlock *&FBB,
-                             SmallVectorImpl<MachineOperand> &Cond,
-                             bool AllowModify = false) const;
+  bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+                     MachineBasicBlock *&FBB,
+                     SmallVectorImpl<MachineOperand> &Cond,
+                     bool AllowModify = false) const override;
 
-  /// RemoveBranch - Remove the branching code at the end of the specific MBB.
-  /// This is only invoked in cases where AnalyzeBranch returns success. It
-  /// returns the number of instructions that were removed.
-  virtual unsigned RemoveBranch(MachineBasicBlock &MBB) const;
+  unsigned removeBranch(MachineBasicBlock &MBB,
+                        int *BytesRemoved = nullptr) const override;
 
-  /// InsertBranch - Insert branch code into the end of the specified
-  /// MachineBasicBlock.  The operands to this method are the same as those
-  /// returned by AnalyzeBranch.  This is only invoked in cases where
-  /// AnalyzeBranch returns success. It returns the number of instructions
-  /// inserted.
-  /// \see TargetInstrInfo::InsertBranch
-  virtual unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
-                                MachineBasicBlock *FBB,
-                                const SmallVectorImpl<MachineOperand> &Cond,
-                                DebugLoc DL) const;
+  unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+                        MachineBasicBlock *FBB, ArrayRef<MachineOperand> Cond,
+                        const DebugLoc &DL,
+                        int *BytesAdded) const override;
 
-  /// ReverseBranchCondition - Reverses the branch condition of the specified
-  /// condition list, returning false on success and true if it cannot be
-  /// reversed.
-  virtual bool ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond)
-                                      const;
-
-
-
+  bool reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond)
+                              const override;
 
   /////////////////////////////////////////////////////////////////////////////
   // Predication and IfConversion
@@ -451,13 +385,7 @@ public:
   /// isPredicated - If the instruction has other than default predicate
   /// operands (p0), return true.
   /// Return false if the branch instruction has default predicate operands.
-  virtual bool isPredicated(const MachineInstr *MI) const;
-
-  /// isUnpredicatedTerminator - Returns true if the instruction is a
-  /// terminator instruction that has not been predicated.
-  /// IMPORTANT: returns also true for conditional branches,
-  ///            they are an exception
-  virtual bool isUnpredicatedTerminator(const MachineInstr *MI) const;
+  bool isPredicated(const MachineInstr &MI) const override;
 
   /// haveDisjointPredicates - check if the predicates of the two instructions
   /// can never be true at the same time (but they might be false at the same
@@ -469,45 +397,39 @@ public:
   /// getPrediate - load the guards of an instruction into Pred. If the
   /// instruction is a bundle, get all predicates of the bundle.
   /// Return true if any predicate is found.
-  bool getPredicateOperands(const MachineInstr* MI,
+  bool getPredicateOperands(const MachineInstr &MI,
                             SmallVectorImpl<MachineOperand> &Pred) const;
 
   /// negatePredicate - invert the flag of the guard of the instruction.
   /// Return true on success.
-  bool NegatePredicate(MachineInstr *MI) const;
+  bool NegatePredicate(MachineInstr &MI) const;
 
   /// PredicateInstruction - Convert the instruction into a predicated
   /// instruction. It returns true if the operation was successful.
-  virtual
-  bool PredicateInstruction(MachineInstr *MI,
-                            const SmallVectorImpl<MachineOperand> &Pred) const;
+  bool PredicateInstruction(MachineInstr &MI,
+                            ArrayRef<MachineOperand> Cond) const override;
 
-  /// SubsumesPredicate - Returns true if the first specified predicate
-  /// subsumes the second.
-  /// For Patmos, the default predicate subsumes all others.
-  /// For all other cases, predicate equality is checked.
-  virtual
-  bool SubsumesPredicate(const SmallVectorImpl<MachineOperand> &Pred1,
-                         const SmallVectorImpl<MachineOperand> &Pred2) const;
+  /// Returns true if the first specified predicate
+  /// subsumes the second, e.g. GE subsumes GT.
+  bool SubsumesPredicate(ArrayRef<MachineOperand> Pred1,
+                         ArrayRef<MachineOperand> Pred2) const override;
 
-  /// DefinesPredicate - If the specified instruction defines any predicate
-  /// register, it returns true as well as the defined predicate register.
-  /// NOTE: currently this is the only place where only one operand is put
-  ///       into the Pred vector.
-  virtual bool DefinesPredicate(MachineInstr *MI,
-                                std::vector<MachineOperand> &Pred) const;
+  /// If the specified instruction defines any predicate
+  /// or condition code register(s) used for predication, returns true as well
+  /// as the definition predicate(s) by reference.
+  bool DefinesPredicate(MachineInstr &MI,
+                        std::vector<MachineOperand> &Pred) const override;
 
-  /// isProfitableToIfCvt - Return true if it's profitable to predicate
+  /// Return true if it's profitable to predicate
   /// instructions with accumulated instruction latency of "NumCycles"
   /// of the specified basic block, where the probability of the instructions
   /// being executed is given by Probability, and Confidence is a measure
   /// of our confidence that it will be properly predicted.
-  virtual
   bool isProfitableToIfCvt(MachineBasicBlock &MBB, unsigned NumCycles,
                            unsigned ExtraPredCycles,
-                           const BranchProbability &Probability) const {
+                           BranchProbability Probability) const override {
 
-    const MCInstrDesc &MCID = prior(MBB.end())->getDesc();
+    const MCInstrDesc &MCID = std::prev(MBB.end())->getDesc();
     if (MCID.isReturn() || MCID.isCall())
       return false;
     if (NumCycles > 8)
@@ -518,22 +440,21 @@ public:
     return !mayStall(MBB);
   }
 
-  /// isProfitableToIfCvt - Second variant of isProfitableToIfCvt, this one
+  /// Second variant of isProfitableToIfCvt. This one
   /// checks for the case where two basic blocks from true and false path
   /// of a if-then-else (diamond) are predicated on mutally exclusive
   /// predicates, where the probability of the true path being taken is given
   /// by Probability, and Confidence is a measure of our confidence that it
   /// will be properly predicted.
-  virtual bool
-  isProfitableToIfCvt(MachineBasicBlock &TMBB,
+  bool isProfitableToIfCvt(MachineBasicBlock &TMBB,
                       unsigned NumTCycles, unsigned ExtraTCycles,
                       MachineBasicBlock &FMBB,
                       unsigned NumFCycles, unsigned ExtraFCycles,
-                      const BranchProbability &Probability) const {
-    const MCInstrDesc &TMCID = prior(TMBB.end())->getDesc();
+                      BranchProbability Probability) const override {
+    const MCInstrDesc &TMCID = std::prev(TMBB.end())->getDesc();
     if (TMCID.isReturn() || TMCID.isCall())
       return false;
-    const MCInstrDesc &FMCID = prior(FMBB.end())->getDesc();
+    const MCInstrDesc &FMCID = std::prev(FMBB.end())->getDesc();
     if (FMCID.isReturn() || FMCID.isCall())
       return false;
     if ((NumTCycles + NumFCycles) > 16)
@@ -550,10 +471,9 @@ public:
   /// The probability of the instructions being executed is given by
   /// Probability, and Confidence is a measure of our confidence that it
   /// will be properly predicted.
-  virtual bool
-  isProfitableToDupForIfCvt(MachineBasicBlock &MBB, unsigned NumCycles,
-                            const BranchProbability &Probability) const {
-    const MCInstrDesc &MCID = prior(MBB.end())->getDesc();
+  bool isProfitableToDupForIfCvt(MachineBasicBlock &MBB, unsigned NumCycles,
+                                 BranchProbability Probability) const override {
+    const MCInstrDesc &MCID = std::prev(MBB.end())->getDesc();
     if (MCID.isReturn() || MCID.isCall())
       return false;
     return NumCycles <= 4;

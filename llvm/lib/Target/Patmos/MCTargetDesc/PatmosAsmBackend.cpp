@@ -1,9 +1,8 @@
-//===-- PatmosASMBackend.cpp - Patmos Asm Backend  ----------------------------===//
+//===-- PatmosAsmBackend.cpp - Patmos Asm Backend  ----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,26 +11,33 @@
 //===----------------------------------------------------------------------===//
 //
 
-#include "PatmosFixupKinds.h"
+#include "MCTargetDesc/PatmosAsmBackend.h"
+#include "MCTargetDesc/PatmosFixupKinds.h"
 #include "MCTargetDesc/PatmosMCTargetDesc.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/MCValue.h"
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCAsmLayout.h"
+#include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Format.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 using namespace Patmos;
 
 // Prepare value for the target space for it
-static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
+static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value) {
+
+  unsigned Kind = Fixup.getKind();
 
   // Add/subtract and shift
   switch (Kind) {
@@ -50,55 +56,24 @@ static unsigned adjustFixupValue(unsigned Kind, uint64_t Value) {
   return Value;
 }
 
-namespace {
-class PatmosAsmBackend : public MCAsmBackend {
-  Triple::OSType OSType;
+std::unique_ptr<MCObjectTargetWriter>
+PatmosAsmBackend::createObjectTargetWriter() const {
+  return createPatmosELFObjectWriter(TheTriple);
+}
 
-public:
-  PatmosAsmBackend(const Target &T,  Triple::OSType _OSType)
-    :MCAsmBackend(), OSType(_OSType) {}
+/// ApplyFixup - Apply the \p Value for given \p Fixup into the provided
+/// data fragment, at the offset specified by the fixup and following the
+/// fixup kind as appropriate.
+void PatmosAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
+                                const MCValue &Target,
+                                MutableArrayRef<char> Data, uint64_t Value,
+                                bool IsResolved,
+                                const MCSubtargetInfo *STI) const {
+  MCFixupKind Kind = Fixup.getKind();
+  Value = adjustFixupValue(Fixup, Value);
 
-  MCObjectWriter *createObjectWriter(raw_ostream &OS) const {
-    return createPatmosELFObjectWriter(OS, OSType);
-  }
-
-
-  virtual void processFixupValue(const MCAssembler &Asm,
-                                 const MCAsmLayout &Layout,
-                                 const MCFixup &Fixup, const MCFragment *DF,
-                                 MCValue &Target, uint64_t &Value,
-                                 bool &IsResolved)
-  {
-    MCFixupKind Kind = Fixup.getKind();
-
-    // For plain PCRELs in the same section, LLVM resolves them itself
-    if (isPCRELFixupKind(Kind)) {
-      // However, we want to have symbols for our MBBs, so we emit symbols
-      // for all labels instead
-      // TODO actually, we only need symbols if it is needed for flow facts
-      IsResolved = false;
-      return;
-    }
-
-    // TODO in case of FK_Patmos_BO|HO|WO_7, we can (try to) resolve it here,
-    // and skip emitting relocations
-
-  }
-
-  /// ApplyFixup - Apply the \arg Value for given \arg Fixup into the provided
-  /// data fragment, at the offset specified by the fixup and following the
-  /// fixup kind as appropriate.
-  virtual void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
-                  uint64_t Value) const {
-    MCFixupKind Kind = Fixup.getKind();
-
-    // Adjust the immediate value according to the format here
-    // this is not done in processFixupValue to avoid keeping track of the
-    // current addressing mode in the rest of the code
-    Value = adjustFixupValue(Kind, Value);
-
-    if (!Value)
-      return; // Doesn't change encoding.
+  if (!Value)
+    return; // Doesn't change encoding.
 
     unsigned TargetSize = getFixupKindInfo(Kind).TargetSize;
     unsigned TargetOffset = getFixupKindInfo(Kind).TargetOffset;
@@ -122,110 +97,65 @@ public:
     unsigned Shift = FullSize * 8 - (TargetOffset + TargetSize);
 
     CurVal |= (Value & Mask) << Shift;
-
     // Write out the fixed up bytes back to the code/data bits.
     for (unsigned i = 0; i != NumBytes; ++i) {
       unsigned Idx = (FullSize - 1 - i);
       Data[Offset + Idx] = (uint8_t)((CurVal >> (i*8)) & 0xff);
     }
-  }
-
-  unsigned getNumFixupKinds() const { return Patmos::NumTargetFixupKinds; }
-
-  const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const {
-
-    const static MCFixupKindInfo Infos[Patmos::NumTargetFixupKinds] = {
-      // This table *must* be in same the order of FK_* kinds in
-      // PatmosFixupKinds.h.
-      //
-      // name                    offset  bits  flags
-      { "FK_Patmos_BO_7" ,       25,      7,   0 }, // 0 bit shifted, unsigned (byte aligned)
-      { "FK_Patmos_SO_7" ,       25,      7,   0 }, // 1 bit shifted, unsigned (half-word aligned)
-      { "FK_Patmos_WO_7" ,       25,      7,   0 }, // 2 bit shifted, unsigned (word aligned)
-      { "FK_Patmos_abs_ALUi",    20,     12,   0 }, // ALU immediate, unsigned
-      { "FK_Patmos_abs_CFLi",    10,     22,   0 }, // 2 bit shifted, unsigned, for call
-      { "FK_Patmos_abs_ALUl",    32,     32,   0 }, // ALU immediate, unsigned
-      { "FK_Patmos_stc",         14,     18,   0 }, // 2 bit shifted, unsigned, for stack control
-      { "FK_Patmos_PCrel",       10,     22,   MCFixupKindInfo::FKF_IsPCRel }, // 2 bit shifted, signed, PC relative
-    };
-
-    if (Kind < FirstTargetFixupKind)
-      return MCAsmBackend::getFixupKindInfo(Kind);
-
-    assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
-           "Invalid kind!");
-    return Infos[Kind - FirstTargetFixupKind];
-  }
-
-  /// @name Target Relaxation Interfaces
-  /// @{
-
-  /// MayNeedRelaxation - Check whether the given instruction may need
-  /// relaxation.
-  ///
-  /// \param Inst - The instruction to test.
-  bool mayNeedRelaxation(const MCInst &Inst) const {
-    // TODO return true for small immediates (?)
-    return false;
-  }
-
-  /// fixupNeedsRelaxation - Target specific predicate for whether a given
-  /// fixup requires the associated instruction to be relaxed.
-  bool fixupNeedsRelaxation(const MCFixup &Fixup,
-                            uint64_t Value,
-                            const MCRelaxableFragment *DF,
-                            const MCAsmLayout &Layout) const
-  {
-
-    // TODO check for branch/call immediate
-    assert(0 && "RelaxInstruction() unimplemented");
-    return false;
-  }
-
-  /// RelaxInstruction - Relax the instruction in the given fragment
-  /// to the next wider instruction.
-  ///
-  /// \param Inst - The instruction to relax, which may be the same
-  /// as the output.
-  /// \parm Res [output] - On return, the relaxed instruction.
-  void relaxInstruction(const MCInst &Inst, MCInst &Res) const {
-    // TODO relax small immediates (?)
-  }
-
-  /// @}
-
-  /// WriteNopData - Write an (optimal) nop sequence of Count bytes
-  /// to the given output. If the target cannot generate such a sequence,
-  /// it should return an error.
-  ///
-  /// \return - True on success.
-  bool writeNopData(uint64_t Count, MCObjectWriter *OW) const {
-
-    // Count is in terms of of ValueSize, which is always 1 Byte for ELF.
-    // This method is used to create a NOP slide for code segment alignment
-    // OW handles byteorder stuff.
-
-    if ((Count % 4) != 0)
-      return false;
-
-    // We should somehow initialize the NOP instruction code from TableGen, but
-    // I do not see how (without creating a new CodeEmitter and everything from
-    // Target)
-
-    for (uint64_t i = 0; i < Count; i += 4)
-        // "(p0) sub r0 = r0, 0"
-        OW->Write32(0x00400000);
-
-    return true;
-  }
-}; // class PatmosAsmBackend
-
-} // namespace
-
-// MCAsmBackend
-MCAsmBackend *llvm::createPatmosAsmBackend(const Target &T,
-                         const MCRegisterInfo &MRI, StringRef TT, StringRef CPU)
-{
-  return new PatmosAsmBackend(T, Triple(TT).getOS());
 }
 
+const MCFixupKindInfo &PatmosAsmBackend::
+getFixupKindInfo(MCFixupKind Kind) const {
+  const static MCFixupKindInfo Infos[Patmos::NumTargetFixupKinds] = {
+    // This table *must* be in same the order of FK_* kinds in
+    // PatmosFixupKinds.h.
+    //
+    // name                    offset  bits  flags
+    { "FK_Patmos_BO_7" ,       25,      7,   0 }, // 0 bit shifted, unsigned (byte aligned)
+    { "FK_Patmos_SO_7" ,       25,      7,   0 }, // 1 bit shifted, unsigned (half-word aligned)
+    { "FK_Patmos_WO_7" ,       25,      7,   0 }, // 2 bit shifted, unsigned (word aligned)
+    { "FK_Patmos_abs_ALUi",    20,     12,   0 }, // ALU immediate, unsigned
+    { "FK_Patmos_abs_CFLi",    10,     22,   0 }, // 2 bit shifted, unsigned, for call
+    { "FK_Patmos_abs_ALUl",    32,     32,   0 }, // ALU immediate, unsigned
+    { "FK_Patmos_stc",         14,     18,   0 }, // 2 bit shifted, unsigned, for stack control
+    { "FK_Patmos_PCrel",       10,     22,   MCFixupKindInfo::FKF_IsPCRel }, // 2 bit shifted, signed, PC relative
+  };
+
+  if (Kind < FirstTargetFixupKind)
+    return MCAsmBackend::getFixupKindInfo(Kind);
+
+  assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
+         "Invalid kind!");
+  return Infos[Kind - FirstTargetFixupKind];
+}
+
+/// WriteNopData - Write an (optimal) nop sequence of Count bytes
+/// to the given output. If the target cannot generate such a sequence,
+/// it should return an error.
+///
+/// \return - True on success.
+bool PatmosAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count) const {
+  // Count is in terms of of ValueSize, which is always 1 Byte for ELF.
+  // This method is used to create a NOP slide for code segment alignment  
+  // OW handles byteorder stuff.
+
+  if ((Count % 4) != 0)
+    return false;
+
+  // We should somehow initialize the NOP instruction code from TableGen, but
+  // I do not see how (without creating a new CodeEmitter and everything from
+  // Target)
+
+  for (uint64_t i = 0; i < Count; i += 4)
+    // "(p0) sub r0 = r0, 0"
+    support::endian::write<uint32_t>(OS, 0x00400000, Endian);
+
+  return true;
+}
+
+MCAsmBackend *llvm::createPatmosAsmBackend(const Target &T,
+                                           const MCSubtargetInfo &STI,
+                                           const MCRegisterInfo &MRI,
+                                           const MCTargetOptions &Options) {
+  return new PatmosAsmBackend(T, MRI, STI.getTargetTriple(), STI.getCPU());
+}

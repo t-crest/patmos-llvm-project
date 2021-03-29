@@ -14,17 +14,17 @@
 #ifndef _PATMOS_MCASMINFO_H_
 #define _PATMOS_MCASMINFO_H_
 
-#include "llvm/ADT/StringRef.h"
-#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCAsmInfoELF.h"
 
 namespace llvm {
+  class Triple;
   enum PrintBytesLevel {
     PrintAsEncoded = 0, PrintCallAsBytes, PrintAllAsBytes
   };
 
-  class PatmosMCAsmInfo : public MCAsmInfo {
+  class PatmosMCAsmInfo : public MCAsmInfoELF {
     public:
-      explicit PatmosMCAsmInfo(StringRef TT);
+      explicit PatmosMCAsmInfo(const Triple &TheTriple);
 
       virtual ~PatmosMCAsmInfo() {}
   };

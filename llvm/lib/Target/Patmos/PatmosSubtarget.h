@@ -83,7 +83,7 @@ public:
   }
 
   /// Return the number of delay slot cycles of control flow instructions
-  unsigned getDelaySlotCycles(const MachineInstr *MI) const;
+  unsigned getDelaySlotCycles(const MachineInstr &MI) const;
 
   /// Get the maximum number of bytes an instruction can have in the delay slots
   /// (excluding the second slot of this instruction)

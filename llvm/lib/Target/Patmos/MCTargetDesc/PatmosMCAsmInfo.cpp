@@ -25,7 +25,7 @@ static cl::opt<PrintBytesLevel> PrintBytes("fpatmos-print-bytes",
     ));
 
 
-PatmosMCAsmInfo::PatmosMCAsmInfo(StringRef TT)
+PatmosMCAsmInfo::PatmosMCAsmInfo(const Triple &TheTriple)
 {
   CodePointerSize = 4;
   IsLittleEndian = false;

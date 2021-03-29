@@ -33,9 +33,17 @@
 
 using namespace llvm;
 
-static MCAsmInfo *createPatmosMCAsmInfo(const MCRegisterInfo &MRI, StringRef TT)
+static MCAsmInfo *createPatmosMCAsmInfo(const MCRegisterInfo &MRI,
+                                        const Triple &TT,
+                                        const MCTargetOptions &Options)
 {
-  return new PatmosMCAsmInfo(TT);
+  MCAsmInfo *MAI = new PatmosMCAsmInfo(TT);
+
+  unsigned SP = MRI.getDwarfRegNum(Patmos::RSP, true);
+  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, SP, 0);
+  MAI->addInitialFrameState(Inst);
+
+  return MAI;
 }
 
 static MCInstrInfo *createPatmosMCInstrInfo() {
@@ -44,71 +52,46 @@ static MCInstrInfo *createPatmosMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createPatmosMCRegisterInfo(StringRef TT) {
+static MCRegisterInfo *createPatmosMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitPatmosMCRegisterInfo(X, Patmos::R1);
   return X;
 }
 
-static MCSubtargetInfo *createPatmosMCSubtargetInfo(StringRef TT, StringRef CPU,
-                                                    StringRef FS) {
-  MCSubtargetInfo *X = new MCSubtargetInfo();
+static MCSubtargetInfo *
+createPatmosMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   if (CPU.empty()) {
     // TODO since we do not create a PatmosSubtarget here (for some registration
     // issues it seems), we need to take care about the default CPU model here
     // as well, otherwise we have no SchedModel.
     CPU = "generic";
   }
-  InitPatmosMCSubtargetInfo(X, TT, CPU, FS);
-  return X;
+  return createPatmosMCSubtargetInfoImpl(TT, CPU, FS);
 }
 
-static MCStreamer *createPatmosMCStreamer(const Target &T, StringRef TT,
-                                    MCContext &Ctx, MCAsmBackend &MAB,
-                                    raw_ostream &_OS, MCCodeEmitter *_Emitter,
-                                    bool RelaxAll, bool NoExecStack)
-{
-  Triple TheTriple(TT);
-
-  if (TheTriple.isOSDarwin()) {
-    llvm_unreachable("Patmos does not support Darwin MACH-O format");
-  }
-
-  if (TheTriple.isOSWindows()) {
-    llvm_unreachable("Patmos does not support Windows COFF format");
-  }
-
-  PatmosTargetELFStreamer *S = new PatmosTargetELFStreamer();
-  return createELFStreamer(Ctx, S, MAB, _OS, _Emitter, RelaxAll, NoExecStack);
-}
-
-static MCStreamer * createPatmosMCAsmStreamer(MCContext &Ctx,
-                            formatted_raw_ostream &OS,
-                            bool isVerboseAsm, bool useLoc, bool useCFI,
-                            bool useDwarfDirectory, MCInstPrinter *InstPrint,
-                            MCCodeEmitter *CE, MCAsmBackend *TAB, bool ShowInst)
-{
-  PatmosTargetStreamer *S = new PatmosTargetAsmStreamer(OS);
-
-  return llvm::createAsmStreamer(Ctx, S, OS, isVerboseAsm, useLoc, useCFI,
-                                 useDwarfDirectory, InstPrint, CE, TAB,
-                                 ShowInst);
-}
-
-
-static MCInstPrinter *createPatmosMCInstPrinter(const Target &T,
+static MCInstPrinter *createPatmosMCInstPrinter(const Triple &T,
                                                 unsigned SyntaxVariant,
                                                 const MCAsmInfo &MAI,
-						const MCInstrInfo &MII,
-						const MCRegisterInfo &MRI,
-                                                const MCSubtargetInfo &STI) {
+                                                const MCInstrInfo &MII,
+                                                const MCRegisterInfo &MRI) {
   return new PatmosInstPrinter(MAI, MII, MRI);
+}
+
+static MCTargetStreamer *createPatmosAsmTargetStreamer(MCStreamer &S,
+                                                       formatted_raw_ostream &OS,
+                                                       MCInstPrinter *InstPrint,
+                                                       bool isVerboseAsm) {
+  return new PatmosTargetAsmStreamer(S, OS);
+}
+
+static MCTargetStreamer *
+createPatmosObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+  return new PatmosTargetELFStreamer(S);
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetMC() {
   // Register the MC asm info.
-  TargetRegistry::RegisterMCAsmInfo(getThePatmosTarget(), 
-                                    createPatmosMCAsmInfo);
+  RegisterMCAsmInfoFn X(getThePatmosTarget(), createPatmosMCAsmInfo);
 
   // Register the MC instruction info.
   TargetRegistry::RegisterMCInstrInfo(getThePatmosTarget(), 
@@ -134,12 +117,12 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetMC() {
   TargetRegistry::RegisterMCAsmBackend(getThePatmosTarget(),
                                        createPatmosAsmBackend);
 
-  // Register the asm streamer
-  TargetRegistry::RegisterAsmStreamer(getThePatmosTarget(),
-                                      createPatmosMCAsmStreamer);
+  // Register the asm target streamer.
+  TargetRegistry::RegisterAsmTargetStreamer(getThePatmosTarget(),
+                                            createPatmosAsmTargetStreamer);
 
-  // Register the object streamer
-  TargetRegistry::RegisterMCObjectStreamer(getThePatmosTarget(),
-                                           createPatmosMCStreamer);
+  // Register the object target streamer.
+  TargetRegistry::RegisterObjectTargetStreamer(getThePatmosTarget(),
+                                               createPatmosObjectTargetStreamer);
 
 }

@@ -34,25 +34,25 @@ class PatmosMCCodeEmitter : public MCCodeEmitter {
   void operator=(const PatmosMCCodeEmitter &); // DO NOT IMPLEMENT
 
   const MCInstrInfo &MCII;
-  const MCSubtargetInfo &STI;
   MCContext &Ctx;
 
 public:
   PatmosMCCodeEmitter(const MCInstrInfo &mcii, const MCRegisterInfo &MRI, 
-	              const MCSubtargetInfo &sti,
                       MCContext &ctx) :
-            MCII(mcii), STI(sti) , Ctx(ctx) {}
+            MCII(mcii) , Ctx(ctx) {}
 
-  ~PatmosMCCodeEmitter() {}
+  ~PatmosMCCodeEmitter() override {}
 
-  void EncodeInstruction(const MCInst &MI, raw_ostream &OS,
-                         SmallVectorImpl<MCFixup> &Fixups) const;
+  void encodeInstruction(const MCInst &MI, raw_ostream &OS,
+                         SmallVectorImpl<MCFixup> &Fixups,
+                         const MCSubtargetInfo &STI) const override;
 
 
   // getBinaryCodeForInstr - TableGen'erated function for getting the
   // binary encoding for an instruction.
   uint64_t getBinaryCodeForInstr(const MCInst &MI,
-                                 SmallVectorImpl<MCFixup> &Fixups) const;
+                                 SmallVectorImpl<MCFixup> &Fixups,
+                                 const MCSubtargetInfo &STI) const;
 
 
   /****** Callback functions for TableGen'ed getBinaryCodeForInstr ******/
@@ -60,10 +60,14 @@ public:
    // getMachineOpValue - Return binary encoding of operand. If the machine
    // operand requires relocation, record the relocation and return zero.
   unsigned getMachineOpValue(const MCInst &MI,const MCOperand &MO,
+                             SmallVectorImpl<MCFixup> &Fixups,
+                             const MCSubtargetInfo &STI) const;
+  unsigned getMachineOpValue(const MCInst &MI,const MCOperand &MO,
                              SmallVectorImpl<MCFixup> &Fixups) const;
 
   unsigned getPredOperandEncoding(const MCInst &MI, unsigned OpNo,
-                                  SmallVectorImpl<MCFixup> &Fixups) const;
+                                  SmallVectorImpl<MCFixup> &Fixups,
+                                  const MCSubtargetInfo &STI) const;
 
   /****** Helper functions to emit binary code ******/
 
@@ -91,22 +95,22 @@ public:
 }; // class PatmosMCCodeEmitter
 }  // namespace
 
-MCCodeEmitter *llvm::createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
-					       const MCRegisterInfo &MRI,
-                                               const MCSubtargetInfo &STI,
-                                               MCContext &Ctx)
+MCCodeEmitter *createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
+                                         const MCRegisterInfo &MRI,
+                                         MCContext &Ctx)
 {
-  return new PatmosMCCodeEmitter(MCII, MRI, STI, Ctx);
+  return new PatmosMCCodeEmitter(MCII, MRI, Ctx);
 }
 
 
 /// EncodeInstruction - Emit the instruction.
 /// Size the instruction (currently only 4 bytes
 void PatmosMCCodeEmitter::
-EncodeInstruction(const MCInst &MI, raw_ostream &OS,
-                  SmallVectorImpl<MCFixup> &Fixups) const
+encodeInstruction(const MCInst &MI, raw_ostream &OS,
+                  SmallVectorImpl<MCFixup> &Fixups,
+                  const MCSubtargetInfo &STI) const
 {
-  uint64_t Binary = getBinaryCodeForInstr(MI, Fixups);
+  uint64_t Binary = getBinaryCodeForInstr(MI, Fixups, STI);
 
   // Check for unimplemented opcodes.
   if (!Binary) {
@@ -151,11 +155,18 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     return getImmediateEncoding(MI, MO, Fixups);
   }
 }
+unsigned PatmosMCCodeEmitter::
+getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                  SmallVectorImpl<MCFixup> &Fixups,
+                  const MCSubtargetInfo &STI) const {
+  return getMachineOpValue(MI,MO,Fixups);
+}
 
 /// getPredOperandEncoding - Return binary encoding of predicate operand.
 unsigned
 PatmosMCCodeEmitter::getPredOperandEncoding(const MCInst &MI, unsigned OpNo,
-                                  SmallVectorImpl<MCFixup> &Fixups) const {
+                                  SmallVectorImpl<MCFixup> &Fixups,
+                                  const MCSubtargetInfo &STI) const {
   // Base register is encoded in bits 20-16, offset is encoded in bits 15-0.
   assert( "Invalid predicate operand in encoder method!"
       && MI.getOperand(OpNo).isReg() && MI.getOperand(OpNo+1).isImm() );
@@ -257,7 +268,7 @@ PatmosMCCodeEmitter::addSymbolRefFixups(const MCInst &MI, const MCOperand& MO,
     llvm_unreachable("Creating symbol fixup for unknown or incorrect instruction format");
   }
 
-  Fixups.push_back(MCFixup::Create(Offset, MO.getExpr(), MCFixupKind(FixupKind)));
+  Fixups.push_back(MCFixup::create(Offset, MO.getExpr(), MCFixupKind(FixupKind)));
 }
 
 #include "PatmosGenMCCodeEmitter.inc"
