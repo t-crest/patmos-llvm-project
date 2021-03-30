@@ -14,7 +14,7 @@
 #ifndef _PATMOS_INSTPRINTER_H_
 #define _PATMOS_INSTPRINTER_H_
 
-#include "../MCTargetDesc/PatmosMCAsmInfo.h"
+#include "MCTargetDesc/PatmosMCAsmInfo.h"
 #include "llvm/MC/MCInstPrinter.h"
 
 namespace llvm {
@@ -37,8 +37,8 @@ namespace llvm {
       }
     }
 
-    void printInst(const MCInst *MI, uint64_t Address, raw_ostream &O,
-	               StringRef Annot);
+    void printInst(const MCInst *MI, uint64_t Address, StringRef Annot,
+                   const MCSubtargetInfo &STI, raw_ostream &O) override;
 
     void printInstPrefix(const MCInst *MI, raw_ostream &O);
 

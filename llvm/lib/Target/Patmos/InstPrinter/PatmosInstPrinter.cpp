@@ -34,7 +34,8 @@ bool PatmosInstPrinter::isBundled(const MCInst *MI) const {
 }
 
 void PatmosInstPrinter::printInst(const MCInst *MI, uint64_t Address,
-                                  raw_ostream &O, StringRef Annot)
+                                  StringRef Annot, const MCSubtargetInfo &STI,
+                                  raw_ostream &O)
 {
   // Prints bundle marker '{' and/or guard predicate.
   // This is a workaround. They cannot be printed before the mnemonic by
