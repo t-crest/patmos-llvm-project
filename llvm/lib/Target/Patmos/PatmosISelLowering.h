@@ -51,18 +51,21 @@ namespace llvm {
 
   class PatmosTargetLowering : public TargetLowering {
   public:
-    explicit PatmosTargetLowering(PatmosTargetMachine &TM);
+    explicit PatmosTargetLowering(const PatmosTargetMachine &TM,
+                                  const PatmosSubtarget &STI);
 
     /// LowerOperation - Provide custom lowering hooks for some operations.
-    virtual SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
     /// getTargetNodeName - This method returns the name of a target specific
     /// DAG node.
-    virtual const char *getTargetNodeName(unsigned Opcode) const;
+    const char *getTargetNodeName(unsigned Opcode) const override;
 
-    virtual EVT getSetCCResultType(LLVMContext &Context, EVT VT) const;
+    EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
+                           EVT VT) const override;
 
-    virtual unsigned getByValTypeAlignment(Type *Ty) const LLVM_OVERRIDE {
+    unsigned getByValTypeAlignment(Type *Ty,
+                                   const DataLayout &DL) const override {
       // Align any type passed by value on the stack to words
       return 4;
     }
@@ -74,42 +77,21 @@ namespace llvm {
     /// getJumpTableEncoding - Return the entry encoding for a jump table in the
     /// current function.  The returned value is a member of the
     /// MachineJumpTableInfo::JTEntryKind enum.
-    virtual unsigned getJumpTableEncoding() const {
+    unsigned getJumpTableEncoding() const override{
       return MachineJumpTableInfo::EK_Custom32;
     }
 
-    virtual const MCExpr *
+    const MCExpr *
     LowerCustomJumpTableEntry(const MachineJumpTableInfo * MJTI,
                               const MachineBasicBlock * MBB, unsigned uid,
-                              MCContext &OutContext) const;
+                              MCContext &OutContext) const override;
 
     /******************************************************************
      * Addressing and Offsets
      ******************************************************************/
 
-    /* TODO needed? should return correct values for Patmos here
-    /// isOffsetFoldingLegal - Return true if folding a constant offset
-    /// with the given GlobalAddress is legal.  It is frequently not legal in
-    /// PIC relocation models.
-    virtual bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
-
-    /// getMaximalGlobalOffset - Returns the maximal possible offset which can be
-    /// used for loads / stores from the global.
-    virtual unsigned getMaximalGlobalOffset() const {
-      return 0;
-    }
-    */
-
-    /*
-    virtual bool getPostIndexedAddressParts(SDNode *N, SDNode *Op,
-                                            SDValue &Base,
-                                            SDValue &Offset,
-                                            ISD::MemIndexedMode &AM,
-                                            SelectionDAG &DAG) const;
-    */
-
     /// Returns true if a cast between SrcAS and DestAS is a noop.
-    virtual bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const {
+    bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override{
       // Addrspacecasts are always noops.
       return true;
     }
@@ -120,9 +102,9 @@ namespace llvm {
 
     ConstraintType getConstraintType(const std::string &Constraint) const;
 
-    virtual std::pair<unsigned, const TargetRegisterClass*>
-      getRegForInlineAsmConstraint(const std::string &Constraint,
-                                   MVT VT) const;
+    std::pair<unsigned, const TargetRegisterClass*>
+      getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                   StringRef Constraint, MVT VT) const override;
 
   private:
     const PatmosSubtarget &Subtarget;
@@ -144,20 +126,19 @@ namespace llvm {
                             SDLoc dl, SelectionDAG &DAG,
                             SmallVectorImpl<SDValue> &InVals) const;
   public:
-    virtual SDValue LowerCall(CallLoweringInfo &CLI,
-                      SmallVectorImpl<SDValue> &InVals) const;
+    SDValue LowerCall(CallLoweringInfo &CLI,
+                      SmallVectorImpl<SDValue> &InVals) const override;
 
-    virtual SDValue LowerFormalArguments(SDValue Chain,
-                                 CallingConv::ID CallConv, bool isVarArg,
+    SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                                  const SmallVectorImpl<ISD::InputArg> &Ins,
-                                 SDLoc dl, SelectionDAG &DAG,
-                                 SmallVectorImpl<SDValue> &InVals) const;
+                                 const SDLoc &dl, SelectionDAG &DAG,
+                                 SmallVectorImpl<SDValue> &InVals) const override;
 
-    virtual SDValue LowerReturn(SDValue Chain,
+    SDValue LowerReturn(SDValue Chain,
                         CallingConv::ID CallConv, bool isVarArg,
                         const SmallVectorImpl<ISD::OutputArg> &Outs,
                         const SmallVectorImpl<SDValue> &OutVals,
-                        SDLoc dl, SelectionDAG &DAG) const;
+                        const SDLoc &dl, SelectionDAG &DAG) const override;
 
     /// LowerVASTART - Lower the va_start intrinsic to access parameters of
     /// variadic functions.
@@ -178,10 +159,6 @@ namespace llvm {
     /// LowerLOAD - Promote i1 load operations to i8.
     SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
   };
-
-
-
-
 } // namespace llvm
 
 #endif // _LLVM_TARGET_PATMOS_ISELLOWERING_H_
