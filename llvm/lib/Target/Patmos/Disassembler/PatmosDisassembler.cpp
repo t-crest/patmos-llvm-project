@@ -28,6 +28,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "patmos-disassembler"
+
 typedef MCDisassembler::DecodeStatus DecodeStatus;
 
 /// PatmosDisassembler - a disassembler class for Patmos.
@@ -36,8 +38,8 @@ class PatmosDisassembler : public MCDisassembler {
 public:
   /// Constructor     - Initializes the disassembler.
   ///
-  PatmosDisassembler(const Target &T, const MCSubtargetInfo &STI) :
-    MCDisassembler(STI), MII(T.createMCInstrInfo()) {
+  PatmosDisassembler(const Target &T, const MCSubtargetInfo &STI, MCContext &Ctx) :
+    MCDisassembler(STI, Ctx), MII(T.createMCInstrInfo()) {
   }
 
   ~PatmosDisassembler() {
@@ -50,8 +52,7 @@ public:
                               uint64_t &size,
                               ArrayRef<uint8_t> Bytes,
                               uint64_t address,
-                              raw_ostream &vStream,
-                              raw_ostream &cStream) const;
+                              raw_ostream &CStream) const override;
 
 private:
 
@@ -98,22 +99,23 @@ static DecodeStatus DecodePredRegisterClass(MCInst &Inst, unsigned RegNo, uint64
 #include "PatmosGenDisassemblerTables.inc"
 
 /// readInstruction - read four bytes from the MemoryObject
+/// The given size is where in the input to start reading and will
+/// be updated so the number of bytes conusmed is added to it.
 static DecodeStatus readInstruction32(ArrayRef<uint8_t> Bytes,
-                                      uint64_t address,
                                       uint64_t &size,
                                       uint32_t &insn) {
   // We want to read exactly 4 Bytes of data.
-  if (Bytes.size() < 4) {
+  if (Bytes.size() < (size + 4)) {
     return MCDisassembler::Fail;
   }
 
-  size += 4;
-
   // Encoded as a big-endian 32-bit word in the stream.
-  insn = (Bytes[3] <<  0) |
-         (Bytes[2] <<  8) |
-         (Bytes[1] << 16) |
-         (Bytes[0] << 24);
+  insn = (Bytes[3 + size] <<  0) |
+         (Bytes[2 + size] <<  8) |
+         (Bytes[1 + size] << 16) |
+         (Bytes[0 + size] << 24);
+
+  size += 4;
 
   return MCDisassembler::Success;
 }
@@ -123,13 +125,12 @@ PatmosDisassembler::getInstruction(MCInst &instr,
                                  uint64_t &Size,
                                  ArrayRef<uint8_t> Bytes,
                                  uint64_t Address,
-                                 raw_ostream &vStream,
-                                 raw_ostream &cStream) const {
+                                 raw_ostream &CStream) const {
   uint32_t Insn;
 
   Size = 0;
 
-  DecodeStatus Result = readInstruction32(Bytes, Address, Size, Insn);
+  DecodeStatus Result = readInstruction32(Bytes, Size, Insn);
   if (Result == MCDisassembler::Fail)
     return MCDisassembler::Fail;
 
@@ -145,9 +146,10 @@ PatmosDisassembler::getInstruction(MCInst &instr,
   if (Result == MCDisassembler::Fail) {
     if (!isBundled) return MCDisassembler::Fail;
 
+
     uint32_t InsnL;
 
-    Result = readInstruction32(Bytes, Address + 4, Size, InsnL);
+    Result = readInstruction32(Bytes, Size, InsnL);
     if (Result == MCDisassembler::Fail) {
       return MCDisassembler::Fail;
     }
@@ -164,7 +166,7 @@ PatmosDisassembler::getInstruction(MCInst &instr,
   }
 
   // handle bundled instructions by adding a special operand
-  instr.addOperand(MCOperand::CreateImm(isBundled));
+  instr.addOperand(MCOperand::createImm(isBundled));
 
   adjustSignedImm(instr);
 
@@ -200,7 +202,7 @@ static DecodeStatus DecodeRRegsRegisterClass(MCInst &Inst, unsigned RegNo, uint6
   if (RegNo > 31)
     return MCDisassembler::Fail;
 
-  Inst.addOperand(MCOperand::CreateReg(RRegsTable[RegNo]));
+  Inst.addOperand(MCOperand::createReg(RRegsTable[RegNo]));
 
   return MCDisassembler::Success;
 }
@@ -211,7 +213,7 @@ static DecodeStatus DecodeSRegsRegisterClass(MCInst &Inst, unsigned RegNo, uint6
   if (RegNo > 15)
     return MCDisassembler::Fail;
 
-  Inst.addOperand(MCOperand::CreateReg(SRegsTable[RegNo]));
+  Inst.addOperand(MCOperand::createReg(SRegsTable[RegNo]));
 
   return MCDisassembler::Success;
 }
@@ -222,7 +224,7 @@ static DecodeStatus DecodePRegsRegisterClass(MCInst &Inst, unsigned RegNo, uint6
   if (RegNo > 7)
     return MCDisassembler::Fail;
 
-  Inst.addOperand(MCOperand::CreateReg(PRegsTable[RegNo]));
+  Inst.addOperand(MCOperand::createReg(PRegsTable[RegNo]));
 
   return MCDisassembler::Success;
 }
@@ -233,21 +235,22 @@ static DecodeStatus DecodePredRegisterClass(MCInst &Inst, unsigned RegNo, uint64
   bool flag    = RegNo >> 3;
   unsigned reg = RegNo & 0x07;
 
-  Inst.addOperand(MCOperand::CreateReg(PRegsTable[reg]));
-  Inst.addOperand(MCOperand::CreateImm(flag));
+  Inst.addOperand(MCOperand::createReg(PRegsTable[reg]));
+  Inst.addOperand(MCOperand::createImm(flag));
 
   return MCDisassembler::Success;
 }
 
 static MCDisassembler *createPatmosDisassembler(
                        const Target &T,
-                       const MCSubtargetInfo &STI) {
-  return new PatmosDisassembler(T, STI);
+                       const MCSubtargetInfo &STI,
+                       MCContext &Ctx) {
+  return new PatmosDisassembler(T, STI, Ctx);
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosDisassembler() {
   // Register the disassembler.
-  TargetRegistry::RegisterMCDisassembler(getThePatmosTarget,
+  TargetRegistry::RegisterMCDisassembler(getThePatmosTarget(),
                                          createPatmosDisassembler);
 }
 
