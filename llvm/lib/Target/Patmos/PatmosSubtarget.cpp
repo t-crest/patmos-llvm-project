@@ -94,12 +94,12 @@ static cl::opt<PatmosSubtarget::CFLType> PatmosCFLType("mpatmos-cfl",
                                            "Emit only non-delayed branches and calls")
                                 ));
 
-PatmosSubtarget::PatmosSubtarget(const std::string &TT,
-                                 const std::string &CPU,
-                                 const std::string &FS) :
+PatmosSubtarget::PatmosSubtarget(const Triple &TT,
+                                 StringRef CPU,
+                                 StringRef FS) :
   PatmosGenSubtargetInfo(TT, CPU, FS)
 {
-  std::string CPUName = CPU;
+  auto CPUName = CPU;
   if (CPUName.empty()) CPUName = "generic";
 
   // Parse features string.
@@ -111,13 +111,6 @@ PatmosSubtarget::PatmosSubtarget(const std::string &TT,
 bool PatmosSubtarget::enablePostRAScheduler(CodeGenOpt::Level OptLevel,
                                    TargetSubtargetInfo::AntiDepBreakMode& Mode,
                                    RegClassVector& CriticalPathRCs) const {
-  // TODO disabled until call delay slots are properly handled by anti-dep
-  // breaker. Moving a use of a caller-defined register (r1,..) into the delay
-  // slot of a call causes the anti-dep breaker not to detect the use if the def
-  // is in a preceding scheduling region.
-  // Mode = (OptLevel == CodeGenOpt::None) ? ANTIDEP_NONE : ANTIDEP_ALL;
-  Mode = ANTIDEP_NONE;
-
   return hasPostRAScheduler(OptLevel);
 }
 
@@ -190,7 +183,7 @@ unsigned PatmosSubtarget::getIssueWidth(unsigned SchedClass) const {
 
 bool PatmosSubtarget::canIssueInSlot(unsigned SchedClass, unsigned Slot) const {
   const InstrStage* IS = InstrItins.beginStage(SchedClass);
-  unsigned FuncUnits = IS->getUnits();
+  auto FuncUnits = IS->getUnits();
 
   switch (Slot) {
   case 0:
