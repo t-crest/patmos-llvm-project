@@ -143,15 +143,20 @@ class FCFG {
 
 namespace llvm{
   // Allow clients to iterate over the Scope FCFG nodes
-  template <> struct GraphTraits<FCFG*> {
-    typedef Node NodeType;
-    typedef Node::child_iterator ChildIteratorType;
+  template <> struct GraphTraits<FCFG *> {
+    using NodeRef = Node *;
+    using ChildIteratorType = Node::child_iterator;
+    using nodes_iterator = const Node *;
 
-    static NodeType *getEntryNode(FCFG *f) { return &f->nentry; }
-    static inline ChildIteratorType child_begin(NodeType *N) {
+    static NodeRef getEntryNode(FCFG *f) {
+      return &f->nentry;
+    }
+
+    static ChildIteratorType child_begin(const NodeRef N) {
       return N->succs_begin();
     }
-    static inline ChildIteratorType child_end(NodeType *N) {
+
+    static ChildIteratorType child_end(const NodeRef N) {
       return N->succs_end();
     }
   };
@@ -205,9 +210,9 @@ public:
     Blocks.push_back(new PredicatedBlock(header));
 
     // add the rest of the MBBs to the scope
-    for (MachineFunction::iterator FI=MF.begin(), FE=MF.end();
+    for (auto FI=MF.begin(), FE=MF.end();
             FI!=FE; ++FI) {
-      MachineBasicBlock *MBB = FI;
+      MachineBasicBlock *MBB = &*FI;
       if(LI[MBB] == loop){
         addMBB(MBB);
       }
@@ -416,7 +421,7 @@ public:
     // get the branch condition
     MachineBasicBlock *TBB = NULL, *FBB = NULL;
     SmallVector<MachineOperand, 2> Cond;
-    if (instrInfo->AnalyzeBranch(*SrcMBB, TBB, FBB, Cond)) {
+    if (instrInfo->analyzeBranch(*SrcMBB, TBB, FBB, Cond)) {
       LLVM_DEBUG(dbgs() << *SrcMBB);
       report_fatal_error("AnalyzeBranch for SP-Transformation failed; "
           "could not determine branch condition");
@@ -428,14 +433,14 @@ public:
         Cond.push_back(MachineOperand::CreateImm(0)); // flag
     }
     if (TBB != DstMBB) {
-      instrInfo->ReverseBranchCondition(Cond);
+      instrInfo->reverseBranchCondition(Cond);
     }
     return std::make_tuple(Cond[0], Cond[1]);
   }
 
   CD_map_t ctrldep(FCFG &fcfg){
     CD_map_t CD;
-    for (df_iterator<FCFG*> I = df_begin(&fcfg), E = df_end(&fcfg);
+    for (auto I = df_begin(&fcfg), E = df_end(&fcfg);
         I != E; ++I) {
       Node *n = *I;
       if (n->dout() >= 2) {
@@ -477,7 +482,7 @@ public:
   void dumpfcfg(FCFG &fcfg){
     dbgs() << "==========\nFCFG [BB#" << Pub.getHeader()->getMBB()->getNumber() << "]\n";
 
-    for (df_iterator<FCFG*> I = df_begin(&fcfg), E = df_end(&fcfg);
+    for (auto I = df_begin(&fcfg), E = df_end(&fcfg);
         I != E; ++I) {
 
       dbgs().indent(2);
@@ -604,7 +609,7 @@ public:
     report_fatal_error(
         "Single-path code generation failed! "
         "Could not find the PredicatedBlock of MBB: '" +
-        mbb->getParent()->getFunction()->getName() + "'!");
+        mbb->getParent()->getFunction().getName() + "'!");
   }
 
   std::vector<PredicatedBlock*> getSubheaders()
@@ -682,7 +687,7 @@ SPScope::SPScope(SPScope *parent, MachineLoop &loop, MachineFunction &MF, Machin
   MachineBasicBlock *header = loop.getHeader();
 
   // info about loop exit edges
-  SmallVector<std::pair<const MachineBasicBlock*,const MachineBasicBlock*>, 4> ExitEdges;
+  SmallVector<std::pair<MachineBasicBlock*,MachineBasicBlock*>, 4> ExitEdges;
   loop.getExitEdges(ExitEdges);
 
   for(auto edge: ExitEdges){
@@ -795,7 +800,7 @@ unsigned SPScope::getLoopBound() const {
     report_fatal_error(
             "Single-path code generation failed! "
             "Scope has no bound. MBB: '" +
-            (getHeader()->getMBB()->getParent()->getFunction()->getName()) + "'!");
+            (getHeader()->getMBB()->getParent()->getFunction().getName()) + "'!");
   }
   return (unsigned) Priv->LoopBound;
 }
@@ -812,7 +817,7 @@ std::vector<PredicatedBlock*> SPScope::getBlocksTopoOrd() const
   auto fcfg = Priv->buildfcfg();
   // dfs the fcfg in postorder
   std::vector<PredicatedBlock *> PO;
-  for (po_iterator<FCFG*> I = po_begin(&fcfg), E = po_end(&fcfg);
+  for (auto I = po_begin(&fcfg), E = po_end(&fcfg);
       I != E; ++I) {
     auto block = const_cast<PredicatedBlock*>((*I)->Block);
     if (block) {
@@ -850,7 +855,7 @@ SPScope* SPScope::findScopeOf(const PredicatedBlock *block) const
     report_fatal_error(
             "Single-path code generation failed! "
             "Could not find the the scope of PredicatedBlock with MBB: '" +
-            (block->getMBB()->getParent()->getFunction()->getName()) + "'!");
+            (block->getMBB()->getParent()->getFunction().getName()) + "'!");
   } else {
     return found;
   }
@@ -889,7 +894,7 @@ SPScope * SPScope::createSPScopeTree(MachineFunction &MF, MachineLoopInfo &LI, c
 
   Root->Priv->assignSuccessors();
 
-  DEBUG({
+  LLVM_DEBUG({
       dbgs() << "Initial scope tree:\n";
       Root->dump(dbgs(), 0, true);
   });
@@ -898,7 +903,7 @@ SPScope * SPScope::createSPScopeTree(MachineFunction &MF, MachineLoopInfo &LI, c
   // NB: this could be solved more elegantly by analyzing a scope when it is
   // built. But how he tree is created right now, it will not become more
   // elegant anyway.
-  for(df_iterator<SPScope*> I = df_begin(Root), E = df_end(Root); I != E; ++I)
+  for(auto I = df_begin(Root), E = df_end(Root); I != E; ++I)
   {
     (*I)->Priv->computePredInfos(instrInfo);
   }

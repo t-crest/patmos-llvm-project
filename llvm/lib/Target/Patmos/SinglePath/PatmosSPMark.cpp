@@ -27,7 +27,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-singlepath"
 
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosSinglePathInfo.h"
@@ -48,10 +47,11 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "patmos-singlepath"
+
 STATISTIC(NumSPTotal,   "Total number of functions marked as single-path");
 STATISTIC(NumSPMaybe,   "Number of 'used' functions marked as single-path");
 STATISTIC(NumSPCleared, "Number of functions cleared again");
-
 
 namespace {
 
@@ -104,28 +104,30 @@ public:
   static char ID; // Pass identification, replacement for typeid
 
   PatmosSPMark(PatmosTargetMachine &tm)
-    : MachineModulePass(ID), TM(tm) { (void) TM; }
+    : MachineModulePass(ID), TM(tm) {
+      MMI = &getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
+  }
 
   /// getPassName - Return the pass' name.
-  virtual const char *getPassName() const {
+  StringRef getPassName() const override {
     return "Patmos Single-Path Mark (machine code)";
   }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<MachineModuleInfo>();
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<MachineModuleInfoWrapperPass>();
     AU.setPreservesAll();
     MachineModulePass::getAnalysisUsage(AU);
   }
 
-  virtual bool doInitialization(Module &M) {
+  bool doInitialization(Module &M) override {
     return false;
   }
 
-  virtual bool doFinalization(Module &M) {
+  bool doFinalization(Module &M) override {
     return false;
   }
 
-  virtual bool runOnMachineModule(const Module &M);
+  bool runOnMachineModule(const Module &M) override;
 };
 
 } // end anonymous namespace
@@ -142,8 +144,6 @@ ModulePass *llvm::createPatmosSPMarkPass(PatmosTargetMachine &tm) {
 bool PatmosSPMark::runOnMachineModule(const Module &M) {
   LLVM_DEBUG( dbgs() <<
          "[Single-Path] Mark functions reachable from single-path roots\n");
-
-  MMI = &getAnalysis<MachineModuleInfo>();
   assert(MMI);
 
   Worklist W;
@@ -152,7 +152,7 @@ bool PatmosSPMark::runOnMachineModule(const Module &M) {
   for(Module::const_iterator F(M.begin()), FE(M.end()); F != FE; ++F) {
     if (F->hasFnAttribute("sp-root") || F->hasFnAttribute("sp-reachable")) {
       // get the machine-level function
-      MachineFunction *MF = MMI->getMachineFunction(F);
+      MachineFunction *MF = MMI->getMachineFunction(*F);
       assert( MF );
       PatmosMachineFunctionInfo *PMFI =
         MF->getInfo<PatmosMachineFunctionInfo>();
@@ -183,7 +183,7 @@ const Function *PatmosSPMark::getCallTarget(const MachineInstr *MI) const {
     Target = dyn_cast<Function>(MO.getGlobal());
   } else if (MO.isSymbol()) {
     const char *TargetName = MO.getSymbolName();
-    const Module *M = MI->getParent()->getParent()->getFunction()->getParent();
+    const Module *M = MI->getParent()->getParent()->getFunction().getParent();
     Target = M->getFunction(TargetName);
   }
   return Target;
@@ -193,7 +193,7 @@ const Function *PatmosSPMark::getCallTarget(const MachineInstr *MI) const {
 MachineFunction *PatmosSPMark::getCallTargetMF(const MachineInstr *MI) const {
   const Function *F = getCallTarget(MI);
   MachineFunction *MF;
-  if (F && (MF = MMI->getMachineFunction(F))) {
+  if (F && (MF = MMI->getMachineFunction(*F))) {
     return MF;
   }
   return NULL;
@@ -201,7 +201,7 @@ MachineFunction *PatmosSPMark::getCallTargetMF(const MachineInstr *MI) const {
 
 MachineFunction *
 PatmosSPMark::getCallTargetMFOrAbort(MachineBasicBlock::iterator MI, MachineFunction::iterator MBB){
-  MachineFunction *MF =  getCallTargetMF(MI);
+  MachineFunction *MF = getCallTargetMF(&*MI);
   if (!MF) {
     errs() << "[Single-path] Cannot find ";
     bool foundSymbol = false;
@@ -220,7 +220,7 @@ PatmosSPMark::getCallTargetMFOrAbort(MachineBasicBlock::iterator MI, MachineFunc
         errs() << "unknown function";
     }
     errs() << " to rewrite. Was called by '"
-           << MBB->getParent()->getFunction()->getName()
+           << MBB->getParent()->getFunction().getName()
            << "' (indirect call?)\n";
     abort();
   }
@@ -237,7 +237,7 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
       if (MI->isCall()) {
         MachineFunction *MF = getCallTargetMFOrAbort(MI,MBB);
 
-        const Function *Target = getCallTarget(MI);
+        const Function *Target = getCallTarget(&*MI);
 
         PatmosMachineFunctionInfo *PMFI =
           MF->getInfo<PatmosMachineFunctionInfo>();
@@ -245,10 +245,10 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
           if (!Target->hasFnAttribute("sp-reachable") &&
               !Target->hasFnAttribute("sp-maybe")) {
             // The call target is not a .._sp_ clone
-            rewriteCall(MI);
+            rewriteCall(&*MI);
           }
           // set _sp MF to single path in PMFI (MF might have changed)
-          MachineFunction *MF = getCallTargetMF(MI);
+          MachineFunction *MF = getCallTargetMF(&*MI);
           PatmosMachineFunctionInfo *PMFI =
             MF->getInfo<PatmosMachineFunctionInfo>();
           // we possibly have already marked the _sp variant as single-path
@@ -299,7 +299,7 @@ void PatmosSPMark::removeUncalledSPFunctions(const Module &M) {
   for(Module::const_iterator F(M.begin()), FE(M.end()); F != FE; ++F) {
     if (F->hasFnAttribute("sp-maybe")) {
       // get the machine-level function
-      MachineFunction *MF = MMI->getMachineFunction(F);
+      MachineFunction *MF = MMI->getMachineFunction(*F);
       assert( MF );
       PatmosMachineFunctionInfo *PMFI =
         MF->getInfo<PatmosMachineFunctionInfo>();
@@ -324,7 +324,7 @@ void PatmosSPMark::removeUncalledSPFunctions(const Module &M) {
 }
 
 void printFunction(MachineFunction &MF) {
-  outs() << "Bundle function '" << MF.getFunction()->getName() << "'\n";
+  outs() << "Bundle function '" << MF.getFunction().getName() << "'\n";
   outs() << "Block list:\n";
   for (MachineFunction::iterator MBB = MF.begin(), MBBE = MF.end();
                                    MBB != MBBE; ++MBB) {

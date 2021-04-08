@@ -23,6 +23,8 @@
 using namespace llvm;
 using namespace std;
 
+#define DEBUG_TYPE "patmos-singlepath"
+
 STATISTIC( SPNumPredicates, "Number of predicates for single-path code");
 STATISTIC( PredSpillLocs, "Number of required spill bits for predicates");
 STATISTIC( NoSpillScopes,
@@ -428,7 +430,7 @@ public:
   /// Unifies with child, such that this RAInfo knows how many locations will
   /// be used by the given child.
   void unifyWithChild(const RAInfo::Impl &child){
-    ChildrenMaxCumLocs = max(child.getCumLocs(), ChildrenMaxCumLocs);
+    ChildrenMaxCumLocs = std::max(child.getCumLocs(), ChildrenMaxCumLocs);
   }
 
   UseLoc calculateNotHeaderUseLoc(unsigned blockIndex, unsigned usePred,
@@ -564,7 +566,7 @@ public:
   /// Sorts the given vector of predicates according to the
   /// furthest next use from the given MBB position.
   void sortFurthestNextUse(unsigned pos, vector<unsigned>& order) {
-    sort(order.begin(), order.end(), [this, pos](int a, int b){
+    std::sort(order.begin(), order.end(), [this, pos](int a, int b){
       return LRs.at(a).hasNextUseBefore(pos, LRs.at(b));
     });
   }

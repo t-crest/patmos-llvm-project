@@ -147,8 +147,8 @@ namespace llvm {
               MI != ME; ++MI) {
         auto instructionPredicates = getInstructionPredicates();
         os.indent(indent + 2) << "[" << &(*MI) << "](";
-        if(instructionPredicates.count(MI)){
-          os << getInstructionPredicates().at(MI);
+        if(instructionPredicates.count(&*MI)){
+          os << getInstructionPredicates().at(&*MI);
         }else{
           os << "-";
         }
@@ -161,8 +161,8 @@ namespace llvm {
               MI != ME; ++MI) {
         auto instructionPredicates = getInstructionPredicates();
         os.indent(indent + 2) << "[" << &(*MI) << "](";
-        if(instructionPredicates.count(MI)){
-          os << getInstructionPredicates().at(MI);
+        if(instructionPredicates.count(&*MI)){
+          os << getInstructionPredicates().at(&*MI);
         }else{
           os << "-";
         }

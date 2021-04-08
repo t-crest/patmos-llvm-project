@@ -35,7 +35,6 @@ FunctionPass *llvm::createPatmosSPBundlingPass(const PatmosTargetMachine &tm) {
 bool PatmosSPBundling::runOnMachineFunction(MachineFunction &MF) {
   PSPI = &getAnalysis<PatmosSinglePathInfo>();
   PostDom = &getAnalysis<MachinePostDominatorTree>();
-  PMFI = MF.getInfo<PatmosMachineFunctionInfo>();
     
   // only convert function if marked
   if ( PSPI->isConverting(MF) && STC.enableBundling(TM.getOptLevel())
@@ -220,7 +219,7 @@ void PatmosSPBundling::doBundlingFunction(SPScope* root) {
 
   bundleScope(root);
 
-  DEBUG({
+  LLVM_DEBUG({
       dbgs() << "Scope tree after bundling:\n";
       root->dump(dbgs(), 0, true);
       dbgs() << "========= End bundling ========= \n";

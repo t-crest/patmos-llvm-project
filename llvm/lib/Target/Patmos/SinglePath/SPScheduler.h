@@ -32,15 +32,15 @@ public:
   {}
 
   // Override MachineFunctionPass::runOnMachineFunction
-  bool runOnMachineFunction(MachineFunction &MF);
+  bool runOnMachineFunction(MachineFunction &MF) override;
 
   /// getPassName - Return the pass' name.
-  virtual const char *getPassName() const {
+  StringRef getPassName() const override {
     return "Patmos Single-Path Scheduler (machine code)";
   }
 
   /// getAnalysisUsage - Specify which passes this pass depends on
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<PatmosSPReduce>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }

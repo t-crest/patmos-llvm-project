@@ -11,12 +11,6 @@
 
 #include "PatmosSPReduce.h"
 #include "PredicateDefinition.h"
-#define DEBUG_TYPE "patmos-singlepath"
-
-#define USE_BCOPY
-#define NOSPILL_OPTIMIZATION
-//#define BOUND_UNDEREST_PROTECTION
-
 #include "Patmos.h"
 #include "PatmosInstrInfo.h"
 #include "PatmosMachineFunctionInfo.h"
@@ -55,6 +49,12 @@
 #include <iostream>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "patmos-singlepath"
+
+#define USE_BCOPY
+#define NOSPILL_OPTIMIZATION
+//#define BOUND_UNDEREST_PROTECTION
 
 STATISTIC( RemovedBranchInstrs, "Number of branch instructions removed");
 STATISTIC( InsertedInstrs,      "Number of instructions inserted");
@@ -144,7 +144,7 @@ namespace llvm {
         // for the data-flow analyses
         for (MachineFunction::iterator MBB = MF.begin(), MBBe = MF.end();
             MBB != MBBe; ++MBB) {
-          BlockInfos.insert(std::make_pair(MBB, Blockinfo(NumFIs)));
+          BlockInfos.insert(std::make_pair(&*MBB, Blockinfo(NumFIs)));
         }
 
         LLVM_DEBUG(dbgs() << "Removing redundant loads:\n");
@@ -488,7 +488,7 @@ void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
   MF.RenumberBlocks();
 
   LLVM_DEBUG( dbgs() << "AFTER Single-Path Reduce\n"; MF.dump() );
-  DEBUG({
+  LLVM_DEBUG({
       dbgs() << "Scope tree after Reduction:\n";
       RootScope->dump(dbgs(), 0, true);
   });
@@ -781,7 +781,7 @@ insertDefToRegLoc(MachineBasicBlock &MBB, unsigned predReg, unsigned guard,
     DefMI = BuildMI(MBB, MI, DL,
         TII->get(Patmos::PMOV), predReg)
       .addReg(guard).addImm(0) // guard operand
-      .addOperand(Cond[0]).addOperand(Cond[1]); // condition
+      .add(Cond[0]).add(Cond[1]); // condition
   } else {
     LLVM_DEBUG(dbgs() << "PAND\n");
 
@@ -789,7 +789,7 @@ insertDefToRegLoc(MachineBasicBlock &MBB, unsigned predReg, unsigned guard,
     DefMI = AddDefaultPred(BuildMI(MBB, MI, DL,
           TII->get(Patmos::PAND), predReg))
       .addReg(guard).addImm(0) // current guard as source
-      .addOperand(Cond[0]).addOperand(Cond[1]); // condition
+      .add(Cond[0]).add(Cond[1]); // condition
   }
   InsertedInstrs++; // STATISTIC
 }
@@ -817,7 +817,7 @@ insertDefToStackLoc(MachineBasicBlock &MBB, unsigned stloc, unsigned guard,
     .addReg(guard).addImm(0) // guard
     .addReg(tmpReg)
     .addImm(bitpos)
-    .addOperand(Cond[0]).addOperand(Cond[1]); // condition
+    .add(Cond[0]).add(Cond[1]); // condition
   InsertedInstrs++; // STATISTIC
 #else
   // clear bit on first definition (unconditionally)
@@ -869,7 +869,7 @@ insertDefToS0SpillSlot(MachineBasicBlock &MBB, unsigned slot, unsigned predReg,
     .addReg(guard).addImm(0) // guard
     .addReg(tmpReg)
     .addImm(bitpos)
-    .addOperand(Cond[0]).addOperand(Cond[1]); // condition
+    .add(Cond[0]).add(Cond[1]); // condition
   InsertedInstrs++; // STATISTIC
 #else
   uint32_t or_bitmask = 1 << bitpos;
@@ -905,7 +905,7 @@ void PatmosSPReduce::fixupKillFlagOfCondRegs(void) {
 
     // restore kill flag at the last use
     // To this end, we search the instruction in which it was last used.
-    for (MachineBasicBlock::iterator lastMI = prior(firstTI),
+    for (auto lastMI = std::prev(firstTI),
         firstMI = MBB->begin();
         lastMI != firstMI; --lastMI) {
       MachineOperand *MO;
@@ -945,7 +945,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           DEBUG_TRACE( dbgs() << "    skip return: " << *MI );
           continue;
       }
-      if (TII->isStackControl(MI)) {
+      if (TII->isStackControl(&*MI)) {
           DEBUG_TRACE( dbgs() << "    skip stack control: " << *MI );
           continue;
       }
@@ -953,7 +953,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           continue;
           DEBUG_TRACE(dbgs() << "    skip frame setup: " << *MI);
       }
-      if (ReturnInfoInsts.count(MI)) {
+      if (ReturnInfoInsts.count(&*MI)) {
           DEBUG_TRACE(dbgs() << "    skip return info (re-)storing: " << *MI);
           continue;
       }
@@ -963,7 +963,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
       auto predReg = predRegs.count(instrPred) ? predRegs[instrPred] : Patmos::P0;
       if (MI->isCall()) {
           DEBUG_TRACE( dbgs() << "    call: " << *MI );
-          assert(!TII->isPredicated(MI) && "call predicated");
+          assert(!TII->isPredicated(*MI) && "call predicated");
           DebugLoc DL = MI->getDebugLoc();
           // copy actual preg to temporary preg
           AddDefaultPred(BuildMI(*MBB, MI, DL,
@@ -977,7 +977,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
             .addFrameIndex(fi).addImm(0) // address
             .addReg(Patmos::R9, RegState::Kill);
           // restore from stack slot (after the call MI)
-          AddDefaultPred(BuildMI(*MBB, llvm::next(MI), DL,
+          AddDefaultPred(BuildMI(*MBB, std::next(MI), DL,
                 TII->get(Patmos::LWC), Patmos::R9))
             .addFrameIndex(fi).addImm(0); // address
           ++MI; // skip the load operation
@@ -1019,7 +1019,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
             AddDefaultPred(BuildMI(*MBB, MI, MI->getDebugLoc(),
                                 TII->get(Patmos::PAND), PRTmp))
                   .addReg(predReg).addImm(0)
-                  .addOperand(PO1).addOperand(PO2);
+                  .add(PO1).add(PO2);
             PO1.setReg(PRTmp);
             PO2.setImm(0);
             InsertedInstrs++; // STATISTIC
@@ -1160,10 +1160,10 @@ void PatmosSPReduce::insertPredicateLoad(MachineBasicBlock *MBB,
 
 void PatmosSPReduce::mergeMBBs(MachineFunction &MF) {
   LLVM_DEBUG( dbgs() << "Function before block merge:\n"; MF.dump() );
-    DEBUG({
-        dbgs() << "Scope tree before block merge:\n";
-        RootScope->dump(dbgs(), 0, true);
-    });
+  LLVM_DEBUG({
+    dbgs() << "Scope tree before block merge:\n";
+    RootScope->dump(dbgs(), 0, true);
+  });
   // first, obtain the sequence of MBBs in DF order (as copy!)
   // NB: have to use the version below, as some version of libcxx will not
   // compile it (similar to
@@ -1246,7 +1246,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
       if (MI->getOpcode() == Patmos::MFS &&
           SpecialRegs.count(MI->getOperand(3).getReg())) {
         // store return info in prologue (reads SRB/SRO)
-        ReturnInfoInsts.insert(MI);
+        ReturnInfoInsts.insert(&*MI);
         LLVM_DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
         // get reg it defines
         unsigned reg = MI->getOperand(0).getReg();
@@ -1260,7 +1260,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
             if ( MO.isReg() && MO.getReg() == reg) {
 
               assert(UMI->getFlag(MachineInstr::FrameSetup));
-              ReturnInfoInsts.insert(UMI);
+              ReturnInfoInsts.insert(&*UMI);
               LLVM_DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
                   UMI->dump());
               found = true;
@@ -1273,18 +1273,18 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
       if (MI->getOpcode() == Patmos::MTS &&
           SpecialRegs.count(MI->getOperand(0).getReg())) {
         // restore return info in epilogue (writes SRB/SRO)
-        ReturnInfoInsts.insert(MI);
+        ReturnInfoInsts.insert(&*MI);
         LLVM_DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
         // get reg it uses
         unsigned reg = MI->getOperand(3).getReg();
         // search up for def of reg (load from stack slot)
-        MachineBasicBlock::iterator DMI = prior(MI);
+        MachineBasicBlock::iterator DMI = std::prev(MI);
         bool found = false;
         while (!found) {
           // if DMI defines reg
           if (DMI->definesRegister(reg)) {
             assert(DMI->getFlag(MachineInstr::FrameSetup));
-            ReturnInfoInsts.insert(DMI);
+            ReturnInfoInsts.insert(&*DMI);
             LLVM_DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
                 DMI->dump());
             found = true;
@@ -1350,7 +1350,7 @@ void LinearizeWalker::nextMBB(MachineBasicBlock *MBB) {
 
   // remove the branch at the end of MBB
   // (update statistic counter)
-  RemovedBranchInstrs += Pass.TII->RemoveBranch(*MBB);
+  RemovedBranchInstrs += Pass.TII->removeBranch(*MBB);
 
   if (LastMBB) {
     // add to the last MBB as successor

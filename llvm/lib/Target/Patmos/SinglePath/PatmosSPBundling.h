@@ -5,10 +5,9 @@
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosSinglePathInfo.h"
 #include "PatmosTargetMachine.h"
+#include "PatmosSinglePathInfo.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
-
-#include "PatmosSinglePathInfo.h"
 
 #define DEBUG_TYPE "patmos-singlepath"
 
@@ -23,11 +22,6 @@ private:
   const PatmosInstrInfo *TII;
   const PatmosRegisterInfo *TRI;
 
-  // The pointer to the PatmosMachinFunctionInfo is set upon running on a
-  // particular function. It contains information about stack slots for
-  // predicate spilling and loop bounds.
-  const PatmosMachineFunctionInfo *PMFI;
-
   PatmosSinglePathInfo *PSPI;
 
   MachinePostDominatorTree *PostDom;
@@ -39,34 +33,32 @@ public:
   static char ID;
   PatmosSPBundling(const PatmosTargetMachine &tm):
        MachineFunctionPass(ID), TM(tm),
-       STC(tm.getSubtarget<PatmosSubtarget>()),
+       STC(*tm.getSubtargetImpl()),
        TII(static_cast<const PatmosInstrInfo*>(tm.getInstrInfo())),
        TRI(static_cast<const PatmosRegisterInfo*>(tm.getRegisterInfo()))
-  {
-    (void) TM;
-  }
+  {}
 
   /// getPassName - Return the pass' name.
-  virtual const char *getPassName() const {
+  StringRef getPassName() const override {
     return "Patmos Single-Path Bundling (machine code)";
   }
 
   /// getAnalysisUsage - Specify which passes this pass depends on
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<PatmosSinglePathInfo>();
     AU.addRequired<MachinePostDominatorTree>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  virtual bool doInitialization(Module &M){
+  bool doInitialization(Module &M) override {
     return false;
   }
 
-  virtual bool doFinalization(Module &M){
+  bool doFinalization(Module &M) override {
     return false;
   }
 
-  virtual bool runOnMachineFunction(MachineFunction &MF);
+  bool runOnMachineFunction(MachineFunction &MF) override ;
 
   SPScope* getRootScope(){
     return PSPI->getRootScope();

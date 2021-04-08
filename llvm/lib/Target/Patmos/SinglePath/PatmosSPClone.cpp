@@ -21,7 +21,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-singlepath"
 
 #include "PatmosSinglePathInfo.h"
 #include "llvm/ADT/Statistic.h"
@@ -40,6 +39,8 @@
 #include <deque>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "patmos-singlepath"
 
 STATISTIC(NumSPRoots,     "Number of single-path roots");
 STATISTIC(NumSPReachable, "Number of functions marked as single-path "
@@ -61,7 +62,7 @@ private:
   typedef std::map<Function*, Function*> FunctionSPMap;
 
   /// Set of function names as roots
-  std::set<std::string> SPRoots;
+  std::set<StringRef> SPRoots;
 
   /// Maintain a mapping from Function func to cloned Function func_sp_
   FunctionSPMap ClonedFunctions;
@@ -70,7 +71,7 @@ private:
   /// Used to detect cycles in the call graph.
   std::set<Function*> ExploreFinished;
 
-  void loadFromGlobalVariable(SmallSet<std::string, 128> &Result,
+  void loadFromGlobalVariable(SmallSet<StringRef, 32> &Result,
                               const GlobalVariable *GV) const;
 
   void handleRoot(Function *F);
@@ -102,13 +103,13 @@ public:
   PatmosSPClone() : ModulePass(ID) {}
 
   /// getPassName - Return the pass' name.
-  virtual const char *getPassName() const {
+  StringRef getPassName() const override{
     return "Patmos Single-Path Clone (bitcode)";
   }
 
-  virtual bool doInitialization(Module &M);
-  virtual bool doFinalization(Module &M);
-  virtual bool runOnModule(Module &M);
+  bool doInitialization(Module &M) override;
+  bool doFinalization(Module &M) override;
+  bool runOnModule(Module &M) override;
 };
 
 } // end anonymous namespace
@@ -130,7 +131,7 @@ bool PatmosSPClone::doInitialization(Module &M) {
 bool PatmosSPClone::doFinalization(Module &M) {
   if (!SPRoots.empty()) {
     errs() << "Following single-path roots were not found:\n";
-    for (std::set<std::string>::iterator it=SPRoots.begin();
+    for (auto it=SPRoots.begin();
             it!=SPRoots.end(); ++it) {
       errs() << "'" << *it << "' ";
     }
@@ -147,20 +148,15 @@ bool PatmosSPClone::runOnModule(Module &M) {
   LLVM_DEBUG( dbgs() <<
          "[Single-Path] Clone functions reachable from single-path roots\n");
 
-  SmallSet<std::string, 128> used;
+  SmallSet<StringRef, 32> used;
   loadFromGlobalVariable(used, M.getGlobalVariable("llvm.used"));
 
-  SmallSet<std::string, 16> blacklst;
+  SmallSet<StringRef, 16> blacklst;
   blacklst.insert(Blacklist,
       Blacklist + (sizeof Blacklist / sizeof Blacklist[0]));
 
-  //TODO in a future version of LLVM the attribute handling
-  //     is likely to be different
-  //AttrBuilder AB;
-  //AB.addAttribute("singlepath", "root");
-
-  for (Module::iterator I = M.begin(), E = M.end(); I != E; ) {
-    Function *F = I++;
+  for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
+    Function *F = &*I;
 
     if (F->isDeclaration()) continue;
 
@@ -191,7 +187,7 @@ bool PatmosSPClone::runOnModule(Module &M) {
 }
 
 
-void PatmosSPClone::loadFromGlobalVariable(SmallSet<std::string, 128> &Result,
+void PatmosSPClone::loadFromGlobalVariable(SmallSet<StringRef, 32> &Result,
                                           const GlobalVariable *GV) const {
   if (!GV || !GV->hasInitializer()) return;
 
@@ -229,7 +225,7 @@ void PatmosSPClone::handleRoot(Function *F) {
 
 Function *PatmosSPClone::cloneAndMark(Function *F, bool onlyMaybe) {
   ValueToValueMapTy VMap;
-  Function *SPF = CloneFunction(F, VMap, false, NULL);
+  Function *SPF = CloneFunction(F, VMap, NULL);
   SPF->setName(F->getName() + Twine("_sp_"));
 
   const char *attr = !onlyMaybe ? "sp-reachable" : "sp-maybe";

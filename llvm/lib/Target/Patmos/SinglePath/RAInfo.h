@@ -16,8 +16,6 @@
 #ifndef TARGET_PATMOS_SINGLEPATH_RAINFO_H_
 #define TARGET_PATMOS_SINGLEPATH_RAINFO_H_
 
-#define DEBUG_TYPE "patmos-singlepath"
-
 #define USE_BCOPY
 #define NOSPILL_OPTIMIZATION
 

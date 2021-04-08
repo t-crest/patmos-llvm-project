@@ -12,11 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-singlepath"
 
 #include "Patmos.h"
 #include "PatmosInstrInfo.h"
 #include "PatmosMachineFunctionInfo.h"
+#include "PatmosSinglePathInfo.h"
 #include "PatmosSubtarget.h"
 #include "PatmosTargetMachine.h"
 #include "llvm/IR/Function.h"
@@ -34,7 +34,6 @@
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-//#include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -43,15 +42,13 @@
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "PatmosSinglePathInfo.h"
-
 #include <map>
 #include <sstream>
 #include <iostream>
 
-
 using namespace llvm;
 
+#define DEBUG_TYPE "patmos-singlepath"
 
 // anonymous namespace
 namespace {
@@ -74,31 +71,29 @@ namespace {
     /// PatmosSPPrepare - Initialize with PatmosTargetMachine
     PatmosSPPrepare(const PatmosTargetMachine &tm) :
       MachineFunctionPass(ID), TM(tm),
-      STC(tm.getSubtarget<PatmosSubtarget>()),
-        TII(static_cast<const PatmosInstrInfo*>(tm.getInstrInfo())) {
-      (void) TM;
-    }
+      STC(*tm.getSubtargetImpl()),
+        TII(static_cast<const PatmosInstrInfo*>(tm.getInstrInfo())) {}
 
     /// getPassName - Return the pass' name.
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Single-Path Prepare";
     }
 
     /// getAnalysisUsage - Specify which passes this pass depends on
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<PatmosSinglePathInfo>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
 
     /// runOnMachineFunction - Run the SP converter on the given function.
-    virtual bool runOnMachineFunction(MachineFunction &MF) {
+    bool runOnMachineFunction(MachineFunction &MF) override {
       PatmosSinglePathInfo &PSPI = getAnalysis<PatmosSinglePathInfo>();
       bool changed = false;
       // only convert function if marked
       if ( PSPI.isConverting(MF) ) {
         LLVM_DEBUG( dbgs() << "[Single-Path] Preparing "
-                      << MF.getFunction()->getName() << "\n" );
+                      << MF.getFunction().getName() << "\n" );
         doPrepareFunction(MF);
         changed |= true;
       }
@@ -125,10 +120,11 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
 
   PatmosSinglePathInfo *PSPI = &getAnalysis<PatmosSinglePathInfo>();
   SPScope* rootScope = PSPI->getRootScope();
-  MachineFrameInfo &MFI = *MF.getFrameInfo();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
+  const TargetRegisterInfo *TRI = TM.getRegisterInfo();
 
-  const TargetRegisterClass *RC = &Patmos::RRegsRegClass;
+  const TargetRegisterClass &RC = Patmos::RRegsRegClass;
 
   std::vector<unsigned> requiredPreds;
 
@@ -153,7 +149,7 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
 
   // create a loop counter slot for each nesting level (no slot required for 0)
   for (unsigned i = 0; i < requiredPreds.size() - 1; i++) {
-    int fi = MFI.CreateStackObject(RC->getSize(), RC->getAlignment(), false);
+    int fi = MFI.CreateStackObject(TRI->getSpillSize(RC), TRI->getSpillAlign(RC), false);
     PMFI.addSinglePathFI(fi);
   }
 
@@ -193,16 +189,16 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
 
   // create them as multiples of RRegs size
   for (unsigned j=0;
-       j <= (numSpillSlotsReq+31)/(8*RC->getSize());
+       j <= (numSpillSlotsReq+31)/(8*TRI->getSpillSize(RC));
        j++) {
-    int fi = MFI.CreateStackObject(RC->getSize(), RC->getAlignment(), false);
+    int fi = MFI.CreateStackObject(TRI->getSpillSize(RC), TRI->getSpillAlign(RC), false);
     PMFI.addSinglePathFI(fi);
   }
 
   // if another (_sp_-)function is called, reserve space for re-/storing R9
   if (MFI.hasCalls()) {
     PMFI.startSinglePathCallSpill();
-    int fi = MFI.CreateStackObject(RC->getSize(), RC->getAlignment(), false);
+    int fi = MFI.CreateStackObject(TRI->getSpillSize(RC), TRI->getSpillAlign(RC), false);
     PMFI.addSinglePathFI(fi);
   }
 }

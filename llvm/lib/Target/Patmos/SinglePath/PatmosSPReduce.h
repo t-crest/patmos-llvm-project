@@ -208,33 +208,31 @@ namespace llvm {
     /// PatmosSPReduce - Initialize with PatmosTargetMachine
     PatmosSPReduce(const PatmosTargetMachine &tm) :
       MachineFunctionPass(ID), TM(tm),
-      STC(tm.getSubtarget<PatmosSubtarget>()),
+      STC(*tm.getSubtargetImpl()),
       TII(static_cast<const PatmosInstrInfo*>(tm.getInstrInfo())),
       TRI(static_cast<const PatmosRegisterInfo*>(tm.getRegisterInfo()))
-    {
-      (void) TM; // silence "unused"-warning
-    }
+    {}
 
     /// getPassName - Return the pass' name.
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Single-Path Reducer";
     }
 
     /// getAnalysisUsage - Specify which passes this pass depends on
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<PatmosSPBundling>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
     /// runOnMachineFunction - Run the SP converter on the given function.
-    virtual bool runOnMachineFunction(MachineFunction &MF) {
+    bool runOnMachineFunction(MachineFunction &MF) override {
       RootScope = getAnalysis<PatmosSPBundling>().getRootScope();
       PMFI = MF.getInfo<PatmosMachineFunctionInfo>();
       bool changed = false;
       // only convert function if marked
       if ( MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePath()) {
-        DEBUG( dbgs() << "[Single-Path] Reducing "
-                      << MF.getFunction()->getName() << "\n" );
+        LLVM_DEBUG( dbgs() << "[Single-Path] Reducing "
+                      << MF.getFunction().getName() << "\n" );
         doReduceFunction(MF);
         changed |= true;
       }

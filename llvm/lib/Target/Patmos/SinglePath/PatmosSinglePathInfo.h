@@ -76,25 +76,25 @@ namespace llvm {
 
       /// getRootNames - Fill a set with the names of
       /// single-path root functions
-      static void getRootNames(std::set<std::string> &S);
+      static void getRootNames(std::set<StringRef> &S);
 
       /// PatmosSinglePathInfo - Constructor
       PatmosSinglePathInfo(const PatmosTargetMachine &tm);
 
       /// doInitialization - Initialize SinglePathInfo pass
-      virtual bool doInitialization(Module &M);
+      bool doInitialization(Module &M) override;
 
       /// doFinalization - Finalize SinglePathInfo pass
-      virtual bool doFinalization(Module &M);
+      bool doFinalization(Module &M) override;
 
       /// getAnalysisUsage - Specify which passes this pass depends on
-      virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+      void getAnalysisUsage(AnalysisUsage &AU) const override;
 
       /// runOnMachineFunction - Run the SP converter on the given function.
-      virtual bool runOnMachineFunction(MachineFunction &MF);
+      bool runOnMachineFunction(MachineFunction &MF) override;
 
       /// getPassName - Return the pass' name.
-      virtual const char *getPassName() const {
+      StringRef getPassName() const override{
         return "Patmos Single-Path Info";
       }
 

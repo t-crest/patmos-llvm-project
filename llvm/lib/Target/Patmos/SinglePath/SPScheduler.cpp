@@ -51,7 +51,7 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   }
 
   LLVM_DEBUG( dbgs() << "AFTER Single-Path Schedule\n"; mf.dump() );
-  DEBUG({
+  LLVM_DEBUG({
       dbgs() << "Scope tree after scheduling:\n";
       rootScope->dump(dbgs(), 0, true);
   });

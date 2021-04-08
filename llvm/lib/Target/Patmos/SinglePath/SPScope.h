@@ -34,7 +34,7 @@
 #define PATMOS_SINGLEPATH_TRACE
 
 #ifdef PATMOS_SINGLEPATH_TRACE
-#define DEBUG_TRACE(x) DEBUG(x)
+#define DEBUG_TRACE(x) LLVM_DEBUG(x)
 #else
 #define DEBUG_TRACE(x) /*empty*/
 #endif
@@ -183,16 +183,21 @@ namespace llvm {
   };
 
   // For iteration over child scopes
-  template <> struct GraphTraits<SPScope*> {
-    typedef SPScope NodeType;
-    typedef SPScope::child_iterator ChildIteratorType;
+  template <> struct GraphTraits<SPScope *> {
+    using NodeRef = SPScope *;
+    using ChildIteratorType = SPScope::child_iterator;
+    using nodes_iterator = const SPScope *;
 
-    static NodeType *getEntryNode(SPScope *S) { return S; }
-    static inline ChildIteratorType child_begin(NodeType *N) {
-     return N->child_begin();
+    static NodeRef getEntryNode(SPScope *G) {
+      return G;
     }
-    static inline ChildIteratorType child_end(NodeType *N) {
-     return N->child_end();
+
+    static ChildIteratorType child_begin(const NodeRef N) {
+      return N->child_begin();
+    }
+
+    static ChildIteratorType child_end(const NodeRef N) {
+      return N->child_end();
     }
   };
 

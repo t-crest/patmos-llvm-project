@@ -12,7 +12,6 @@
 //
 //===---------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-singlepath"
 
 #include "Patmos.h"
 #include "PatmosInstrInfo.h"
@@ -38,6 +37,7 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "patmos-singlepath"
 /// SPRootList - Option to enable single-path code generation and specify entry
 ///              functions. This option needs to be present even when all
 ///              roots are specified via attributes.
@@ -77,18 +77,18 @@ bool PatmosSinglePathInfo::isEnabled(const MachineFunction &MF) {
 }
 
 bool PatmosSinglePathInfo::isRoot(const MachineFunction &MF) {
-  return MF.getFunction()->hasFnAttribute("sp-root");
+  return MF.getFunction().hasFnAttribute("sp-root");
 }
 
 bool PatmosSinglePathInfo::isReachable(const MachineFunction &MF) {
-  return MF.getFunction()->hasFnAttribute("sp-reachable");
+  return MF.getFunction().hasFnAttribute("sp-reachable");
 }
 
 bool PatmosSinglePathInfo::isMaybe(const MachineFunction &MF) {
-  return MF.getFunction()->hasFnAttribute("sp-maybe");
+  return MF.getFunction().hasFnAttribute("sp-maybe");
 }
 
-void PatmosSinglePathInfo::getRootNames(std::set<std::string> &S) {
+void PatmosSinglePathInfo::getRootNames(std::set<StringRef> &S) {
   S.insert( SPRootList.begin(), SPRootList.end() );
   S.erase("");
 }
@@ -97,7 +97,7 @@ void PatmosSinglePathInfo::getRootNames(std::set<std::string> &S) {
 
 PatmosSinglePathInfo::PatmosSinglePathInfo(const PatmosTargetMachine &tm)
   : MachineFunctionPass(ID), TM(tm),
-    STC(tm.getSubtarget<PatmosSubtarget>()),
+    STC(*tm.getSubtargetImpl()),
     TII(static_cast<const PatmosInstrInfo*>(tm.getInstrInfo())), Root(0) {}
 
 
@@ -128,7 +128,7 @@ bool PatmosSinglePathInfo::runOnMachineFunction(MachineFunction &MF) {
   }
 
   // only consider function actually marked for conversion
-  std::string curfunc = MF.getFunction()->getName();
+  auto curfunc = MF.getFunction().getName();
   if ( isConverting(MF) ) {
     LLVM_DEBUG( dbgs() << "[Single-Path] Analyze '" << curfunc << "'\n" );
     analyzeFunction(MF);
@@ -175,7 +175,7 @@ void PatmosSinglePathInfo::checkIrreducibility(MachineFunction &MF) const {
           if (!DT.dominates(*si, MBB)) {
             report_fatal_error("Single-path code generation failed due to "
                                "irreducible CFG in '" +
-                               MBB->getParent()->getFunction()->getName() +
+                               MBB->getParent()->getFunction().getName() +
                                "'!");
 
           }
