@@ -136,7 +136,7 @@ namespace llvm {
 
 
       unsigned int process(void) {
-        DEBUG( dbgs() << "Eliminate redundant loads/stores to " <<
+        LLVM_DEBUG( dbgs() << "Eliminate redundant loads/stores to " <<
             TRI->getName(TgtReg) << "\n" );
 
         unsigned int count = 0;
@@ -147,13 +147,13 @@ namespace llvm {
           BlockInfos.insert(std::make_pair(MBB, Blockinfo(NumFIs)));
         }
 
-        DEBUG(dbgs() << "Removing redundant loads:\n");
+        LLVM_DEBUG(dbgs() << "Removing redundant loads:\n");
         findRedundantLoads();
         count += remove();
 
         // Having redundant loads eliminated enables simpler removal
         // of redundant stores
-        DEBUG(dbgs() << "Removing redundant stores:\n");
+        LLVM_DEBUG(dbgs() << "Removing redundant stores:\n");
         // FIXME the analysis is erroneous.
         //findRedundantStores();
         count += remove();
@@ -165,7 +165,7 @@ namespace llvm {
         unsigned int cnt = Removables.size();
         for (std::set<MachineInstr *>::iterator I = Removables.begin(),
             E = Removables.end(); I != E; ++I) {
-          DEBUG(dbgs() << "  " << **I);
+          LLVM_DEBUG(dbgs() << "  " << **I);
           (*I)->eraseFromParent();
         }
         Removables.clear();
@@ -407,31 +407,31 @@ FunctionPass *llvm::createPatmosSPReducePass(const PatmosTargetMachine &tm) {
 
 void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
 
-  DEBUG( dbgs() << "BEFORE Single-Path Reduce\n"; MF.dump() );
+  LLVM_DEBUG( dbgs() << "BEFORE Single-Path Reduce\n"; MF.dump() );
 
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
 
   AvailPredRegs.clear();
   UnavailPredRegs.clear();
   // Get the unused predicate registers
-  DEBUG( dbgs() << "Available PRegs:" );
+  LLVM_DEBUG( dbgs() << "Available PRegs:" );
   for (TargetRegisterClass::iterator I=Patmos::PRegsRegClass.begin(),
       E=Patmos::PRegsRegClass.end(); I!=E; ++I ) {
     if (RegInfo.reg_empty(*I) && *I!=Patmos::P0) {
       AvailPredRegs.push_back(*I);
-      DEBUG( dbgs() << " " << TRI->getName(*I) );
+      LLVM_DEBUG( dbgs() << " " << TRI->getName(*I) );
     } else {
       UnavailPredRegs.push_back(*I);
     }
   }
-  DEBUG( dbgs() << "\n" );
+  LLVM_DEBUG( dbgs() << "\n" );
 
   GuardsReg = Patmos::R26;
   // Get a temporary predicate register, which must not be used for allocation
   PRTmp     = AvailPredRegs.back();
   AvailPredRegs.pop_back();
 
-  DEBUG( dbgs() << "RegAlloc\n" );
+  LLVM_DEBUG( dbgs() << "RegAlloc\n" );
   RAInfos.clear();
   RAInfos = RAInfo::computeRegAlloc(RootScope, AvailPredRegs.size());
 
@@ -459,7 +459,7 @@ void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
   // Fixup kill flag of condition predicate registers
   fixupKillFlagOfCondRegs();
 
-  //DEBUG(MF.viewCFGOnly());
+  //LLVM_DEBUG(MF.viewCFGOnly());
 
   // we create an instance of the eliminator here, such that we can
   // insert dummy instructions for analysis and mark them as 'to be removed'
@@ -468,7 +468,7 @@ void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
 
   // Following walk of the SPScope tree linearizes the CFG structure,
   // inserting MBBs as required (preheader, spill/restore, loop counts, ...)
-  DEBUG( dbgs() << "Linearize MBBs\n" );
+  LLVM_DEBUG( dbgs() << "Linearize MBBs\n" );
   LinearizeWalker LW(*this, MF);
   RootScope->walk(LW);
 
@@ -487,7 +487,7 @@ void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
   // Finally, we assign numbers in ascending order to MBBs again.
   MF.RenumberBlocks();
 
-  DEBUG( dbgs() << "AFTER Single-Path Reduce\n"; MF.dump() );
+  LLVM_DEBUG( dbgs() << "AFTER Single-Path Reduce\n"; MF.dump() );
   DEBUG({
       dbgs() << "Scope tree after Reduction:\n";
       RootScope->dump(dbgs(), 0, true);
@@ -515,7 +515,7 @@ SmallVector<MachineOperand, 2> PatmosSPReduce::getEdgeCondition(
 }
 
 void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
-  DEBUG( dbgs() << " Insert StackLoc Initializations in [MBB#"
+  LLVM_DEBUG( dbgs() << " Insert StackLoc Initializations in [MBB#"
                 << S->getHeader()->getMBB()->getNumber() << "]\n");
 
   // register allocation information
@@ -523,7 +523,7 @@ void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
 
   // Create the masks
   std::map<int, uint32_t> masks;
-  DEBUG(dbgs() << "  - Stack Loc: " );
+  LLVM_DEBUG(dbgs() << "  - Stack Loc: " );
   for(auto pred: S->getAllPredicates()){
     // We don't clear the header predicate
     if(pred == *S->getHeader()->getBlockPredicates().begin()) continue;
@@ -533,7 +533,7 @@ void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
     if (type == RAInfo::Stack) {
       int fi; unsigned bitpos;
       getStackLocPair(fi, bitpos, stloc);
-      DEBUG(dbgs() << "p" << pred << " " << stloc
+      LLVM_DEBUG(dbgs() << "p" << pred << " " << stloc
           << " ("  << fi  << "/" << bitpos << "); ");
       if (!masks.count(fi)) {
         masks[fi] = 0;
@@ -541,7 +541,7 @@ void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
       masks[fi] |= (1 << bitpos);
     }
   }
-  DEBUG(dbgs() << "\n");
+  LLVM_DEBUG(dbgs() << "\n");
 
   // Clear stack locations according to masks, at the beginning of the header
   MachineBasicBlock *MBB = S->getHeader()->getMBB();
@@ -551,13 +551,13 @@ void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
     while (MI->getFlag(MachineInstr::FrameSetup)) ++MI;
   }
 
-  DEBUG(dbgs() << "  - Masks:\n" );
+  LLVM_DEBUG(dbgs() << "  - Masks:\n" );
   DebugLoc DL;
   for (std::map<int, uint32_t>::iterator I = masks.begin(), E = masks.end();
       I != E; ++I) {
     int fi = I->first;
     uint32_t mask = I->second;
-    DEBUG(dbgs() << "    fi " << fi  << " mask " << mask << "\n");
+    LLVM_DEBUG(dbgs() << "    fi " << fi  << " mask " << mask << "\n");
     // load from stack slot
     AddDefaultPred(BuildMI(*MBB, MI, DL, TII->get(Patmos::LWC), GuardsReg))
       .addFrameIndex(fi).addImm(0); // address
@@ -575,7 +575,7 @@ void PatmosSPReduce::insertStackLocInitializations(SPScope *S) {
 }
 
 void PatmosSPReduce::insertPredDefinitions(SPScope *S) {
-  DEBUG( dbgs() << " Insert Predicate Definitions in [MBB#"
+  LLVM_DEBUG( dbgs() << " Insert Predicate Definitions in [MBB#"
                 << S->getHeader()->getMBB()->getNumber() << "]\n");
 
   auto blocks = S->getScopeBlocks();
@@ -589,7 +589,7 @@ void PatmosSPReduce::insertPredDefinitions(SPScope *S) {
     auto useLocs = getPredicateRegisters(RI, block);
     auto defs = block->getDefinitions();
 
-    DEBUG(
+    LLVM_DEBUG(
       dbgs() << " - MBB#" << block->getMBB()->getNumber() << ":\n";
       dbgs() << "  Definitions before sorting: [";
       for(auto def: defs){
@@ -663,7 +663,7 @@ void PatmosSPReduce::insertPredDefinitions(SPScope *S) {
       defs_sorted.insert(insert_at, std::make_tuple(x_def, is_first_pred_def));
     }
 
-    DEBUG(
+    LLVM_DEBUG(
       dbgs() << "  Definitions after sorting: [";
       for(auto entry: defs_sorted){
 		auto def = std::get<0>(entry);
@@ -690,7 +690,7 @@ void PatmosSPReduce::insertPredDefinitions(SPScope *S) {
 	  cond1.push_back(definition.conditions[1]);
       if( definition.is_swap() ){
         auto pred1 = definition.swap.predicate_1, pred2 = definition.swap.predicate_2;
-        DEBUG(dbgs() << "Insert Swap Definition Pred(" << pred1 << ") Pred2(" << pred2 << ")\n");
+        LLVM_DEBUG(dbgs() << "Insert Swap Definition Pred(" << pred1 << ") Pred2(" << pred2 << ")\n");
 
         auto insertPXOR = [&](auto r1, auto r2){
           MachineBasicBlock::iterator MI = block->getMBB()->getFirstTerminator();
@@ -724,7 +724,7 @@ void PatmosSPReduce::insertPredDefinitions(SPScope *S) {
 		report_fatal_error("PatmosSPReduce::insertPredDefinitions unsupported definition type."); 
 	  }
     }
-    DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "\n");
   }
 }
 
@@ -754,13 +754,13 @@ void PatmosSPReduce::insertDefEdge(SPScope *S, const PredicatedBlock *block,
 	  
       unsigned slot = RI.Scope->getDepth()-1;
 
-      DEBUG(dbgs() << "Insert Definition to S0 Spill. Pred(" << predLoc << ") Guard(" << guardLoc << ")\n");
+      LLVM_DEBUG(dbgs() << "Insert Definition to S0 Spill. Pred(" << predLoc << ") Guard(" << guardLoc << ")\n");
 
       // set a bit in the appropriate S0 spill slot
       insertDefToS0SpillSlot(SrcMBB, slot, predLoc, guardLoc, cond);
     }
   } else {
-    DEBUG(dbgs() << "Insert Definition to stack. Loac(" << predLoc << ") Guard(" << guardLoc << ")\n");
+    LLVM_DEBUG(dbgs() << "Insert Definition to stack. Loac(" << predLoc << ") Guard(" << guardLoc << ")\n");
     insertDefToStackLoc(SrcMBB, predLoc, guardLoc, cond);
   }
 }
@@ -769,21 +769,21 @@ void PatmosSPReduce::
 insertDefToRegLoc(MachineBasicBlock &MBB, unsigned predReg, unsigned guard,
                   const SmallVectorImpl<MachineOperand> &Cond,
                   bool usePmov) {
-  DEBUG(dbgs() << "Insert Register Definition Pred(" << predReg << ") Guard(" << guard << ") using ");
+  LLVM_DEBUG(dbgs() << "Insert Register Definition Pred(" << predReg << ") Guard(" << guard << ") using ");
   
   // insert the predicate definitions before any branch at the MBB end
   MachineBasicBlock::iterator MI = MBB.getFirstTerminator();
   DebugLoc DL(MI->getDebugLoc());
   MachineInstr *DefMI;
   if (usePmov) {
-    DEBUG(dbgs() << "PMOV\n");
+    LLVM_DEBUG(dbgs() << "PMOV\n");
 
     DefMI = BuildMI(MBB, MI, DL,
         TII->get(Patmos::PMOV), predReg)
       .addReg(guard).addImm(0) // guard operand
       .addOperand(Cond[0]).addOperand(Cond[1]); // condition
   } else {
-    DEBUG(dbgs() << "PAND\n");
+    LLVM_DEBUG(dbgs() << "PAND\n");
 
     // the PAND instruction must not be predicated
     DefMI = AddDefaultPred(BuildMI(MBB, MI, DL,
@@ -921,7 +921,7 @@ void PatmosSPReduce::fixupKillFlagOfCondRegs(void) {
 
 
 void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
-  DEBUG( dbgs() << " Applying predicates in [MBB#"
+  LLVM_DEBUG( dbgs() << " Applying predicates in [MBB#"
                 << S->getHeader()->getMBB()->getNumber() << "]\n");
 
   const RAInfo &R = RAInfos.at(S);
@@ -1159,7 +1159,7 @@ void PatmosSPReduce::insertPredicateLoad(MachineBasicBlock *MBB,
 
 
 void PatmosSPReduce::mergeMBBs(MachineFunction &MF) {
-  DEBUG( dbgs() << "Function before block merge:\n"; MF.dump() );
+  LLVM_DEBUG( dbgs() << "Function before block merge:\n"; MF.dump() );
     DEBUG({
         dbgs() << "Scope tree before block merge:\n";
         RootScope->dump(dbgs(), 0, true);
@@ -1227,7 +1227,7 @@ void PatmosSPReduce::mergeMBBs(MachineFunction &MF) {
 
 
 void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
-  DEBUG( dbgs() << "Collect return info insts\n" );
+  LLVM_DEBUG( dbgs() << "Collect return info insts\n" );
 
   ReturnInfoInsts.clear();
 
@@ -1247,7 +1247,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
           SpecialRegs.count(MI->getOperand(3).getReg())) {
         // store return info in prologue (reads SRB/SRO)
         ReturnInfoInsts.insert(MI);
-        DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
+        LLVM_DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
         // get reg it defines
         unsigned reg = MI->getOperand(0).getReg();
         // search down for first use of reg (store to stack slot)
@@ -1261,7 +1261,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
 
               assert(UMI->getFlag(MachineInstr::FrameSetup));
               ReturnInfoInsts.insert(UMI);
-              DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
+              LLVM_DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
                   UMI->dump());
               found = true;
               break;
@@ -1274,7 +1274,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
           SpecialRegs.count(MI->getOperand(0).getReg())) {
         // restore return info in epilogue (writes SRB/SRO)
         ReturnInfoInsts.insert(MI);
-        DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
+        LLVM_DEBUG(dbgs() << "   in MBB#" << MBB->getNumber() << ": "; MI->dump());
         // get reg it uses
         unsigned reg = MI->getOperand(3).getReg();
         // search up for def of reg (load from stack slot)
@@ -1285,7 +1285,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
           if (DMI->definesRegister(reg)) {
             assert(DMI->getFlag(MachineInstr::FrameSetup));
             ReturnInfoInsts.insert(DMI);
-            DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
+            LLVM_DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";
                 DMI->dump());
             found = true;
             break;
@@ -1327,7 +1327,7 @@ void PatmosSPReduce::getLoopLiveOutPRegs(const SPScope *S,
   for(auto succ: SuccMBBs) {
     for (unsigned i=0; i<UnavailPredRegs.size(); i++) {
       if (succ->getMBB()->isLiveIn(UnavailPredRegs[i])) {
-        DEBUG(dbgs() << "LiveIn: " << TRI->getName(UnavailPredRegs[i])
+        LLVM_DEBUG(dbgs() << "LiveIn: " << TRI->getName(UnavailPredRegs[i])
             << " into MBB#" << succ->getMBB()->getNumber() << "\n");
         pregs.push_back(UnavailPredRegs[i]);
       }

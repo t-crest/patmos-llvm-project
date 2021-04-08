@@ -140,7 +140,7 @@ ModulePass *llvm::createPatmosSPMarkPass(PatmosTargetMachine &tm) {
 
 
 bool PatmosSPMark::runOnMachineModule(const Module &M) {
-  DEBUG( dbgs() <<
+  LLVM_DEBUG( dbgs() <<
          "[Single-Path] Mark functions reachable from single-path roots\n");
 
   MMI = &getAnalysis<MachineModuleInfo>();
@@ -228,7 +228,7 @@ PatmosSPMark::getCallTargetMFOrAbort(MachineBasicBlock::iterator MI, MachineFunc
 }
 
 void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
-  DEBUG(dbgs() << "In function '" << MF->getName() << "':\n");
+  LLVM_DEBUG(dbgs() << "In function '" << MF->getName() << "':\n");
   for (MachineFunction::iterator MBB = MF->begin(), MBBE = MF->end();
                                  MBB != MBBE; ++MBB) {
     for( MachineBasicBlock::iterator MI = MBB->begin(),
@@ -290,7 +290,7 @@ void PatmosSPMark::rewriteCall(MachineInstr *MI) {
   MI->RemoveOperand(2);
   MachineInstrBuilder MIB(*MBB->getParent(), MI);
   MIB.addGlobalAddress(SPTarget);
-  DEBUG( dbgs() << "  Rewrite call: " << Target->getName()
+  LLVM_DEBUG( dbgs() << "  Rewrite call: " << Target->getName()
                 << " -> " << SPFuncName << "\n" );
 }
 
@@ -305,7 +305,7 @@ void PatmosSPMark::removeUncalledSPFunctions(const Module &M) {
         MF->getInfo<PatmosMachineFunctionInfo>();
 
       if (!PMFI->isSinglePath()) {
-        DEBUG(dbgs() << "  Remove function: " << F->getName() << "\n");
+        LLVM_DEBUG(dbgs() << "  Remove function: " << F->getName() << "\n");
         // delete all MBBs
         while (MF->begin() != MF->end()) {
           MF->begin()->eraseFromParent();

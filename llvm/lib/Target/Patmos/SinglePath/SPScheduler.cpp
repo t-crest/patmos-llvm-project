@@ -32,14 +32,14 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
     return false;
   }
 
-  DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
+  LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
 
   auto reduceAnalysis = &getAnalysis<PatmosSPReduce>();
   auto rootScope = reduceAnalysis->RootScope;
 
   for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; mbbIter++){
     auto mbb = &(*mbbIter);
-    DEBUG(dbgs() << "MBB: [" << mbb << "]: #" << mbb->getNumber() << "\n");
+    LLVM_DEBUG(dbgs() << "MBB: [" << mbb << "]: #" << mbb->getNumber() << "\n");
     for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
         instrIter != instrEnd; instrIter++)
     {
@@ -50,7 +50,7 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
 
   }
 
-  DEBUG( dbgs() << "AFTER Single-Path Schedule\n"; mf.dump() );
+  LLVM_DEBUG( dbgs() << "AFTER Single-Path Schedule\n"; mf.dump() );
   DEBUG({
       dbgs() << "Scope tree after scheduling:\n";
       rootScope->dump(dbgs(), 0, true);
@@ -63,7 +63,7 @@ unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr){
 
   auto mbb = instr->getParent();
   if(instr->isBranch() || instr->isCall() || instr->isReturn()){
-    DEBUG(dbgs() << "Inserting 3xNOP after instruction: "; instr->print(dbgs(), NULL, false));
+    LLVM_DEBUG(dbgs() << "Inserting 3xNOP after instruction: "; instr->print(dbgs(), NULL, false));
 
     // We simply add 3 nops after any branch, call or return, as its
     // the highest possible delay.
@@ -73,7 +73,7 @@ unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr){
     instrInfo->insertNoop(*mbb, instr);
     instrInfo->insertNoop(*mbb, instr);
   } else if (instr->mayLoad() || (instr->getOpcode() == Patmos::MUL) || (instr->getOpcode() == Patmos::MULU)){
-    DEBUG(dbgs() << "Inserting NOP after instruction: "; instr->print(dbgs(), NULL, false));
+    LLVM_DEBUG(dbgs() << "Inserting NOP after instruction: "; instr->print(dbgs(), NULL, false));
     instr++;
     auto sizebefore = mbb->size();
     instrInfo->insertNoop(*mbb, instr);

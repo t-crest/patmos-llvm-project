@@ -417,7 +417,7 @@ public:
     MachineBasicBlock *TBB = NULL, *FBB = NULL;
     SmallVector<MachineOperand, 2> Cond;
     if (instrInfo->AnalyzeBranch(*SrcMBB, TBB, FBB, Cond)) {
-      DEBUG(dbgs() << *SrcMBB);
+      LLVM_DEBUG(dbgs() << *SrcMBB);
       report_fatal_error("AnalyzeBranch for SP-Transformation failed; "
           "could not determine branch condition");
     }

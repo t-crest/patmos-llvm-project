@@ -205,7 +205,7 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
 
   }
 
-  DEBUG( dbgs() << "Pseudo PREG instruction expanded: " << PseudoMI );
+  LLVM_DEBUG( dbgs() << "Pseudo PREG instruction expanded: " << PseudoMI );
 
   // remove the pseudo instruction
   MBB.erase(&PseudoMI);

@@ -130,7 +130,7 @@ bool PatmosSinglePathInfo::runOnMachineFunction(MachineFunction &MF) {
   // only consider function actually marked for conversion
   std::string curfunc = MF.getFunction()->getName();
   if ( isConverting(MF) ) {
-    DEBUG( dbgs() << "[Single-Path] Analyze '" << curfunc << "'\n" );
+    LLVM_DEBUG( dbgs() << "[Single-Path] Analyze '" << curfunc << "'\n" );
     analyzeFunction(MF);
   }
   // didn't modify anything
@@ -148,7 +148,7 @@ void PatmosSinglePathInfo::analyzeFunction(MachineFunction &MF) {
   // build the SPScope tree
   Root = SPScope::createSPScopeTree(MF, getAnalysis<MachineLoopInfo>(), TII);
 
-  DEBUG( print(dbgs()) );
+  LLVM_DEBUG( print(dbgs()) );
 
   // XXX for extensive debugging
   //MF.viewCFGOnly();

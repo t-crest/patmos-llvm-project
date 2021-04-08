@@ -97,7 +97,7 @@ namespace {
       bool changed = false;
       // only convert function if marked
       if ( PSPI.isConverting(MF) ) {
-        DEBUG( dbgs() << "[Single-Path] Preparing "
+        LLVM_DEBUG( dbgs() << "[Single-Path] Preparing "
                       << MF.getFunction()->getName() << "\n" );
         doPrepareFunction(MF);
         changed |= true;
@@ -139,7 +139,7 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
     unsigned preds = scope->getNumPredicates();
     unsigned d = scope->getDepth();
 
-    DEBUG( dbgs() << "[MBB#" << scope->getHeader()->getMBB()->getNumber()
+    LLVM_DEBUG( dbgs() << "[MBB#" << scope->getHeader()->getMBB()->getNumber()
                   << "]: d=" << d << ", " << preds << "\n");
 
     // keep track of the maximum required number of predicates for each SPScope
@@ -176,7 +176,7 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
   int numAllocatablePRegs = getNumUnusedPRegs(MF);
   int numSpillSlotsReq = 0;
   for(unsigned i=0; i<requiredPreds.size(); i++) {
-    DEBUG( dbgs() << "[" << i << "]: " << requiredPreds[i] << "\n");
+    LLVM_DEBUG( dbgs() << "[" << i << "]: " << requiredPreds[i] << "\n");
 
     int cnt = requiredPreds[i] - numAllocatablePRegs;
     if (cnt>0) {
@@ -186,7 +186,7 @@ void PatmosSPPrepare::doPrepareFunction(MachineFunction &MF) {
     }
   }
 
-  DEBUG( dbgs() << "Computed number of allocatable PRegs: "
+  LLVM_DEBUG( dbgs() << "Computed number of allocatable PRegs: "
                 << numAllocatablePRegs
                 << "\nRequired predicate spill slots (bits): "
                 << numSpillSlotsReq << "\n");

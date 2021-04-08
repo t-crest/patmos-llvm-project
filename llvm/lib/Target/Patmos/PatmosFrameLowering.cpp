@@ -173,8 +173,8 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
   // This must be in sync with PatmosRegisterInfo::eliminateCallFramePseudoInstr
   unsigned int SSOffset = (hasFP(MF) ? 0 : maxFrameSize);
 
-  DEBUG(dbgs() << "PatmosSC: " << MF.getFunction()->getName() << "\n");
-  DEBUG(MFI.print(MF, dbgs()));
+  LLVM_DEBUG(dbgs() << "PatmosSC: " << MF.getFunction()->getName() << "\n");
+  LLVM_DEBUG(MFI.print(MF, dbgs()));
   for(unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
     if (MFI.isDeadObjectIndex(FI))
       continue;
@@ -197,7 +197,7 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
       // check if the FI still fits into the SC
       if (align(next_SCOffset + FIsize, getEffectiveStackCacheBlockSize()) <=
           getEffectiveStackCacheSize()) {
-        DEBUG(dbgs() << "PatmosSC: FI: " << FI << " on SC: " << next_SCOffset
+        LLVM_DEBUG(dbgs() << "PatmosSC: FI: " << FI << " on SC: " << next_SCOffset
                     << "(" << MFI.getObjectOffset(FI) << ")\n");
 
         // reassign stack offset
@@ -224,7 +224,7 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
       // alignment
       SSOffset = align(SSOffset, FIalignment);
 
-      DEBUG(dbgs() << "PatmosSC: FI: " << FI << " on SS: " << SSOffset
+      LLVM_DEBUG(dbgs() << "PatmosSC: FI: " << FI << " on SS: " << SSOffset
                    << "(" << MFI.getObjectOffset(FI) << ")\n");
 
       // reassign stack offset
@@ -249,7 +249,7 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
     MFI.setObjectOffset(FI, MFI.getObjectOffset(FI) + stackSize);
   }
 
-  DEBUG(MFI.print(MF, dbgs()));
+  LLVM_DEBUG(MFI.print(MF, dbgs()));
 
   // store assignment information
   PMFI.setStackCacheReservedBytes(stackCacheSize);

@@ -278,7 +278,7 @@ public:
     };
 
     // create live range information for each predicate
-    DEBUG(dbgs() << " Create live-ranges for [MBB#"
+    LLVM_DEBUG(dbgs() << " Create live-ranges for [MBB#"
                  << Pub.Scope->getHeader()->getMBB()->getNumber() << "]\n");
 
     auto blocks = Pub.Scope->getBlocksTopoOrd();
@@ -308,7 +308,7 @@ public:
   }
 
   void assignLocations(void) {
-    DEBUG(dbgs() << " Assign locations for [MBB#"
+    LLVM_DEBUG(dbgs() << " Assign locations for [MBB#"
                  << Pub.Scope->getHeader()->getMBB()->getNumber() << "]\n");
     SPNumPredicates += Pub.Scope->getNumPredicates(); // STATISTIC
 
@@ -322,7 +322,7 @@ public:
       auto block = blocks[i];
       MachineBasicBlock *MBB = block->getMBB();
 
-      DEBUG( dbgs() << "  MBB#" << MBB->getNumber() << ": " );
+      LLVM_DEBUG( dbgs() << "  MBB#" << MBB->getNumber() << ": " );
 
       // (1) handle use
       handlePredUse(i, block, curLocs, FreeLocs);
@@ -358,11 +358,11 @@ public:
             DefLocs.find(pred)->second = l;
           }
           assert(curLocs.find(pred)->second.getLoc() == DefLocs.at(pred).getLoc());
-          DEBUG( dbgs() << "def " << pred << " in loc "
+          LLVM_DEBUG( dbgs() << "def " << pred << " in loc "
                         << DefLocs.at(pred).getLoc() << ", ");
         }
       }
-      DEBUG(dbgs() << "\n");
+      LLVM_DEBUG(dbgs() << "\n");
     } // end of forall MBB
 
     // What is the location of the header predicate after handling all blocks?
@@ -493,7 +493,7 @@ public:
         assert(block == Pub.Scope->getHeader() || i > 0);
 
         if (LRs.at(usePred).lastUse(i)) {
-          DEBUG(dbgs() << "retire " << usePred << ". ");
+          LLVM_DEBUG(dbgs() << "retire " << usePred << ". ");
           map<unsigned, Location>::iterator findCurUseLoc = curLocs.find(usePred);
           assert(findCurUseLoc != curLocs.end());
           Location& curUseLoc = findCurUseLoc->second;
@@ -750,7 +750,7 @@ std::map<const SPScope*, RAInfo> RAInfo::computeRegAlloc(SPScope *rootScope, uns
       if (!RI.needsScopeSpill()) NoSpillScopes++; // STATISTIC
     }
     spillLocCnt += RI.neededSpillLocs();
-    DEBUG( RI.dump() );
+    LLVM_DEBUG( RI.dump() );
   } // end df
 
   PredSpillLocs += spillLocCnt; // STATISTIC

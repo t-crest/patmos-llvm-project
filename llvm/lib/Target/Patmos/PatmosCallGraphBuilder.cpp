@@ -526,7 +526,7 @@ namespace llvm {
     // Mark live nodes to be within SCCs (loops or recursion)
     MCG.markNodesInSCC();
 
-    DEBUG(
+    LLVM_DEBUG(
       std::string tmp;
       raw_fd_ostream of("mcg.dot", tmp);
       WriteGraph(of, MCG);

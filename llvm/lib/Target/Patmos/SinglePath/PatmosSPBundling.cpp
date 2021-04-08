@@ -135,7 +135,7 @@ void PatmosSPBundling::mergeMBBs(MachineBasicBlock *mbb1, MachineBasicBlock *mbb
 
 std::pair<bool, std::pair<PredicatedBlock*,PredicatedBlock*>> PatmosSPBundling::findMergePair(const SPScope* scope){
   for(auto block: scope->getScopeBlocks()){
-    DEBUG(dbgs() << "Looking for merge pair at: #" << block->getMBB()->getNumber() << "\n");
+    LLVM_DEBUG(dbgs() << "Looking for merge pair at: #" << block->getMBB()->getNumber() << "\n");
     auto mbb = block->getMBB();
     auto succs = block->getSuccessors();
     auto exits = block->getExitTargets();
@@ -186,7 +186,7 @@ void PatmosSPBundling::bundleScope(SPScope* root){
     auto destination = mergePair.second.first;
     auto source = mergePair.second.second;
 
-    DEBUG(dbgs() << "Merge pair: (#" << destination->getMBB()->getNumber() << ", #" << source->getMBB()->getNumber() << ")\n");
+    LLVM_DEBUG(dbgs() << "Merge pair: (#" << destination->getMBB()->getNumber() << ", #" << source->getMBB()->getNumber() << ")\n");
 
     mergeMBBs(destination->getMBB(), source->getMBB());
 
@@ -216,7 +216,7 @@ void PatmosSPBundling::bundleScope(SPScope* root){
 
 void PatmosSPBundling::doBundlingFunction(SPScope* root) {
 
-  DEBUG(dbgs() << "========= Begin bundling ========= \n");
+  LLVM_DEBUG(dbgs() << "========= Begin bundling ========= \n");
 
   bundleScope(root);
 

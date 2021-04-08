@@ -488,7 +488,7 @@ bool PatmosPostRASchedStrategy::pickNode(SUnit *&SU, bool &IsTopNode,
       ReadyQ.recedeCycle(++CurrCycle);
     }
 
-    DEBUG(dbgs() << "\nPicking node in cycle " << CurrCycle << "\n";
+    LLVM_DEBUG(dbgs() << "\nPicking node in cycle " << CurrCycle << "\n";
           ReadyQ.dump());
 
     // .. and try to get a new bundle.

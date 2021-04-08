@@ -58,7 +58,7 @@ namespace {
     bool runOnMachineFunction(MachineFunction &F) {
       bool Changed = false;
       if (TM.getSubtargetImpl()->getCFLType() != PatmosSubtarget::CFL_DELAYED) {
-        DEBUG( dbgs() << "\n[DelaySlotKiller] "
+        LLVM_DEBUG( dbgs() << "\n[DelaySlotKiller] "
                << F.getFunction()->getName() << "\n" );
 
         for (MachineFunction::iterator FI = F.begin(), FE = F.end();
@@ -89,7 +89,7 @@ FunctionPass *llvm::createPatmosDelaySlotKillerPass(PatmosTargetMachine &tm) {
 bool PatmosDelaySlotKiller::killDelaySlots(MachineBasicBlock &MBB) {
   bool Changed = false;
 
-  DEBUG( dbgs() << "Killing slots in BB#" << MBB.getNumber()
+  LLVM_DEBUG( dbgs() << "Killing slots in BB#" << MBB.getNumber()
                 << " (" << MBB.getFullName() << ")\n" );
 
   // consider the basic block from top to bottom

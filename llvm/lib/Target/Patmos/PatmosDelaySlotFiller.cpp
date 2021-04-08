@@ -52,7 +52,7 @@
 //#define PATMOS_DELAY_SLOT_FILLER_TRACE
 
 #ifdef PATMOS_DELAY_SLOT_FILLER_TRACE
-#define DEBUG_TRACE(x) DEBUG(x)
+#define DEBUG_TRACE(x) LLVM_DEBUG(x)
 #else
 #define DEBUG_TRACE(x) /*empty*/
 #endif
@@ -103,7 +103,7 @@ namespace {
 
     bool runOnMachineFunction(MachineFunction &F) {
       bool Changed = false;
-      DEBUG( dbgs() << "\n[DelaySlotFiller] "
+      LLVM_DEBUG( dbgs() << "\n[DelaySlotFiller] "
                     << F.getFunction()->getName() << "\n" );
 
       // FIXME: check if Post-RA scheduler is enabled (by option or Subtarget),
@@ -206,7 +206,7 @@ bool PatmosDelaySlotFiller::fillDelaySlots(MachineBasicBlock &MBB) {
   // this info needs to survive for the whole MBB
   SmallSet<MachineInstr *, 16> FillerInstrs;
 
-  DEBUG( dbgs() << "Filling slots in BB#" << MBB.getNumber()
+  LLVM_DEBUG( dbgs() << "Filling slots in BB#" << MBB.getNumber()
                 << " (" << MBB.getFullName() << ")\n" );
   // XXX call AnalyzeBranch for this MBB for a last time?
 
@@ -228,7 +228,7 @@ bool PatmosDelaySlotFiller::fillDelaySlots(MachineBasicBlock &MBB) {
 bool PatmosDelaySlotFiller::insertNOPs(MachineBasicBlock &MBB) {
   bool Changed = false;
 
-  DEBUG( dbgs() << "Inserting NOPs in " << MBB.getName() << "\n" );
+  LLVM_DEBUG( dbgs() << "Inserting NOPs in " << MBB.getName() << "\n" );
   for (MachineBasicBlock::iterator I = MBB.begin(); I != MBB.end(); ++I) {
 
     if (TII->hasOpcode(I, Patmos::MUL) || TII->hasOpcode(I, Patmos::MULU)) {
@@ -249,7 +249,7 @@ fillSlotForCtrlFlow(MachineBasicBlock &MBB, const MachineBasicBlock::iterator I,
 
   DelayHazardInfo DI(*this, *I);
 
-  DEBUG( dbgs() << "For: " << *I );
+  LLVM_DEBUG( dbgs() << "For: " << *I );
 
   unsigned CFLDelaySlots = TM.getSubtargetImpl()->getDelaySlotCycles(I);
 
@@ -296,13 +296,13 @@ fillSlotForCtrlFlow(MachineBasicBlock &MBB, const MachineBasicBlock::iterator I,
       MBB.splice(llvm::next(I), &MBB, FillMI);
       FillerInstrs.insert(FillMI);
       ++FilledSlots;  // update statistics
-      DEBUG( dbgs() << " -- filler: " << *FillMI );
+      LLVM_DEBUG( dbgs() << " -- filler: " << *FillMI );
     } else {
       // we add the NOPs before the next instruction
       insertNOPAfter(MBB, I);
       FillerInstrs.insert(prior(NI));
       ++FilledNOPs;  // update statistics
-      DEBUG( dbgs() << " -- filler: NOP\n" );
+      LLVM_DEBUG( dbgs() << " -- filler: NOP\n" );
     }
   }
 
@@ -354,8 +354,8 @@ insertAfterLoad(MachineBasicBlock &MBB, const MachineBasicBlock::iterator I) {
     TII->insertNoop(MBB, llvm::next(I));
     // stats and debug output
     ++InsertedLoadNOPs;
-    DEBUG( dbgs() << "NOP inserted after load: " << *I );
-    DEBUG( dbgs() << "                 before: " << *J );
+    LLVM_DEBUG( dbgs() << "NOP inserted after load: " << *I );
+    LLVM_DEBUG( dbgs() << "                 before: " << *J );
     return true;
   } else if ( J != MBB.end() ) {
     // no dependency in next cycle
@@ -379,10 +379,10 @@ insertAfterLoad(MachineBasicBlock &MBB, const MachineBasicBlock::iterator I) {
         // stats and debug output
         ++InsertedLoadNOPs;
         if (!inserted) {
-          DEBUG( dbgs() << "NOP inserted after load: " << *I );
+          LLVM_DEBUG( dbgs() << "NOP inserted after load: " << *I );
           inserted = true;
         }
-        DEBUG(   dbgs() << "          (succ) before: " << *FirstMI );
+        LLVM_DEBUG(   dbgs() << "          (succ) before: " << *FirstMI );
       } else {
         ++SkippedLoadNOPs;
       }

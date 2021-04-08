@@ -135,7 +135,7 @@ nextIfDebug(MachineBasicBlock::iterator I, MachineBasicBlock::iterator End) {
 bool PatmosPostRAScheduler::runOnMachineFunction(MachineFunction &mf) {
 
   if( mf.getInfo<PatmosMachineFunctionInfo>()->isSinglePath()){
-      DEBUG( dbgs() << "Not running PatmosPostRAScheduler on " << mf.getName() << "\n");
+      LLVM_DEBUG( dbgs() << "Not running PatmosPostRAScheduler on " << mf.getName() << "\n");
       finalizeBundles(mf); // Must be called, otherwise bundles wont be emitted correctly
       return true;
   }
@@ -235,8 +235,8 @@ bool PatmosPostRAScheduler::runOnMachineFunction(MachineFunction &mf) {
         continue;
       }
 
-      DEBUG(dbgs() << "********** PostRA MI Scheduling **********\n");
-      DEBUG(dbgs() << MF->getName()
+      LLVM_DEBUG(dbgs() << "********** PostRA MI Scheduling **********\n");
+      LLVM_DEBUG(dbgs() << MF->getName()
             << ":BB#" << MBB->getNumber() << " " << MBB->getName()
             << "\n  From: " << *I << "    To: ";
             if (RegionEnd != MBB->end()) dbgs() << *RegionEnd;
@@ -415,8 +415,8 @@ void ScheduleDAGPostRA::schedule() {
   // Initialize the strategy before modifying the DAG.
   SchedImpl->initialize(this);
 
-  DEBUG(dbgs() << "********** List Scheduling **********\n");
-  DEBUG(for (unsigned su = 0, e = SUnits.size(); su != e; ++su)
+  LLVM_DEBUG(dbgs() << "********** List Scheduling **********\n");
+  LLVM_DEBUG(for (unsigned su = 0, e = SUnits.size(); su != e; ++su)
           SUnits[su].dumpAll(this));
   if (ViewPostRASchedDAGs) viewGraph();
 
@@ -587,16 +587,16 @@ void ScheduleDAGPostRA::scheduleMI(SUnit *SU, bool IsTopNode, bool IsBundled) {
     if (!IsBundled)
       finishTopBundle();
     if (MI) {
-      DEBUG(dbgs() << "Pick top node SU(" << SU->NodeNum << ") ");
-      DEBUG( if (DFSResult) dbgs()
+      LLVM_DEBUG(dbgs() << "Pick top node SU(" << SU->NodeNum << ") ");
+      LLVM_DEBUG( if (DFSResult) dbgs()
             << " ILP: " << DFSResult->getILP(SU)
             << " Tree: " << DFSResult->getSubtreeID(SU) << " @"
             << DFSResult->getSubtreeLevel(DFSResult->getSubtreeID(SU)) << '\n');
-      DEBUG(dbgs() << "Scheduling " << *SU->getInstr());
+      LLVM_DEBUG(dbgs() << "Scheduling " << *SU->getInstr());
 
       TopBundleMIs.push_back(MI);
     } else {
-      DEBUG(dbgs() << "Scheduling NOOP at top\n");
+      LLVM_DEBUG(dbgs() << "Scheduling NOOP at top\n");
 
       TII->insertNoop(*BB, CurrentTop);
       // set ReginBegin to the NOP if we inserted a NOP at the region start
@@ -612,16 +612,16 @@ void ScheduleDAGPostRA::scheduleMI(SUnit *SU, bool IsTopNode, bool IsBundled) {
     if (!IsBundled)
       finishBottomBundle();
     if (MI) {
-      DEBUG(dbgs() << "Pick bottom node SU(" << SU->NodeNum << ") ");
-      DEBUG( if (DFSResult) dbgs()
+      LLVM_DEBUG(dbgs() << "Pick bottom node SU(" << SU->NodeNum << ") ");
+      LLVM_DEBUG( if (DFSResult) dbgs()
             << " ILP: " << DFSResult->getILP(SU)
             << " Tree: " << DFSResult->getSubtreeID(SU) << " @"
             << DFSResult->getSubtreeLevel(DFSResult->getSubtreeID(SU)) << '\n');
-      DEBUG(dbgs() << "Scheduling " << *SU->getInstr());
+      LLVM_DEBUG(dbgs() << "Scheduling " << *SU->getInstr());
 
       BottomBundleMIs.push_back(MI);
     } else {
-      DEBUG(dbgs() << "Scheduling NOOP at bottom\n");
+      LLVM_DEBUG(dbgs() << "Scheduling NOOP at bottom\n");
 
       TII->insertNoop(*BB, CurrentBottom);
       // recede Top as well if we insert a NOP at the top
@@ -641,7 +641,7 @@ void ScheduleDAGPostRA::finishTopBundle()
 {
   if (TopBundleMIs.empty()) return;
 
-  DEBUG(dbgs() << "Finishing top bundle of size "
+  LLVM_DEBUG(dbgs() << "Finishing top bundle of size "
                << TopBundleMIs.size() << "\n");
 
   for (size_t i = 0; i < TopBundleMIs.size(); i++) {
@@ -672,7 +672,7 @@ void ScheduleDAGPostRA::finishBottomBundle()
 {
   if (BottomBundleMIs.empty()) return;
 
-  DEBUG(dbgs() << "Finishing bottom bundle of size "
+  LLVM_DEBUG(dbgs() << "Finishing bottom bundle of size "
                << BottomBundleMIs.size() << "\n");
 
   for (int i = (int)BottomBundleMIs.size() - 1; i >= 0; i--) {
@@ -841,7 +841,7 @@ bool ScheduleDAGPostRA::toggleKillFlag(MachineInstr *MI,
 /// incorrect by instruction reordering.
 ///
 void ScheduleDAGPostRA::fixupKills(MachineBasicBlock *MBB) {
-  DEBUG(dbgs() << "Fixup kills for BB#" << MBB->getNumber() << '\n');
+  LLVM_DEBUG(dbgs() << "Fixup kills for BB#" << MBB->getNumber() << '\n');
 
   BitVector killedRegs(TRI->getNumRegs());
 
@@ -904,10 +904,10 @@ void ScheduleDAGPostRA::fixupKills(MachineBasicBlock *MBB) {
       }
 
       if (MO.isKill() != kill) {
-        DEBUG(dbgs() << "Fixing " << MO << " in ");
+        LLVM_DEBUG(dbgs() << "Fixing " << MO << " in ");
         // Warning: ToggleKillFlag may invalidate MO.
         toggleKillFlag(MI, MO);
-        DEBUG(MI->dump());
+        LLVM_DEBUG(MI->dump());
       }
 
       killedRegs.set(Reg);

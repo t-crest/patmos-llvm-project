@@ -523,7 +523,7 @@ namespace llvm {
       if (tmp == Nodes.end()) {
 
 #ifdef PATMOS_TRACE_DETAILED_RESULTS
-        DEBUG(
+        LLVM_DEBUG(
           dbgs() << "makeNode[" << yamlId << "]: " << *node
             << " spill=" << spillcost.get() << " occ=" << occupancy.get() << "\n";
         );
@@ -1303,9 +1303,9 @@ namespace llvm {
       }
 
 #ifdef PATMOS_TRACE_CG_DISPLACMENT
-      DEBUG(dbgs() << (Maximize ? ">>>>>>>>>>>>>>> MAX >>>>>>>>>>>>>>>>\n" :
+      LLVM_DEBUG(dbgs() << (Maximize ? ">>>>>>>>>>>>>>> MAX >>>>>>>>>>>>>>>>\n" :
                                   "<<<<<<<<<<<<<<< MIN <<<<<<<<<<<<<<<<\n"););
-      DEBUG(
+      LLVM_DEBUG(
         for(MCGNodes::const_iterator i(nodes.begin()), ie(nodes.end()); i != ie;
             i++) {
           if (!(*i)->isDead()) {
@@ -1459,7 +1459,7 @@ namespace llvm {
           }
 
 #ifdef PATMOS_TRACE_BB_LIVEAREA
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "*************************** "
                    << MF->getFunction()->getName() << "\n";
             for(MBBUInt::const_iterator i(INs.begin()), ie(INs.end()); i != ie;
@@ -2193,7 +2193,7 @@ namespace llvm {
             propagateDeadArea(WL, INs, *i, MBB);
           }
 #ifdef PATMOS_TRACE_BB_DEADAREA
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "*************************** "
                    << MF->getFunction()->getName() << "\n";);
 #endif // PATMOS_TRACE_BB_DEADAREA
@@ -2201,7 +2201,7 @@ namespace llvm {
           for(MBBUInt::const_iterator j(INs.begin()), je(INs.end()); j != je;
               j++) {
 #ifdef PATMOS_TRACE_BB_DEADAREA
-            DEBUG(
+            LLVM_DEBUG(
               dbgs() << "  " << j->first->getName()
                     << "(" << j->first->getNumber() << ")"
                     << ": " << j->second << "\n";);
@@ -2328,7 +2328,7 @@ namespace llvm {
 #ifdef PATMOS_TRACE_DETAILED_RESULTS
             MachineBasicBlock *MBB = i->first->getParent();
             MachineBasicBlock::instr_iterator MI(i->first);
-            DEBUG(
+            LLVM_DEBUG(
             dbgs() << "ENS: " << MF->getFunction()->getName() << ":BB"
                    << MBB->getNumber() << ":"
                    << std::distance(MBB->instr_begin(), MI) << ": k="
@@ -2356,7 +2356,7 @@ namespace llvm {
           }
 
 #ifdef PATMOS_TRACE_SENS_REMOVAL
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "########################### "
                    << MF->getFunction()->getName() << "\n";
             for(MBBUInt::const_iterator i(INs.begin()), ie(INs.end()); i != ie;
@@ -2952,7 +2952,7 @@ namespace llvm {
                                            getMaxOccupancy(Node));
       unsigned int optimized_saving = WorstCaseBlockSaving[MBB];
 
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "Saving \\\\\\\\\\\\\\\\\\\\\\ "
                    << MBB->getFullName()
                    << "  k = " << reserved << ": "
@@ -3022,7 +3022,7 @@ namespace llvm {
                              globalEnsure);
       int optimized_restoring = optimized_costs - reserveGain;
 
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "Restoring \\\\\\\\\\\\\\\\\\\\\\ "
                    << MBB->getFullName()
                    << "  k = " << reserved << ": "
@@ -3062,7 +3062,7 @@ namespace llvm {
       }
 
 #ifdef PATMOS_TRACE_WORST_RESTORING_REGION
-      DEBUG(
+      LLVM_DEBUG(
         dbgs() << "globalEnsureFilling "
                << " t = " << GlobalEnsureFillingTotal
                << " i = " << GlobalEnsureFillingILP
@@ -3116,7 +3116,7 @@ namespace llvm {
           }
 
 #ifdef PATMOS_TRACE_WORST_SITE_OCCUPANCY
-          DEBUG(
+          LLVM_DEBUG(
             dbgs() << "\\\\\\\\\\\\\\\\\\\\\\\\\\\\ "
                    << MF->getFunction()->getName()
                    << " (" << getBytesReserved(*i) << ")\n";

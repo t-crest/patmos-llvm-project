@@ -144,7 +144,7 @@ bool PatmosSPClone::doFinalization(Module &M) {
 
 
 bool PatmosSPClone::runOnModule(Module &M) {
-  DEBUG( dbgs() <<
+  LLVM_DEBUG( dbgs() <<
          "[Single-Path] Clone functions reachable from single-path roots\n");
 
   SmallSet<std::string, 128> used;
@@ -182,7 +182,7 @@ bool PatmosSPClone::runOnModule(Module &M) {
 
     // Check if used; if yes, duplicate and mark as "sp-maybe".
     if (used.count(F->getName()) && !blacklst.count(F->getName())) {
-      DEBUG( dbgs() << "Used: " << F->getName() << "\n" );
+      LLVM_DEBUG( dbgs() << "Used: " << F->getName() << "\n" );
       explore(cloneAndMark(F, true), true);
       continue;
     }
@@ -217,7 +217,7 @@ Function *PatmosSPClone::findSourceFunc(Function *F) {
 
 void PatmosSPClone::handleRoot(Function *F) {
 
-  DEBUG( dbgs() << "SPRoot " << F->getName() << "\n" );
+  LLVM_DEBUG( dbgs() << "SPRoot " << F->getName() << "\n" );
   if (!F->hasFnAttribute(llvm::Attribute::NoInline)) {
     F->addFnAttr(llvm::Attribute::NoInline);
   }
@@ -234,7 +234,7 @@ Function *PatmosSPClone::cloneAndMark(Function *F, bool onlyMaybe) {
 
   const char *attr = !onlyMaybe ? "sp-reachable" : "sp-maybe";
   SPF->addFnAttr(attr);
-  DEBUG( dbgs() << "  Clone function: " << F->getName()
+  LLVM_DEBUG( dbgs() << "  Clone function: " << F->getName()
                 << " -> " << SPF->getName() << " (" << attr << ")\n");
   // STATISTICS
   if (onlyMaybe) {

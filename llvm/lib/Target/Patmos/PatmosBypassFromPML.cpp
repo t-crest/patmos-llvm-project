@@ -147,7 +147,7 @@ bool PatmosBypassFromPML::rewriteInstruction(MachineInstr &MI) {
   }
 
   if (opc) {
-    DEBUG( dbgs() << "  - rewrite: " << MI );
+    LLVM_DEBUG( dbgs() << "  - rewrite: " << MI );
     MI.setDesc(TII->get(opc));
     Rewritten++; // bump stats
     return true;
@@ -216,7 +216,7 @@ bool PatmosBypassFromPML::runOnMachineFunction(MachineFunction &MF) {
 
   if (Query && Query->getMemFacts(MF, LoadFacts)) {
 
-    DEBUG( dbgs() << "[BypassFromPML] "
+    LLVM_DEBUG( dbgs() << "[BypassFromPML] "
         << MF.getFunction()->getName() << "\n");
 
     for (MachineFunction::iterator FI = MF.begin(), FE = MF.end();
@@ -224,7 +224,7 @@ bool PatmosBypassFromPML::runOnMachineFunction(MachineFunction &MF) {
       PMLQuery::ValueFactList &VFL = Query->getBBMemFacts(LoadFacts, *FI);
       if (!VFL.empty()) {
 
-        DEBUG( dbgs() << "  MBB#" << FI->getNumber() << "\n" );
+        LLVM_DEBUG( dbgs() << "  MBB#" << FI->getNumber() << "\n" );
         Changed |= bypassCacheLoads(*FI, Query, VFL);
       }
 

@@ -464,7 +464,7 @@ namespace llvm {
             entries.insert(d);
           }
 
-          DEBUG(dbgs() << "Found jumptable (size " << JTs[idx].MBBs.size()
+          LLVM_DEBUG(dbgs() << "Found jumptable (size " << JTs[idx].MBBs.size()
                        << ", targets: " << entries.size() << "):");
 
           // collect all jump-table entries.
@@ -472,14 +472,14 @@ namespace llvm {
                it != ie; it++)
           {
             ablock *d = *it;
-            DEBUG(dbgs() << " " << d->getName());
+            LLVM_DEBUG(dbgs() << " " << d->getName());
 
             Jumptables[idx].push_back(d);
           }
 
           visited[idx] = false;
 
-          DEBUG(dbgs() << "\n");
+          LLVM_DEBUG(dbgs() << "\n");
         }
 
         // Find overlapping jump-tables, create artificial headers
@@ -885,7 +885,7 @@ namespace llvm {
 #ifndef PATMOS_DUMP_ALL_SCC_DOTS
             unsigned cnt = 0;
 #endif
-            DEBUG(
+            LLVM_DEBUG(
               dbgs() << "Found SCC, header " << header->getName()
                      << ", id: " << cnt
                      << ", numblocks: " << scc.size()
@@ -1033,7 +1033,7 @@ namespace llvm {
         block->Region = block;
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << " creating region " << block->getName() << "\n");
+          LLVM_DEBUG(dbgs() << " creating region " << block->getName() << "\n");
 #endif
 
       } else {
@@ -1056,7 +1056,7 @@ namespace llvm {
         (*i)->Region = region;
 
 #ifdef PATMOS_TRACE_EMIT
-        DEBUG(dbgs() << "    emit:" << (*i)->getName() << "\n");
+        LLVM_DEBUG(dbgs() << "    emit:" << (*i)->getName() << "\n");
 #endif
 
         // skip artificial loop headers -- as part of a surrounding SCCs
@@ -1096,7 +1096,7 @@ namespace llvm {
               makeReady(ready, dst);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "      making successor " << dst->getName()
+          LLVM_DEBUG(dbgs() << "      making successor " << dst->getName()
                        << " ready\n");
 #endif
             }
@@ -1107,7 +1107,7 @@ namespace llvm {
             emitRegion(region, dst, ready, regions);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "      making successor " << dst->getName()
+          LLVM_DEBUG(dbgs() << "      making successor " << dst->getName()
                        << " a new region\n");
 #endif
           }
@@ -1201,7 +1201,7 @@ namespace llvm {
                     ready_set &ready, ablock_set &regions, ablocks &order)
     {
 #ifdef PATMOS_TRACE_VISITS
-      DEBUG(dbgs() << "  visit: " << block->getName() << " (ready: " << ready.size() << ")");
+      LLVM_DEBUG(dbgs() << "  visit: " << block->getName() << " (ready: " << ready.size() << ")");
 #endif
 
       // Check for special case first: a natural loop header starting a new
@@ -1233,7 +1233,7 @@ namespace llvm {
         emitSCC(region, blocks, ready, regions, order);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "... emitted (SCC) " << region_size << "\n");
+          LLVM_DEBUG(dbgs() << "... emitted (SCC) " << region_size << "\n");
 #endif
       }
       else if (block->SCCSize == 0 || region == block) {
@@ -1250,7 +1250,7 @@ namespace llvm {
         bool has_call = block->HasCall;
 
 #ifdef PATMOS_TRACE_VISITS
-        DEBUG(dbgs() << "  block size: " << block_size << " ("
+        LLVM_DEBUG(dbgs() << "  block size: " << block_size << " ("
                      << block->Size << " + "
                      << getMaxBlockMargin(PTM, region, region_size, block)
                      << "), hasCall: " << has_call << "\n");
@@ -1271,7 +1271,7 @@ namespace llvm {
           emitSCC(region, blocks, ready, regions, order);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "... emitted " << region_size << "\n");
+          LLVM_DEBUG(dbgs() << "... emitted " << region_size << "\n");
 #endif
         }
         else {
@@ -1284,7 +1284,7 @@ namespace llvm {
           emitRegion(region, block, ready, regions);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "... new region\n");
+          LLVM_DEBUG(dbgs() << "... new region\n");
 #endif
         }
       }
@@ -1307,7 +1307,7 @@ namespace llvm {
           emitSCC(region, block->SCC, ready, regions, order);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "... emitted (SCC) " << region_size << "\n");
+          LLVM_DEBUG(dbgs() << "... emitted (SCC) " << region_size << "\n");
 #endif
         }
         else {
@@ -1316,7 +1316,7 @@ namespace llvm {
           emitRegion(region, block, ready, regions);
 
 #ifdef PATMOS_TRACE_VISITS
-          DEBUG(dbgs() << "... new region ("
+          LLVM_DEBUG(dbgs() << "... new region ("
                        << (block->MBB ? "loop" :
                           (block->JTIDs.size() ? "jump-table"
                                                : "non-natural loop")) << ")\n");
@@ -1363,7 +1363,7 @@ namespace llvm {
         // count the number of regions
         num_regions++;
 
-        DEBUG(dbgs() << "Starting region " << num_regions << " with "
+        LLVM_DEBUG(dbgs() << "Starting region " << num_regions << " with "
                      << region->getName() << "\n");
 
         while(!ready.empty()) {
@@ -1377,7 +1377,7 @@ namespace llvm {
           visitBlock(region, region_size, next.block, ready, regions, order);
         }
 
-        DEBUG(dbgs() << "Region: " << region->getName() << ": "
+        LLVM_DEBUG(dbgs() << "Region: " << region->getName() << ": "
                      << region_size << "\n");
       }
 
@@ -1394,7 +1394,7 @@ namespace llvm {
       assert(UnassignedBlocks == 0);
 #endif
 
-      DEBUG(dbgs() << "#Regions: " << num_regions << "\n");
+      LLVM_DEBUG(dbgs() << "#Regions: " << num_regions << "\n");
 
       if (EnableShowCFGs)
         view();
@@ -1454,7 +1454,7 @@ namespace llvm {
         block->FallthroughTarget = NULL;
 
 #ifdef PATMOS_TRACE_FIXUP
-        DEBUG(dbgs() << "Fixup: " << fallthrough->getName() << "|"
+        LLVM_DEBUG(dbgs() << "Fixup: " << fallthrough->getName() << "|"
                      <<(layout_successor ? layout_successor->getName() : "NULL")
                      <<  "-->" << target->getName() << "\n");
 #endif
@@ -1558,7 +1558,7 @@ namespace llvm {
       if (rewrite) {
         MachineBasicBlock &MBB = *BR->getParent();
 
-        DEBUG(dbgs() << "Rewrite: branch in " << MBB.getName()
+        LLVM_DEBUG(dbgs() << "Rewrite: branch in " << MBB.getName()
                      << "[" << MBB.getNumber() << "]"
                      << " branching to " << target->getName()
                      << "[" << target->getNumber() << "]\n");
@@ -1984,7 +1984,7 @@ namespace llvm {
         {
           total_size += curr_size;
 
-          DEBUG(dbgs() << "Splitting basic block at " << total_size << ": "
+          LLVM_DEBUG(dbgs() << "Splitting basic block at " << total_size << ": "
                 << MBB->getFullName());
 
           // the current instruction does not fit -- split the block.
@@ -2221,7 +2221,7 @@ namespace llvm {
         total_size += bb_size;
       }
 
-      DEBUG(dbgs() << "\nPatmos Function Splitter: "
+      LLVM_DEBUG(dbgs() << "\nPatmos Function Splitter: "
                    << MF.getFunction()->getName() << ": " << total_size << "\n");
 
       TotalFunctions++;

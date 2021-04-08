@@ -500,7 +500,7 @@ namespace llvm {
           // Note that we start with the low-part registers first
           assert(TLI->getValueType(I->getType()).isSimple());
 
-          DEBUG( dbgs() << FAIdx << " " << *I << ": [" );
+          LLVM_DEBUG( dbgs() << FAIdx << " " << *I << ": [" );
 
           // FIXME
           // we don't add it immediately to PMF, as we only support
@@ -523,11 +523,11 @@ namespace llvm {
             // we prefer the name of the register as is printed in assembly
             Arg->addReg(PatmosInstPrinter::getRegisterName(VA.getLocReg()));
 
-            DEBUG( dbgs() <<  TM.getRegisterInfo()->getName(VA.getLocReg()) 
+            LLVM_DEBUG( dbgs() <<  TM.getRegisterInfo()->getName(VA.getLocReg()) 
 		          << " " );
           }
 
-          DEBUG( dbgs() <<  "]\n" );
+          LLVM_DEBUG( dbgs() <<  "]\n" );
 
           if (allInRegs) {
             PMF->addArgument(Arg);
