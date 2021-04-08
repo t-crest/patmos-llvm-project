@@ -75,10 +75,10 @@ public:
 
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.
-  void emitPrologue(MachineFunction &MF) const;
+  void emitPrologue(llvm::MachineFunction&, llvm::MachineBasicBlock&) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
 
-  bool hasFP(const MachineFunction &MF) const;
+  bool hasFP(const MachineFunction &MF) const override;
 
   /// processFunctionBeforeCalleeSavedScan - This method is called immediately
   /// before PrologEpilogInserter scans the physical registers used to determine
@@ -93,9 +93,10 @@ public:
                                    MachineBasicBlock::iterator MI,
                                    const std::vector<CalleeSavedInfo> &CSI,
                                    const TargetRegisterInfo *TRI) const;
-  void eliminateCallFramePseudoInstr(MachineFunction &MF,
-                                     MachineBasicBlock &MBB,
-                                     MachineBasicBlock::iterator I) const;
+  MachineBasicBlock::iterator
+  eliminateCallFramePseudoInstr(MachineFunction &MF,
+                                MachineBasicBlock &MBB,
+                                MachineBasicBlock::iterator I) const override;
 
 #if 0
   bool hasReservedCallFrame(const MachineFunction &MF) const;

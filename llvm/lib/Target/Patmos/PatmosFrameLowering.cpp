@@ -52,8 +52,8 @@ static cl::opt<bool> EnableBlockAlignedStackCache
 
 
 PatmosFrameLowering::PatmosFrameLowering(const PatmosTargetMachine &tm)
-: TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 4, 0), TM(tm),
-  STC(tm.getSubtarget<PatmosSubtarget>())
+: TargetFrameLowering(TargetFrameLowering::StackGrowsDown, Align(4), 0), TM(tm),
+  STC(tm.getSubtargetImpl())
 {
 }
 
@@ -63,11 +63,11 @@ bool PatmosFrameLowering::hasFP(const MachineFunction &MF) const {
   const MachineFrameInfo *MFI = MF.getFrameInfo();
 
   // Naked functions should not use the stack, they do not get a frame pointer.
-  if (MF.getFunction()->hasFnAttribute(Attribute::Naked))
+  if (MF.getFunction().hasFnAttribute(Attribute::Naked))
     return false;
 
   return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
-          MF.getFrameInfo()->hasVarSizedObjects() ||
+          MF.getFrameInfo().hasVarSizedObjects() ||
           MFI->isFrameAddressTaken());
 }
 
@@ -173,7 +173,7 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
   // This must be in sync with PatmosRegisterInfo::eliminateCallFramePseudoInstr
   unsigned int SSOffset = (hasFP(MF) ? 0 : maxFrameSize);
 
-  LLVM_DEBUG(dbgs() << "PatmosSC: " << MF.getFunction()->getName() << "\n");
+  LLVM_DEBUG(dbgs() << "PatmosSC: " << MF.getFunction().getName() << "\n");
   LLVM_DEBUG(MFI.print(MF, dbgs()));
   for(unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
     if (MFI.isDeadObjectIndex(FI))
@@ -299,7 +299,7 @@ void PatmosFrameLowering::patchCallSites(MachineFunction &MF) const {
          j++) {
       // a call site?
       if (j->isCall()) {
-        MachineBasicBlock::iterator p(llvm::next(j));
+        MachineBasicBlock::iterator p(std::next(j));
         emitSTC(MF, *i, p, Patmos::SENSi);
       }
     }
@@ -327,7 +327,7 @@ void PatmosFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineFrameInfo *MFI      = MF.getFrameInfo();
   if (MFI->getMaxAlignment() > 4) {
     dbgs() << "Stack alignment ";
-    if (MF.getFunction()) dbgs() << "in " << MF.getFunction()->getName() << " ";
+    if (MF.getFunction()) dbgs() << "in " << MF.getFunction().getName() << " ";
     dbgs() << "too large (" << MFI->getMaxAlignment() << ").\n";
 
     report_fatal_error("Stack alignment other than 4 byte is not supported");
@@ -423,7 +423,7 @@ void PatmosFrameLowering::processFunctionBeforeCalleeSavedScan(
   DebugLoc DL;
 
   // Do not emit anything for naked functions
-  if (MF.getFunction()->hasFnAttribute(Attribute::Naked)) {
+  if (MF.getFunction().hasFnAttribute(Attribute::Naked)) {
     return;
   }
 
@@ -432,25 +432,6 @@ void PatmosFrameLowering::processFunctionBeforeCalleeSavedScan(
     // Set frame pointer: FP = SP
     AddDefaultPred(BuildMI(EntryMBB, EntryMBB.begin(), DL,
           TII->get(Patmos::MOV), Patmos::RFP)).addReg(Patmos::RSP);
-    // Mark RFP as used
-    MRI.setPhysRegUsed(Patmos::RFP);
-  }
-
-  // load the current function base if it needs to be passed to call sites
-  if (MFI.hasCalls()) {
-    // If we have calls, we need to spill the call link registers
-    MRI.setPhysRegUsed(Patmos::SRB);
-    MRI.setPhysRegUsed(Patmos::SRO);
-  } else {
-    MRI.setPhysRegUnused(Patmos::SRB);
-    MRI.setPhysRegUnused(Patmos::SRO);
-  }
-
-  // mark all predicate registers as used, for single path support
-  // S0 is saved/restored as whole anyway
-  if (PatmosSinglePathInfo::isEnabled(MF)) {
-    MRI.setPhysRegUsed(Patmos::S0);
-    MRI.setPhysRegUsed(Patmos::R26);
   }
 
   // If we need to spill S0, try to find an unused scratch register that we can
@@ -458,7 +439,7 @@ void PatmosFrameLowering::processFunctionBeforeCalleeSavedScan(
   // the register though.
   // It also makes no sense if we single-path convert the function,
   // because the SP converter introduces spill slots anyway.
-  if (MRI.isPhysRegUsed(Patmos::S0) && !MF.getFrameInfo()->hasCalls()
+  if (MRI.isPhysRegUsed(Patmos::S0) && !MF.getFrameInfo().hasCalls()
       && !PatmosSinglePathInfo::isEnabled(MF)) {
     unsigned SpillReg = 0;
     BitVector Reserved = MRI.getReservedRegs();
@@ -477,13 +458,12 @@ void PatmosFrameLowering::processFunctionBeforeCalleeSavedScan(
     if (SpillReg) {
       // Remember the register for the prologe-emitter and mark as used
       PMFI.setS0SpillReg(SpillReg);
-      MRI.setPhysRegUsed(SpillReg);
     }
   }
 
   if (TRI->requiresRegisterScavenging(MF)) {
-    const TargetRegisterClass *RC = &Patmos::RRegsRegClass;
-    int fi = MFI.CreateStackObject(RC->getSize(), RC->getAlignment(), false);
+    const TargetRegisterClass &RC = Patmos::RRegsRegClass;
+    int fi = MFI.CreateStackObject(TRI->getSpillSize(RC), TRI->getSpillAlign(RC), false);
     RS->addScavengingFrameIndex(fi);
     PMFI.setRegScavengingFI(fi);
   }
@@ -519,14 +499,14 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // Spill S0 to a register instead to a slot if there is a free register
     if (Reg == Patmos::S0 && PMFI.getS0SpillReg()) {
       TII.copyPhysReg(MBB, MI, DL, PMFI.getS0SpillReg(), Reg, true);
-      prior(MI)->setFlag(MachineInstr::FrameSetup);
+      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
       continue;
     }
 
     // copy to R register first, then spill
     if (Patmos::SRegsRegClass.contains(Reg)) {
       TII.copyPhysReg(MBB, MI, DL, Patmos::R9, Reg, true);
-      prior(MI)->setFlag(MachineInstr::FrameSetup);
+      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
       Reg = Patmos::R9;
     }
 
@@ -534,7 +514,7 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
     TII.storeRegToStackSlot(MBB, MI, Reg, true,
         CSI[i-1].getFrameIdx(), RC, TRI);
-    prior(MI)->setFlag(MachineInstr::FrameSetup);
+    std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
     // increment spilled size
     spilledSize += 4;
@@ -577,7 +557,7 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
     // Spill S0 to a register instead to a slot if there is a free register
     if (Reg == Patmos::S0 && PMFI.getS0SpillReg()) {
       TII.copyPhysReg(MBB, MI, DL, Reg, PMFI.getS0SpillReg(), true);
-      prior(MI)->setFlag(MachineInstr::FrameSetup);
+      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
       continue;
     }
 
@@ -588,22 +568,23 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
     // load
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(tmpReg);
     TII.loadRegFromStackSlot(MBB, MI, tmpReg, CSI[i-1].getFrameIdx(), RC, TRI);
-    prior(MI)->setFlag(MachineInstr::FrameSetup);
+    std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
     // copy, if needed
     if (tmpReg != Reg)
     {
       TII.copyPhysReg(MBB, MI, DL, Reg, tmpReg, true);
-      prior(MI)->setFlag(MachineInstr::FrameSetup);
+      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
     }
   }
 
   return true;
 }
 
-void PatmosFrameLowering::
-eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
-                              MachineBasicBlock::iterator I) const {
+MachineBasicBlock::iterator
+PatmosFrameLowering::eliminateCallFramePseudoInstr(MachineFunction &MF,
+                                                   MachineBasicBlock &MBB,
+                                                   MachineBasicBlock::iterator I) const {
   const TargetInstrInfo &TII = *TM.getInstrInfo();
 
   // We need to adjust the stack pointer here (and not in the prologue) to
@@ -630,7 +611,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                                   .addImm(Size);
   }
   // erase the pseudo instruction
-  MBB.erase(I);
+  return MBB.erase(I);
 }
 
 
