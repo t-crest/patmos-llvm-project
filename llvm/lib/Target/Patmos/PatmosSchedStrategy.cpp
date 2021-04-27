@@ -14,7 +14,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "post-RA-sched"
 #include "PatmosSchedStrategy.h"
 #include "PatmosInstrInfo.h"
 #include "PatmosRegisterInfo.h"
@@ -29,11 +28,12 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 
 #include <algorithm>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "post-RA-sched"
 
 bool ILPOrder::operator()(const SUnit *A, const SUnit *B) const {
   // Always prefer instructions with ScheduleLow flag.
@@ -350,7 +350,7 @@ void PatmosPostRASchedStrategy::postprocessDAG(ScheduleDAGPostRA *dag)
 
   const PatmosSubtarget *PST = PTM.getSubtargetImpl();
 
-  unsigned DelaySlot = CFL ? PST->getDelaySlotCycles(CFL->getInstr()) : 0;
+  unsigned DelaySlot = CFL ? PST->getDelaySlotCycles(*CFL->getInstr()) : 0;
 
   if (CFL) {
     // RET and CALL have implicit deps on the return values and call
@@ -588,7 +588,7 @@ void PatmosPostRASchedStrategy::removeImplicitCFLDeps(SUnit &SU)
         MachineInstr *PredMI = it->getSUnit()->getInstr();
 
         if (PredMI->mayStore() || PredMI->mayLoad()) {
-          PatmosII::MemType MT = PII.getMemType(PredMI);
+          PatmosII::MemType MT = PII.getMemType(*PredMI);
 
           // If we have a load or store from SPM or stack cache, it does not
           // interfere with the call and we may move it into the delay slot

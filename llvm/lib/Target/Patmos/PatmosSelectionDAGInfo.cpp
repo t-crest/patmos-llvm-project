@@ -11,13 +11,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-selectiondag-info"
 #include "PatmosTargetMachine.h"
 using namespace llvm;
+#define DEBUG_TYPE "patmos-selectiondag-info"
 
-PatmosSelectionDAGInfo::PatmosSelectionDAGInfo(const PatmosTargetMachine &TM)
-  : SelectionDAGTargetInfo(TM) {
-}
+PatmosSelectionDAGInfo::PatmosSelectionDAGInfo(){}
 
-PatmosSelectionDAGInfo::~PatmosSelectionDAGInfo() {
-}
+PatmosSelectionDAGInfo::~PatmosSelectionDAGInfo() {}

@@ -22,7 +22,6 @@
 
 namespace llvm {
   class PatmosTargetMachine;
-  class FunctionPass;
   class ModulePass;
   class formatted_raw_ostream;
   class PassRegistry;
@@ -32,7 +31,7 @@ namespace llvm {
   void initializePatmosPostRASchedulerPass(PassRegistry&);
   void initializePatmosPMLProfileImportPasS(PassRegistry&);
 
-  FunctionPass *createPatmosISelDag(PatmosTargetMachine &TM);
+  FunctionPass *createPatmosISelDag(PatmosTargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
   ModulePass   *createPatmosSPClonePass();
   ModulePass   *createPatmosSPMarkPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosSinglePathInfoPass(const PatmosTargetMachine &tm);
@@ -47,8 +46,6 @@ namespace llvm {
   FunctionPass *createPatmosExportPass(PatmosTargetMachine &TM,
                                        std::string& Filename,
                                        std::string& BitcodeFilename);
-  FunctionPass *createPatmosBypassFromPMLPass(PatmosTargetMachine &tm);
-  FunctionPass *createPatmosPMLProfileImport(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosEnsureAlignmentPass(PatmosTargetMachine &tm);
 
   ModulePass *createPatmosModuleExportPass(PatmosTargetMachine &TM,

@@ -44,8 +44,6 @@ namespace {
         return false;
       }
     }
-    void sortRelocs(const MCAssembler &Asm,
-                    std::vector<ELFRelocationEntry> &Relocs) override;
   };
 }
 
@@ -86,7 +84,8 @@ unsigned PatmosELFObjectWriter::getRelocType(MCContext &Ctx,
 
 
 std::unique_ptr<MCObjectTargetWriter>
-createPatmosELFObjectWriter(uint8_t OSABI) {
+llvm::createPatmosELFObjectWriter(const Triple &TT) {
+  uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
   MCELFObjectTargetWriter *MOTW = new PatmosELFObjectWriter(OSABI);
   return std::make_unique<PatmosELFObjectWriter>(OSABI);
 }

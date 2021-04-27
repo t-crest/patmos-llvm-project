@@ -37,15 +37,19 @@
 using namespace llvm;
 
 // FIXME: Provide proper call frame setup / destroy opcodes.
-PatmosRegisterInfo::PatmosRegisterInfo(PatmosTargetMachine &tm,
+PatmosRegisterInfo::PatmosRegisterInfo(const PatmosTargetMachine &tm,
                                        const TargetInstrInfo &tii)
-  : PatmosGenRegisterInfo(Patmos::R1), TM(tm), TII(tii) {
-  StackAlign = TM.getFrameLowering()->getStackAlignment();
+  : PatmosGenRegisterInfo(Patmos::R1), TM(tm), TII(tii) {}
+
+const uint32_t *PatmosRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+                                     CallingConv::ID) const
+{
+  llvm_unreachable("Unimplemented");
 }
 
-const uint16_t*
+const MCPhysReg*
 PatmosRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  const TargetFrameLowering *TFI = TM.getFrameLowering();
+  const TargetFrameLowering *TFI = MF->getSubtarget().getFrameLowering();
   //const Function* F = MF->getFunction();
   static const uint16_t CalleeSavedRegs[] = {
     // Special regs
@@ -76,7 +80,7 @@ PatmosRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 
 BitVector PatmosRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  const TargetFrameLowering *TFI = TM.getFrameLowering();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
 
   Reserved.set(Patmos::R0);
   Reserved.set(Patmos::P0);
@@ -172,7 +176,7 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
         //   we implement it as a predicated store of a non-zero value
         //   followed by a predicated (inverted) store of 0
         BuildMI(MBB, II, DL, TII.get(st_opc))
-          .addOperand(SrcRegOpnd).addImm(0) // predicate
+          .add(SrcRegOpnd).addImm(0) // predicate
           .addReg(basePtr, false).addImm(offset) // adress
           .addReg(Patmos::RSP); // a non-zero value, i.e. RSP
 
@@ -180,7 +184,7 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
         // value), there is no need to emit (!p0) sws ..
         if (SrcRegOpnd.getReg() != Patmos::P0) {
           BuildMI(MBB, II, DL, TII.get(st_opc))
-            .addOperand(SrcRegOpnd).addImm(1) // predicate, inverted
+            .add(SrcRegOpnd).addImm(1) // predicate, inverted
             .addReg(basePtr, false).addImm(offset) // address
             .addReg(Patmos::R0); // zero
         }
@@ -215,7 +219,7 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
 void
 PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                         int SPAdj, unsigned FIOperandNum,
-					RegScavenger *RS) const 
+                                        RegScavenger *RS) const
 {
   assert(SPAdj == 0 && "Unexpected");
 
@@ -223,8 +227,8 @@ PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineInstr &MI                = *II;
   MachineBasicBlock &MBB          = *MI.getParent();
   MachineFunction &MF             = *MBB.getParent();
-  const TargetFrameLowering &TFI  = *TM.getFrameLowering();
-  const MachineFrameInfo &MFI     = *MF.getFrameInfo();
+  const TargetFrameLowering &TFI  = *TM.getSubtargetImpl()->getFrameLowering();
+  const MachineFrameInfo &MFI     = MF.getFrameInfo();
   PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
   MachineRegisterInfo &MRI        = MF.getRegInfo();
 
@@ -365,14 +369,14 @@ PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 Register PatmosRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = TM.getFrameLowering();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
 
   return TFI->hasFP(MF) ? Patmos::RFP : Patmos::RSP;
 }
 
 
 bool PatmosRegisterInfo::hasReservedSpillSlot(const MachineFunction &MF,
-                                          unsigned Reg, int &FrameIdx) const {
+                                              Register Reg, int &FrameIdx) const {
 
   // We don't want to create a stack frame object for PRegs, they are handled
   // by S0, as they're aliased
@@ -428,4 +432,16 @@ int PatmosRegisterInfo::getS0Index(unsigned RegNo) const
     default: break;
   }
   return res;
+}
+
+bool PatmosRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
+  return PhysReg == Patmos::R0 || PhysReg == Patmos::P0;
+}
+
+raw_ostream &llvm::operator<< (raw_ostream &OS, const llvm::PrintReg &P) {
+  if (P.Rs.isValid())
+    OS << printReg(P.Rs, &P.HRI);
+  else
+    OS << "noreg";
+  return OS;
 }

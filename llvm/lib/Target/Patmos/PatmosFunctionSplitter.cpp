@@ -49,7 +49,6 @@
 // 
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-function-splitter"
 #undef PATMOS_TRACE_SCCS
 #undef PATMOS_TRACE_VISITS
 #undef PATMOS_TRACE_EMIT
@@ -79,8 +78,6 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/PMLImport.h"
-#include "llvm/MC/MCNullStreamer.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCSectionELF.h"
@@ -156,6 +153,8 @@ static cl::opt<bool> AppendStatsFile(
     cl::Hidden);
 
 namespace llvm {
+
+  #define DEBUG_TYPE "patmos-function-splitter"
 
   STATISTIC(TotalFunctions, "Number of functions visited.");
   STATISTIC(SplitFunctions, "Number of functions splitted.");
@@ -383,20 +382,17 @@ namespace llvm {
     unsigned PreferredSCCSize;
     unsigned MaxRegionSize;
 
-    PMLMCQuery *PML;
-    PMLQuery::BlockDoubleMap Criticalities;
-
     MachinePostDominatorTree &MPDT;
 
     /// Construct a graph from a machine function.
-    agraph(MachineFunction *mf, PatmosTargetMachine &tm, PMLMCQuery *pml,
+    agraph(MachineFunction *mf, PatmosTargetMachine &tm,
            MachinePostDominatorTree &mpdt, unsigned int preferredRegionSize,
            unsigned int preferredSCCSize, unsigned int maxRegionSize)
-    : MF(mf), PTM(tm), STC(tm.getSubtarget<PatmosSubtarget>()),
+    : MF(mf), PTM(tm), STC(*tm.getSubtargetImpl()),
       PII(*tm.getInstrInfo()),
       PreferredRegionSize(preferredRegionSize),
       PreferredSCCSize(preferredSCCSize), MaxRegionSize(maxRegionSize),
-      PML(pml), MPDT(mpdt)
+      MPDT(mpdt)
     {
       Blocks.reserve(mf->size());
 
@@ -407,7 +403,7 @@ namespace llvm {
       for(MachineFunction::iterator i(mf->begin()), ie(mf->end());
           i != ie; i++) {
         // make a block
-        ablock *ab = new ablock(PTM, id++, this, i);
+        ablock *ab = new ablock(PTM, id++, this, &*i);
 
         // Keep track of fallthough edges
         if (pred && mayFallThrough(PTM, pred->MBB)) {
@@ -416,7 +412,7 @@ namespace llvm {
         pred = ab;
 
         // store block
-        MBBtoA[i] = ab;
+        MBBtoA[&*i] = ab;
         Blocks.push_back(ab);
       }
 
@@ -425,7 +421,7 @@ namespace llvm {
           i != ie; i++) {
 
         // get ablock of source
-        ablock *s = MBBtoA[i];
+        ablock *s = MBBtoA[&*i];
 
         for(MachineBasicBlock::const_succ_iterator j(i->succ_begin()),
             je(i->succ_end()); j != je; j++) {
@@ -536,10 +532,6 @@ namespace llvm {
           header->JTIDs.insert(jtids.begin(), jtids.end());
         }
       }
-
-      if (PML) {
-        PML->getBlockCriticalityMap(Criticalities);
-      }
     }
 
     /// mayFallThrough - Return true in case the block terminates with a 
@@ -564,7 +556,7 @@ namespace llvm {
           ie(MBB->instr_end()); i != ie; i++)
       {
         if (i->isBundle()) continue;
-        size += getInstrSize(i, PTM);
+        size += getInstrSize(&*i, PTM);
       }
 
       return size;
@@ -576,7 +568,7 @@ namespace llvm {
       for(MachineBasicBlock::instr_iterator i(MBB->instr_begin()),
           ie(MBB->instr_end()); i != ie; i++)
       {
-        if (PTM.getInstrInfo()->hasCall(i))
+        if (PTM.getInstrInfo()->hasCall(&*i))
           return true;
       }
 
@@ -931,21 +923,8 @@ namespace llvm {
       ready_block rb;
       rb.block = block;
 
-      if (PML && block->MBB) {
-        rb.criticality = PML->getCriticality(Criticalities, *block->MBB);
-      } else if (PML) {
-        double maxCrit = 0.0;
-        for (ablocks::iterator i = block->SCC.begin(), ie = block->SCC.end();
-             i != ie; i++)
-        {
-          if (!(*i)->MBB) continue;
-          maxCrit = std::max(maxCrit,
-                             PML->getCriticality(Criticalities, *(*i)->MBB));
-        }
-        rb.criticality = maxCrit;
-      } else {
-        rb.criticality = 1.0;
-      }
+
+      rb.criticality = 1.0;
 
       // add the block to the sorted ready list
       ready.push_back(rb);
@@ -1417,7 +1396,7 @@ namespace llvm {
       // fix-up needed?
       if (target->MBB != layout_successor) {
 
-        const TargetInstrInfo &TII = *MF->getTarget().getInstrInfo();
+        const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
 
         if (PTM.getCodeModel() != CodeModel::Large || block->Region == target->Region) {
           // Encode branch in a single instruction
@@ -1436,7 +1415,7 @@ namespace llvm {
 
         MachineBasicBlock::iterator II = fallthrough->end();
         --II;
-        unsigned cycles = PTM.getSubtargetImpl()->getDelaySlotCycles(&*II);
+        unsigned cycles = PTM.getSubtargetImpl()->getDelaySlotCycles(*II);
         if (PTM.getSubtargetImpl()->getCFLType() != PatmosSubtarget::CFL_NON_DELAYED
             && !PII.hasRegUse(&*II)) {
           cycles = PII.moveUp(*fallthrough, II);
@@ -1563,7 +1542,7 @@ namespace llvm {
                      << " branching to " << target->getName()
                      << "[" << target->getNumber() << "]\n");
 
-        MachineBasicBlock::instr_iterator II = BR;
+        MachineBasicBlock::instr_iterator II(BR);
         // move to the beginning of the BR bundle
         while (II->isBundledWithPred()) II--;
 
@@ -1571,7 +1550,7 @@ namespace llvm {
           // Load target into register when rewriting to BRCF with immediate
           if (opcode == Patmos::BRCF || opcode == Patmos::BRCFu) {
             AddDefaultPred(BuildMI(MBB, II, DebugLoc(), PII.get(Patmos::LIl), Patmos::RTR))
-              .addOperand(BR->getOperand(BR->getNumExplicitOperands()-1));
+              .add(BR->getOperand(BR->getNumExplicitOperands()-1));
             BR->RemoveOperand(BR->getNumExplicitOperands()-1);
             BR->addOperand(*MF, MachineOperand::CreateReg(Patmos::RTR, false, false, true));
          
@@ -1792,7 +1771,7 @@ namespace llvm {
       }
 
       // insert MBB as successor of newBB
-      newBB->addSuccessor(MBB, 1);
+      newBB->addSuccessor(MBB, BranchProbability::getOne());
 
       // ensure that MBB can fall-through to the new block
       MF->insert(MachineFunction::iterator(MBB), newBB);
@@ -1885,19 +1864,20 @@ namespace llvm {
                                          MachineInstr *MI,
                                          PatmosTargetMachine &PTM)
     {
-      int cycles = PTM.getSubtargetImpl()->getDelaySlotCycles(MI);
+      int cycles = PTM.getSubtargetImpl()->getDelaySlotCycles(*MI);
       const PatmosInstrInfo *PII = PTM.getInstrInfo();
 
       unsigned bytes = 0;
 
-      MachineBasicBlock::iterator it = MI;
+      MachineBasicBlock::iterator it(MI);
+
       for (; cycles > 0; ) {
         it++;
         assert(it != MBB->end() && "Reached end of MBB before end of delay slot");
         assert(!it->isInlineAsm() && "Inline asm should not be in delay slot");
 
-        if (!PII->isPseudo(it)) {
-          bytes += getInstrSize(it, PTM);
+        if (!PII->isPseudo(*it)) {
+          bytes += getInstrSize(&*it, PTM);
           --cycles;
         }
       }
@@ -1931,19 +1911,19 @@ namespace llvm {
         }
 
         // get instruction size
-        unsigned int i_size = agraph::getInstrSize(i, PTM);
+        unsigned int i_size = agraph::getInstrSize(&*i, PTM);
 
         // for branches, assume we need to add a NOP to make it BRCF.
         if (i->isBranch()) i_size += branchFixup;
 
         if (i_size > cache_size) {
           report_fatal_error("Inline assembly in function '" +
-                             MBB->getParent()->getFunction()->getName() +
+                             MBB->getParent()->getFunction().getName() +
                              "' is larger than the method cache size!");
         }
         if (i_size > MaxSize) {
             report_fatal_error("Inline assembly in function '" +
-                               MBB->getParent()->getFunction()->getName() +
+                               MBB->getParent()->getFunction().getName() +
                                "' is larger than maximum allowed size for subfunctions!\n" +
 			       "Max allowed size: " + Twine(MaxSize) + ", actual size: " + Twine(i_size));
         }
@@ -1954,8 +1934,8 @@ namespace llvm {
         if (PTM.getCodeModel() == CodeModel::Large &&
             i->definesRegister(Patmos::RTR) && !i->isBranch()) {
           MachineBasicBlock::instr_iterator k;
-          for (k = llvm::next(i); k != ie; ++k) {
-            tmp_live_margin += agraph::getInstrSize(k, PTM);
+          for (k = std::next(i); k != ie; ++k) {
+            tmp_live_margin += agraph::getInstrSize(&*k, PTM);
             if (k->killsRegister(Patmos::RTR)) {
               break;
             }
@@ -1967,10 +1947,10 @@ namespace llvm {
 
         // ensure that we do not split inside delay slots
         unsigned int delay_slot_margin = i->hasDelaySlot()
-                      ? getDelaySlotSize(MBB, i, PTM) : 0;
+                      ? getDelaySlotSize(MBB, &*i, PTM) : 0;
 
 #ifndef NDEBUG
-        const MachineInstr *FirstMI = PTM.getInstrInfo()->getFirstMI(i);
+        const MachineInstr *FirstMI = PTM.getInstrInfo()->getFirstMI(&*i);
         assert(!isPatmosCFL(FirstMI->getOpcode(), FirstMI->getDesc().TSFlags)
                || (delay_slot_margin > 0));
 #endif
@@ -2011,18 +1991,18 @@ namespace llvm {
           // the tree.
           if (MPDT.getNode(MBB)) {
             // - the new node is post-dominated by the old block
-            MPDT.addNewBlock(newBB, MBB);
+            MPDT.getBase().addNewBlock(newBB, MBB);
             // - the new block post-dominates all nodes post-dominated by
             //   the old block
             for (MachineDomTreeNode::const_iterator
-                 it = MPDT.getNode(MBB)->getChildren().begin(),
-                 ie = MPDT.getNode(MBB)->getChildren().end(); it != ie; it++)
+                 it = MPDT.getNode(MBB)->children().begin(),
+                 ie = MPDT.getNode(MBB)->children().end(); it != ie; it++)
             {
               MachineBasicBlock *preBB = (*it)->getBlock();
               if (preBB == newBB) continue;
-              MPDT.changeImmediateDominator(preBB, newBB);
+              MPDT.getBase().changeImmediateDominator(preBB, newBB);
               // restart from beginning, with one post-dominated node less.
-              it = MPDT.getNode(MBB)->getChildren().begin();
+              it = MPDT.getNode(MBB)->children().begin();
             }
           }
 
@@ -2044,8 +2024,8 @@ namespace llvm {
     void write(unsigned int i)
     {
       std::stringstream s;
-      s << MF->getFunction()->getName().str() << "-" << i << ".dot";
-      std::string err;
+      s << MF->getFunction().getName().str() << "-" << i << ".dot";
+      std::error_code err;
       raw_fd_ostream f(s.str().c_str(), err);
       WriteGraph(f, *this);
       f.close();
@@ -2066,8 +2046,6 @@ namespace llvm {
       for(ablocks::iterator i(Blocks.begin()), ie(Blocks.end()); i != ie; i++) {
         delete *i;
       }
-
-      if (PML) delete PML;
     }
   };
 
@@ -2086,8 +2064,8 @@ namespace llvm {
                     agraph &G, ablocks &order,
                     unsigned orig_size, const TimeRecord &Time)
     {
-      std::string err;
-      raw_fd_ostream f(Filename.str().c_str(), err, sys::fs::F_Append);
+      std::error_code err;
+      raw_fd_ostream f(Filename, err, sys::fs::F_Append);
 
       // write a single line per function
 
@@ -2156,17 +2134,16 @@ namespace llvm {
     /// PatmosFunctionSplitter - Create a new instance of the function splitter.
     PatmosFunctionSplitter(PatmosTargetMachine &tm) :
       MachineFunctionPass(ID), PTM(tm),
-      STC(tm.getSubtarget<PatmosSubtarget>())
+      STC(*tm.getSubtargetImpl())
     {
     }
 
     /// getPassName - Return the pass' name.
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Function Splitter";
     }
 
-    void getAnalysisUsage(AnalysisUsage &AU) const {
-      AU.addRequired<PMLImport>();
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<MachineDominatorTree>();
       AU.addRequired<MachinePostDominatorTree>();
       AU.addPreserved<MachineDominatorTree>();
@@ -2174,7 +2151,7 @@ namespace llvm {
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
-    virtual bool doInitialization(Module &)  {
+    bool doInitialization(Module &) override {
       if (!StatsFile.empty() && !AppendStatsFile && sys::fs::exists(StatsFile))
       {
         sys::fs::remove(StatsFile.c_str());
@@ -2207,14 +2184,14 @@ namespace llvm {
       MachinePostDominatorTree &MPDT = getAnalysis<MachinePostDominatorTree>();
 
       for(MachineFunction::iterator i(MF.begin()), ie(MF.end()); i != ie; i++) {
-        unsigned bb_size = agraph::getBBSize(i, PTM);
+        unsigned bb_size = agraph::getBBSize(&*i, PTM);
 
         // in case the block is larger than the method cache, split it and
         // update its
         //
-        if (bb_size + agraph::getMaxBlockMargin(PTM, i) > max_subfunc_size)
+        if (bb_size + agraph::getMaxBlockMargin(PTM, &*i) > max_subfunc_size)
         {
-          bb_size = agraph::splitBlock(i, max_subfunc_size, PTM, MDT, MPDT);
+          bb_size = agraph::splitBlock(&*i, max_subfunc_size, PTM, MDT, MPDT);
           blocks_splitted = true;
         }
 
@@ -2222,7 +2199,7 @@ namespace llvm {
       }
 
       LLVM_DEBUG(dbgs() << "\nPatmos Function Splitter: "
-                   << MF.getFunction()->getName() << ": " << total_size << "\n");
+                   << MF.getFunction().getName() << ": " << total_size << "\n");
 
       TotalFunctions++;
 
@@ -2235,8 +2212,7 @@ namespace llvm {
         if (CollectStats) Time -= TimeRecord::getCurrentTime(true);
 
         // construct a copy of the CFG.
-        PMLImport &PI = getAnalysis<PMLImport>();
-        agraph G(&MF, PTM, PI.createMCQuery(*this, MF), MPDT,
+        agraph G(&MF, PTM, MPDT,
                  prefer_subfunc_size, prefer_scc_size, max_subfunc_size);
         G.transformSCCs();
 
@@ -2277,6 +2253,10 @@ FunctionPass *llvm::createPatmosFunctionSplitterPass(PatmosTargetMachine &tm) {
 
 namespace llvm {
   template <> struct GraphTraits<agraph> {
+    using GraphType = typename llvm::agraph;
+    using NodeRef = typename llvm::ablock*;
+    using EdgeRef = typename llvm::aedges::value_type;
+
     typedef ablock NodeType;
     class ChildIteratorType
     {
@@ -2307,42 +2287,40 @@ namespace llvm {
       }
     };
 
-    static inline ChildIteratorType child_begin(NodeType *N) {
+    static inline ChildIteratorType child_begin(NodeRef N) {
       return N->G->Edges.lower_bound(N);
     }
-    static inline ChildIteratorType child_end(NodeType *N) {
+    static inline ChildIteratorType child_end(NodeRef N) {
       return N->G->Edges.upper_bound(N);
     }
 
-    static NodeType *getEntryNode(const agraph &G) {
+    static NodeRef getEntryNode(const agraph &G) {
       return G.Blocks.front();
     }
 
     // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
     typedef ablocks::const_iterator nodes_iterator;
-    static nodes_iterator nodes_begin(const agraph &G) {
+    static nodes_iterator nodes_begin(const GraphType &G) {
       return G.Blocks.begin();
     }
-    static nodes_iterator nodes_end  (const agraph &G) {
+    static nodes_iterator nodes_end  (const GraphType &G) {
       return G.Blocks.end();
     }
-    static unsigned       size       (const agraph &G)  {
+    static unsigned       size       (const GraphType &G)  {
       return G.Blocks.size();
     }
   };
 
   template<>
   struct DOTGraphTraits<agraph> : public DefaultDOTGraphTraits {
-    typedef aedges::iterator EdgeIteratorType;
 
     DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
     static std::string getGraphName(const agraph &G) {
-      return G.MF->getFunction()->getName();
+      return G.MF->getFunction().getName().str();
     }
 
-    template<typename T>
-    static bool isNodeHidden(const T, const agraph &G) {
+    static bool isNodeHidden(const ablock *) {
       return false;
     }
 

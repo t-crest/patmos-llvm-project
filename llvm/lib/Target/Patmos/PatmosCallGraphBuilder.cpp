@@ -11,8 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-call-graph-builder"
-
 #include "PatmosCallGraphBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
@@ -23,6 +21,8 @@
 #include <set>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "patmos-call-graph-builder"
 
 INITIALIZE_PASS(PatmosCallGraphBuilder, "patmos-mcg",
                 "Patmos Call Graph Builder", false, true)
@@ -53,7 +53,7 @@ namespace llvm {
     if (isUnknown())
       tmp << "<UNKNOWN-"<< *T << ">";
     else
-      tmp << MF->getFunction()->getName();
+      tmp << MF->getFunction().getName();
 
     return tmps;
   }
@@ -220,12 +220,12 @@ namespace llvm {
     MachineBasicBlock *MBB = MI->getParent();
     MachineFunction *MF = MBB->getParent();
 
-    for(scc_iterator<MachineFunction*> i(scc_begin(MF)), ie(scc_end(MF));
-        i != ie; i++)
+    for(auto i = scc_begin(MF), ie = scc_end(MF);
+        i != ie; ++i)
     {
-      if (i.hasLoop())
+      if (i.hasCycle())
       {
-        if (std::find((*i).begin(), (*i).end(), MBB) != (*i).end())
+        if (std::find(i->begin(), i->end(), MBB) != i->end())
           return true;
       }
     }
@@ -311,18 +311,18 @@ namespace llvm {
     typedef std::set<MCGNode*> MCGNodeSet;
     MCGNodeSet WL;
     for(scc_iterator<MCallGraph> i(scc_begin(*this)), ie(scc_end(*this));
-        i != ie; i++)
+        i != ie; ++i)
     {
       // See if the node is in an SCC of the call graph --> mark it directly ...
-      if (i.hasLoop())
+      if (i.hasCycle())
       {
-        WL.insert((*i).begin(), (*i).end());
+        WL.insert(i->begin(), i->end());
       }
       else
       {
         // ok the node is not in an SCC of the call graph, but maybe one of
         // its call sites it in a loop
-        MCGNode *MCGN = *(*i).begin();
+        MCGNode *MCGN = *i->begin();
         const MCGSites &calling(MCGN->getCallingSites());
         for(MCGSites::const_iterator j(calling.begin()), je(calling.end());
             j != je; j++)
@@ -404,7 +404,7 @@ namespace llvm {
   void PatmosCallGraphBuilder::visitCallSites(const Module &M, MachineFunction *MF)
   {
     // get the machine-level module information.
-    MachineModuleInfo &MMI(getAnalysis<MachineModuleInfo>());
+    auto &MMI = getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
 
     // make a call graph node, also for functions that are never called.
     MCGNode *MCGN = MCG.makeMCGNode(MF);
@@ -438,10 +438,10 @@ namespace llvm {
           }
 
           // does a MachineFunction exist for F?
-          MachineFunction *MF = F ? MMI.getMachineFunction(F) : NULL;
+          MachineFunction *MF = F ? MMI.getMachineFunction(*F) : NULL;
 
           // construct a new call site
-          MCG.makeMCGSite(MCGN, j,
+          MCG.makeMCGSite(MCGN, &*j,
                           MF ? MCG.makeMCGNode(MF) : MCG.getUnknownNode(T));
         }
       }
@@ -453,10 +453,10 @@ namespace llvm {
     Function *F = dyn_cast_or_null<Function>(M.getNamedValue(name));
     if (F) {
       // get the machine-level module information for M.
-      MachineModuleInfo &MMI(getAnalysis<MachineModuleInfo>());
+      auto &MMI = getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
 
       // get the MachineFunction
-      MachineFunction *MF = MMI.getMachineFunction(F);
+      MachineFunction *MF = MMI.getMachineFunction(*F);
 
       if (MF)
         return MCG.makeMCGNode(MF);
@@ -495,12 +495,12 @@ namespace llvm {
   bool PatmosCallGraphBuilder::runOnMachineModule(const Module &M)
   {
     // get the machine-level module information for M.
-    MachineModuleInfo &MMI(getAnalysis<MachineModuleInfo>());
+    auto &MMI = getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
 
     // visit all functions in the module
     for(Module::const_iterator i(M.begin()), ie(M.end()); i != ie; i++) {
       // get the machine-level function
-      MachineFunction *MF = MMI.getMachineFunction(i);
+      MachineFunction *MF = MMI.getMachineFunction(*i);
 
       // find all call-sites in the MachineFunction
       if (MF) {
@@ -510,9 +510,9 @@ namespace llvm {
         visitCallSites(M, MF);
 
         // represent external callers
-        const Function *F = MF->getFunction();
-        Type *T = F ? F->getType() : NULL;
-        if (i->hasAddressTaken() && F->getName() != MCallGraph::EntrySymbol) {
+        auto &F = MF->getFunction();
+        Type *T = F.getType();
+        if (i->hasAddressTaken() && F.getName() != MCallGraph::EntrySymbol) {
           MCG.makeMCGSite(MCG.getUnknownNode(T), NULL, MCGN);
         }
       }
@@ -527,7 +527,7 @@ namespace llvm {
     MCG.markNodesInSCC();
 
     LLVM_DEBUG(
-      std::string tmp;
+        std::error_code tmp;
       raw_fd_ostream of("mcg.dot", tmp);
       WriteGraph(of, MCG);
     );

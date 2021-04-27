@@ -15,6 +15,7 @@
 #define _PATMOS_MCTARGETDESC_H_
 
 #include "llvm/Support/DataTypes.h"
+#include "llvm/MC/MCInstrItineraries.h"
 
 #include <memory>
 
@@ -40,6 +41,8 @@ MCAsmBackend *createPatmosAsmBackend(const Target &T, const MCSubtargetInfo &STI
                                      const MCTargetOptions &Options);
 
 std::unique_ptr<MCObjectTargetWriter> createPatmosELFObjectWriter(const Triple &TT);
+
+bool canIssueInSlotForUnits(unsigned Slot, llvm::InstrStage::FuncUnits &units);
 
 } // End llvm namespace
 

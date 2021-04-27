@@ -42,7 +42,7 @@ namespace {
       MinBasicBlockAlignment = PST->getMinBasicBlockAlignment();
     }
 
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Ensure Alignment";
     }
 
@@ -52,8 +52,8 @@ namespace {
 
       bool Changed = false;
 
-      if (MinSubfunctionAlignment > MF.getAlignment()) {
-        MF.ensureAlignment(MinSubfunctionAlignment);
+      if (MinSubfunctionAlignment > MF.getAlignment().value()) {
+        MF.ensureAlignment(Align(MinSubfunctionAlignment));
         Changed = true;
       }
 
@@ -62,14 +62,14 @@ namespace {
            i != ie; ++i)
       {
         unsigned align;
-        if (PMFI->isMethodCacheRegionEntry(i)) {
+        if (PMFI->isMethodCacheRegionEntry(&*i)) {
           align = MinSubfunctionAlignment;
         } else {
           align = MinBasicBlockAlignment;
         }
 
-        if (align > i->getAlignment()) {
-          i->setAlignment(align);
+        if (align > i->getAlignment().value()) {
+          i->setAlignment(Align(align));
           Changed = true;
         }
       }

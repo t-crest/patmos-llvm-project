@@ -15,16 +15,12 @@
 #define _PATMOS_FRAMEINFO_H_
 
 #include "Patmos.h"
+#include "PatmosSubtarget.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
-  class BitVector;
-  class PatmosSubtarget;
-  class PatmosTargetMachine;
-
 class PatmosFrameLowering : public TargetFrameLowering {
 protected:
-  const PatmosTargetMachine &TM;
   const PatmosSubtarget &STC;
 
   /// getEffectiveStackCacheSize - Return the size of the stack cache that can
@@ -71,12 +67,16 @@ protected:
   /// \see PatmosMachineFunctionInfo
   void patchCallSites(MachineFunction &MF) const;
 public:
-  explicit PatmosFrameLowering(const PatmosTargetMachine &tm);
+  explicit PatmosFrameLowering(const PatmosSubtarget &sti)
+        : TargetFrameLowering(StackGrowsDown, Align(8), 0), STC(sti) {
+    }
 
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.
-  void emitPrologue(llvm::MachineFunction&, llvm::MachineBasicBlock&) const override;
-  void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const;
+  void emitPrologue(MachineFunction &MF,
+                    MachineBasicBlock &MBB) const override;
+  void emitEpilogue(MachineFunction &MF,
+                    MachineBasicBlock &MBB) const override;
 
   bool hasFP(const MachineFunction &MF) const override;
 
@@ -87,20 +87,16 @@ public:
                                                  RegScavenger *RS = NULL) const;
   bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MI,
-                                 const std::vector<CalleeSavedInfo> &CSI,
-                                 const TargetRegisterInfo *TRI) const;
+                                 ArrayRef<CalleeSavedInfo> CSI,
+                                 const TargetRegisterInfo *TRI) const override;
   bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MI,
-                                   const std::vector<CalleeSavedInfo> &CSI,
-                                   const TargetRegisterInfo *TRI) const;
+                                   MutableArrayRef<CalleeSavedInfo> CSI,
+                                   const TargetRegisterInfo *TRI) const override;
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF,
                                 MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I) const override;
-
-#if 0
-  bool hasReservedCallFrame(const MachineFunction &MF) const;
-#endif
 
 };
 

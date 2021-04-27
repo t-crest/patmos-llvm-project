@@ -95,7 +95,7 @@ public:
 }; // class PatmosMCCodeEmitter
 }  // namespace
 
-MCCodeEmitter *createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
+MCCodeEmitter *llvm::createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
                                          const MCRegisterInfo &MRI,
                                          MCContext &Ctx)
 {

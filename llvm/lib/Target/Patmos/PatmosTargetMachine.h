@@ -29,46 +29,45 @@ namespace llvm {
 /// PatmosTargetMachine
 ///
 class PatmosTargetMachine : public LLVMTargetMachine {
+  std::unique_ptr<TargetLoweringObjectFile> TLOF;
   PatmosSubtarget        Subtarget;
-  const DataLayout       DL;       // Calculates type size & alignment
   PatmosInstrInfo        InstrInfo;
-  PatmosTargetLowering   TLInfo;
   PatmosSelectionDAGInfo TSInfo;
-  PatmosFrameLowering    FrameLowering;
-  InstrItineraryData     InstrItins;
 
 public:
-  PatmosTargetMachine(const Target &T, StringRef TT,
-                      StringRef CPU, StringRef FS,
-		      TargetOptions O,
-                      Reloc::Model RM, CodeModel::Model CM,
-		      CodeGenOpt::Level L);
+  PatmosTargetMachine(const Target &T,
+                      const Triple &TT,
+                      StringRef CPU,
+                      StringRef FS,
+                      const TargetOptions &Options,
+                      Optional<Reloc::Model> RM,
+                      Optional<CodeModel::Model> CM,
+                      CodeGenOpt::Level L, bool JIT);
 
-  virtual const TargetFrameLowering *getFrameLowering() const {
-    return &FrameLowering;
+  const PatmosInstrInfo *getInstrInfo() const { return &InstrInfo; }
+  const DataLayout *getDataLayout() const { return &DL;}
+  const PatmosSubtarget *getSubtargetImpl(const Function &F) const override{
+    return getSubtargetImpl();
   }
+  const PatmosSubtarget *getSubtargetImpl() const { return &Subtarget; }
 
-  virtual const PatmosInstrInfo *getInstrInfo() const  { return &InstrInfo; }
-  virtual const DataLayout *getDataLayout() const     { return &DL;}
-  virtual const PatmosSubtarget *getSubtargetImpl() const { return &Subtarget; }
-
-  virtual const TargetRegisterInfo *getRegisterInfo() const {
+  const TargetRegisterInfo *getRegisterInfo() const {
     return &InstrInfo.getRegisterInfo();
   }
 
-  virtual const PatmosTargetLowering *getTargetLowering() const {
-    return &TLInfo;
-  }
-
-  virtual const PatmosSelectionDAGInfo* getSelectionDAGInfo() const {
+  const PatmosSelectionDAGInfo* getSelectionDAGInfo() const {
     return &TSInfo;
   }
 
-  virtual const InstrItineraryData *getInstrItineraryData() const {  return &InstrItins; }
+  TargetLoweringObjectFile *getObjFileLowering() const override {
+    return TLOF.get();
+  }
+
+  const InstrItineraryData *getInstrItineraryData() const {  return Subtarget.getInstrItineraryData(); }
 
   /// createPassConfig - Create a pass configuration object to be used by
   /// addPassToEmitX methods for generating a pipeline of CodeGen passes.
-  virtual TargetPassConfig *createPassConfig(PassManagerBase &PM);
+  TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
 }; // PatmosTargetMachine.
 

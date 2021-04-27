@@ -15,6 +15,7 @@
 #define _LLVM_TARGET_PATMOSCALLGRAPHBUILDER_H_
 
 #include "Patmos.h"
+#include "MachineModulePass.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
@@ -23,7 +24,6 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/MachineModulePass.h"
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/GraphWriter.h"
 
@@ -272,7 +272,7 @@ namespace llvm {
       for(MCGNodes::const_iterator i(Nodes.begin()), ie(Nodes.end()); i != ie;
           i++) {
         if (!(*i)->isUnknown() &&
-            (*i)->getMF()->getFunction()->getName() == name)
+            (*i)->getMF()->getFunction().getName() == name)
           return *i;
       }
       return NULL;
@@ -333,7 +333,7 @@ namespace llvm {
       for(MCGNodes::const_iterator i(Nodes.begin()), ie(Nodes.end()); i != ie;
           i++) {
         if (!(*i)->isUnknown() &&
-            (*i)->getMF()->getFunction()->getName() == name)
+            (*i)->getMF()->getFunction().getName() == name)
           return *i;
       }
       return NULL;
@@ -366,7 +366,7 @@ namespace llvm {
     /// here.
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       AU.setPreservesAll();
-      AU.addRequired<MachineModuleInfo>();
+      AU.addRequired<MachineModuleInfoWrapperPass>();
 
       ModulePass::getAnalysisUsage(AU);
     }
@@ -436,10 +436,10 @@ namespace llvm {
 
     /// runOnModule - Construct a simple machine-level call graph from the given
     /// module.
-    virtual bool runOnMachineModule(const Module &M);
+    bool runOnMachineModule(const Module &M) override;
 
     /// getPassName - Return the pass' name.
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Call Graph Builder";
     }
   };
@@ -447,6 +447,10 @@ namespace llvm {
 
 namespace llvm {
   template <> struct GraphTraits<MCallGraph> {
+    using GraphType = typename llvm::MCallGraph;
+    using NodeRef = typename llvm::MCGNode*;
+    using EdgeRef = typename llvm::MCGSites::value_type;
+
     typedef MCGNode NodeType;
     class ChildIteratorType
     {
@@ -499,33 +503,32 @@ namespace llvm {
       }
     };
 
-    static inline ChildIteratorType child_begin(NodeType *N) {
+    static inline ChildIteratorType child_begin(NodeRef N) {
       return N->Sites.begin();
     }
-    static inline ChildIteratorType child_end(NodeType *N) {
+    static inline ChildIteratorType child_end(NodeRef N) {
       return N->Sites.end();
     }
 
-    static NodeType *getEntryNode(const MCallGraph &G) {
+    static NodeRef getEntryNode(const MCallGraph &G) {
       return G.getEntryNode() ? G.getEntryNode() : G.Nodes.front();
     }
 
     // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
     typedef MCGNodes::const_iterator nodes_iterator;
-    static nodes_iterator nodes_begin(const MCallGraph &G) {
+    static nodes_iterator nodes_begin(const GraphType &G) {
       return G.Nodes.begin();
     }
-    static nodes_iterator nodes_end  (const MCallGraph &G) {
+    static nodes_iterator nodes_end  (const GraphType &G) {
       return G.Nodes.end();
     }
-    static unsigned       size       (const MCallGraph &G)  {
+    static unsigned       size       (const GraphType &G)  {
       return G.Nodes.size();
     }
   };
 
   template<>
   struct DOTGraphTraits<MCallGraph> : public DefaultDOTGraphTraits {
-    typedef MCGSites::const_iterator EdgeIteratorType;
 
     DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
@@ -533,8 +536,7 @@ namespace llvm {
       return "xxx";
     }
 
-    template<typename T>
-    static bool isNodeHidden(const T, const MCallGraph &G) {
+    static bool isNodeHidden(const MCGNode *N) {
       return false;
     }
 
@@ -546,7 +548,7 @@ namespace llvm {
         return s.str();
       }
       else
-        return N->getMF()->getFunction()->getName();
+        return N->getMF()->getFunction().getName().str();
     }
 
     static std::string getNodeAttributes(const MCGNode *N,
@@ -573,6 +575,10 @@ namespace llvm {
 
 
   template <> struct GraphTraits<MCallSubGraph> {
+    using GraphType = typename llvm::MCallSubGraph;
+    using NodeRef = typename llvm::MCGNode*;
+    using EdgeRef = typename llvm::MCGSites::value_type;
+
     typedef MCGNode NodeType;
     class ChildIteratorType
     {
@@ -625,33 +631,33 @@ namespace llvm {
       }
     };
 
-    static inline ChildIteratorType child_begin(NodeType *N) {
+    static inline ChildIteratorType child_begin(NodeRef N) {
       return N->Sites.begin();
     }
-    static inline ChildIteratorType child_end(NodeType *N) {
+    static inline ChildIteratorType child_end(NodeRef N) {
       return N->Sites.end();
     }
 
-    static NodeType *getEntryNode(const MCallSubGraph &G) {
+    static NodeRef getEntryNode(const MCallSubGraph &G) {
       return G.getEntryNode() ? G.getEntryNode() : G.Nodes.front();
     }
 
     // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
     typedef MCGNodes::const_iterator nodes_iterator;
-    static nodes_iterator nodes_begin(const MCallSubGraph &G) {
+    static nodes_iterator nodes_begin(const GraphType &G) {
       return G.Nodes.begin();
     }
-    static nodes_iterator nodes_end  (const MCallSubGraph &G) {
+    static nodes_iterator nodes_end  (const GraphType &G) {
       return G.Nodes.end();
     }
-    static unsigned       size       (const MCallSubGraph &G)  {
+    static unsigned       size       (const GraphType &G)  {
       return G.Nodes.size();
     }
   };
 
   template<>
   struct DOTGraphTraits<MCallSubGraph> : public DefaultDOTGraphTraits {
-    typedef MCGSites::const_iterator EdgeIteratorType;
+
 
     DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
@@ -659,9 +665,8 @@ namespace llvm {
       return "CallGraph";
     }
 
-    template<typename T>
-    static bool isNodeHidden(const T N, const MCallSubGraph &G) {
-      return G.isNodeHidden(N);
+    static bool isNodeHidden(const MCGNode* N) {
+      return false;
     }
 
     std::string getNodeLabel(const MCGNode *N, const MCallSubGraph &G) {
@@ -672,7 +677,7 @@ namespace llvm {
         return s.str();
       }
       else
-        return N->getMF()->getFunction()->getName();
+        return N->getMF()->getFunction().getName().str();
     }
 
     static std::string getNodeAttributes(const MCGNode *N,

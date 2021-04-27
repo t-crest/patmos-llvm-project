@@ -285,9 +285,8 @@ SDValue PatmosTargetLowering::LowerMUL_LOHI(SDValue Op,
 
 
 SDValue PatmosTargetLowering::LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const {
-  MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
-  MFI->setReturnAddressIsTaken(true);
+  auto MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setReturnAddressIsTaken(true);
 
   EVT VT = Op.getValueType();
   SDLoc dl(Op);
@@ -304,8 +303,8 @@ SDValue PatmosTargetLowering::LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) con
 }
 
 SDValue PatmosTargetLowering::LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
-  MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
-  MFI->setFrameAddressIsTaken(true);
+  auto MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setFrameAddressIsTaken(true);
 
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
@@ -379,15 +378,14 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
                                         SmallVectorImpl<SDValue> &InVals
                                         ) const {
 
-  MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
-  MachineRegisterInfo &RegInfo = MF.getRegInfo();
-  PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
+  auto MFI = DAG.getMachineFunction().getFrameInfo();
+  MachineRegisterInfo &RegInfo = DAG.getMachineFunction().getRegInfo();
+  PatmosMachineFunctionInfo &PMFI = *DAG.getMachineFunction().getInfo<PatmosMachineFunctionInfo>();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
 
-  CCState CCInfo(CallConv, isVarArg, MF, ArgLocs, *DAG.getContext());
+  CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), ArgLocs, *DAG.getContext());
   CCInfo.AnalyzeFormalArguments(Ins, CC_Patmos);
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
@@ -431,10 +429,10 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
       // Load the argument to a virtual register
       unsigned ObjSize = VA.getLocVT().getSizeInBits()/8;
       // Create the frame index object for this incoming parameter...
-      int FI = MFI->CreateFixedObject(ObjSize, VA.getLocMemOffset(), true);
+      int FI = MFI.CreateFixedObject(ObjSize, VA.getLocMemOffset(), true);
 
       // XXX handle alignment of large arguments
-      if (ObjSize > 4 || MFI->getObjectAlignment(FI) > 4) {
+      if (ObjSize > 4 || MFI.getObjectAlignment(FI) > 4) {
         errs() << "LowerFormalArguments Unhandled argument type: "
              << EVT(VA.getLocVT()).getEVTString()
              << "\n";
@@ -445,7 +443,7 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
       //from this parameter
       SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
       InVals.push_back(DAG.getLoad(VA.getLocVT(), dl, Chain, FIN,
-                                   MachinePointerInfo::getFixedStack(MF,FI)));
+                                   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),FI)));
     }
   }
 
@@ -453,7 +451,7 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
   if (isVarArg) {
     // create a fixed FI to reference the variadic parameters passed on the 
     // stack and store it with the patmos machine function info.
-    PMFI.setVarArgsFI(MFI->CreateFixedObject(4, CCInfo.getNextStackOffset(),
+    PMFI.setVarArgsFI(MFI.CreateFixedObject(4, CCInfo.getNextStackOffset(),
                                              true));
   }
 
@@ -518,7 +516,7 @@ PatmosTargetLowering::LowerCCCCallTo(CallLoweringInfo &CLI,
                                      SmallVectorImpl<SDValue> &InVals) const
 {
   SelectionDAG &DAG                     = CLI.DAG;
-  SDLoc dl                              = CLI.DL;
+  const SDLoc dl                        = CLI.DL;
   SmallVector<ISD::OutputArg, 32> &Outs = CLI.Outs;
   SmallVector<SDValue, 32> &OutVals     = CLI.OutVals;
   SmallVector<ISD::InputArg, 32> &Ins   = CLI.Ins;
@@ -536,10 +534,7 @@ PatmosTargetLowering::LowerCCCCallTo(CallLoweringInfo &CLI,
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = CCInfo.getNextStackOffset();
 
-  Chain = DAG.getCALLSEQ_START(Chain,
-                               DAG.getConstant(NumBytes, dl,
-                                               getPointerTy(DAG.getDataLayout())),
-                               0 ,dl);
+  Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, dl);
 
   SmallVector<std::pair<unsigned, SDValue>, 4> RegsToPass;
   SmallVector<SDValue, 12> MemOpChains;
@@ -629,7 +624,7 @@ PatmosTargetLowering::LowerCCCCallTo(CallLoweringInfo &CLI,
   MachineMemOperand *MMO = 
       DAG.getMachineFunction().getMachineMemOperand(MPO,
 	                                            MachineMemOperand::MOLoad,
-					            4, Align(0));
+					            4, Align(1));
 
   Chain = DAG.getMemIntrinsicNode(PatmosISD::CALL, dl,
                                   NodeTys, Ops,
@@ -687,7 +682,7 @@ PatmosTargetLowering::LowerCallResult(SDValue Chain, SDValue InFlag,
 }
 
 PatmosTargetLowering::ConstraintType PatmosTargetLowering::
-getConstraintType(const std::string &Constraint) const
+getConstraintType(StringRef Constraint) const
 {
   // Patmos specific constrains
   if (Constraint.size() == 1) {
@@ -734,7 +729,7 @@ getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   }
   // Handle '{$<regname>}'
   if (Constraint.size() > 2 && Constraint[0] == '{' && Constraint[1] == '$') {
-    std::string Stripped = "{" + Constraint.substr(2);
+    auto Stripped = ("{" + Constraint.substr(2)).getSingleStringRef();
     return TargetLowering::getRegForInlineAsmConstraint(TRI, Stripped, VT);
   }
   // Handle everything else ('{<regname}, ..)

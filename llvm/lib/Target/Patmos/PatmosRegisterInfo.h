@@ -24,12 +24,8 @@ class PatmosTargetMachine;
 
 struct PatmosRegisterInfo : public PatmosGenRegisterInfo {
 private:
-  PatmosTargetMachine &TM;
+  const PatmosTargetMachine &TM;
   const TargetInstrInfo &TII;
-
-  /// StackAlign - Default stack alignment.
-  ///
-  unsigned StackAlign;
 
   /// computeLargeFIOffset - Emit an ADDi or ADDl instruction to compute a large
   /// FI offset.
@@ -45,20 +41,22 @@ private:
                              int offset, unsigned basePtr,
                              bool isOnStackCache) const;
 public:
-  PatmosRegisterInfo(PatmosTargetMachine &tm, const TargetInstrInfo &tii);
+  PatmosRegisterInfo(const PatmosTargetMachine &tm, const TargetInstrInfo &tii);
+
+  const uint32_t *getCallPreservedMask(const MachineFunction &MF,
+                                       CallingConv::ID) const override;
 
   /// get the associate patmos target machine
-  PatmosTargetMachine& getTargetMachine() const { return TM; }
+  const PatmosTargetMachine& getTargetMachine() const { return TM; }
 
-  /// Code Generation virtual methods...
-  const uint16_t *getCalleeSavedRegs(const MachineFunction *MF = 0) const;
+  const MCPhysReg* getCalleeSavedRegs(const MachineFunction *MF) const override;
 
-  BitVector getReservedRegs(const MachineFunction &MF) const;
+  BitVector getReservedRegs(const MachineFunction &MF) const override;
 
 
   const TargetRegisterClass *
   getMatchingSuperRegClass(const TargetRegisterClass *A,
-                           const TargetRegisterClass *B, unsigned Idx) const {
+                           const TargetRegisterClass *B, unsigned Idx) const override {
     // No sub-classes makes this really easy.
     return A;
   }
@@ -75,39 +73,47 @@ public:
   ///      getS0Index(Patmos::R9) -> -1
   int getS0Index(unsigned RegNo) const;
 
-  /// hasReservedSpillSlot - Return true if target has reserved a spill slot in
-  /// the stack frame of the given function for the specified register. e.g. On
-  /// x86, if the frame register is required, the first fixed stack object is
-  /// reserved as its spill slot. This tells PEI not to create a new stack
-  /// frame object for the given register. It should be called only after
-  /// processFunctionBeforeCalleeSavedScan().
-  virtual bool hasReservedSpillSlot(const MachineFunction &MF, unsigned Reg,
-                                    int &FrameIdx) const;
+  bool hasReservedSpillSlot(const MachineFunction &MF, Register Reg,
+                                    int &FrameIdx) const override;
 
-  /// requiresRegisterScavenging - returns true if the target requires (and can
-  /// make use of) the register scavenger.
-  virtual bool requiresRegisterScavenging(const MachineFunction &MF) const;
+  bool requiresRegisterScavenging(const MachineFunction &MF) const override;
 
-  /// requiresFrameIndexScavenging - returns true if the target requires post
-  /// PEI scavenging of registers for materializing frame index constants.
-  virtual bool requiresFrameIndexScavenging(const MachineFunction &MF) const {
+  bool requiresFrameIndexScavenging(const MachineFunction &MF) const override {
     return false; //FIXME
   }
 
-  /// trackLivenessAfterRegAlloc - returns true if the live-ins should be
-  /// tracked after register allocation.
-  virtual bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const {
+  bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const override {
     return true;
   }
 
-  virtual void eliminateFrameIndex(MachineBasicBlock::iterator II,
-                                   int SPAdj, unsigned FIOperandNum,
-		                   RegScavenger *RS = NULL) const;
+  void eliminateFrameIndex(MachineBasicBlock::iterator II,
+                           int SPAdj, unsigned FIOperandNum,
+		                   RegScavenger *RS = nullptr) const override;
 
   // Debug information queries.
   Register getFrameRegister(const MachineFunction &MF) const override;
 
+  bool isConstantPhysReg(MCRegister PhysReg) const override;
+
+  const TargetRegisterClass *
+  getPointerRegClass(const MachineFunction &MF,
+                     unsigned Kind = 0) const override {
+    return &Patmos::RRegsRegClass;
+  }
+
 };
+
+/// Used purely to provide an easy way of printing registers with the '<<' operator.
+/// Use: outs() << "Register: " << PrintReg(Register, TRI) << "\n";
+struct PrintReg {
+  PrintReg(Register R, const TargetRegisterInfo &I)
+    : Rs(R), HRI(I) {}
+  Register Rs;
+  const TargetRegisterInfo &HRI;
+};
+
+LLVM_ATTRIBUTE_UNUSED
+raw_ostream &operator<< (raw_ostream &OS, const PrintReg &P);
 
 } // end namespace llvm
 

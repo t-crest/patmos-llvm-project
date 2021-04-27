@@ -29,11 +29,8 @@ add_llvm_target(PatmosCodeGen
   PatmosDelaySlotKiller.cpp
   PatmosCallGraphBuilder.cpp
   PatmosStackCacheAnalysis.cpp
-  PatmosExport.cpp
-  PatmosBypassFromPML.cpp
   PatmosPostRAScheduler.cpp
   PatmosSchedStrategy.cpp
-  PatmosPMLProfileImport.cpp
   PatmosEnsureAlignment.cpp
   MachineModulePass.cpp
   )

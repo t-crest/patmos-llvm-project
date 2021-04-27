@@ -100,11 +100,11 @@ namespace llvm {
      * Inline asm support
      ******************************************************************/
 
-    ConstraintType getConstraintType(const std::string &Constraint) const;
+    ConstraintType getConstraintType(StringRef Constraint) const override;
 
     std::pair<unsigned, const TargetRegisterClass*>
-      getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                                   StringRef Constraint, MVT VT) const override;
+    getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                 StringRef Constraint, MVT VT) const override;
 
   private:
     const PatmosSubtarget &Subtarget;

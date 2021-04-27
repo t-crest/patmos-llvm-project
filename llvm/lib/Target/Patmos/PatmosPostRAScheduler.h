@@ -25,13 +25,12 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/ScheduleDAGInstrs.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 
 namespace llvm {
 
   class MachineLoopInfo;
   class MachineDominatorTree;
-  class TargetPassConfig;
-  class AliasAnalysis;
   class RegisterClassInfo;
   class TargetRegisterClass;
   class SUnit;
@@ -45,7 +44,7 @@ namespace llvm {
     const MachineLoopInfo *MLI;
     const MachineDominatorTree *MDT;
     const TargetPassConfig *PassConfig;
-    AliasAnalysis *AA;
+    AAResults *AA;
 
     RegisterClassInfo *RegClassInfo;
 
@@ -154,7 +153,7 @@ namespace llvm {
     unsigned EndIndex;
 
     /// AA - AliasAnalysis for making memory reference queries.
-    AliasAnalysis *AA;
+    AAResults *AA;
 
     /// Mutations to postprocess the DAGs
     MutationList Mutations;
@@ -225,7 +224,7 @@ namespace llvm {
 
     /// Change the position of an instruction within the basic block and update
     /// live ranges and region boundary iterators.
-    void moveInstruction(MachineInstr *MI, MachineBasicBlock::iterator InsertPos);
+    void moveInstruction(MachineBasicBlock::iterator MI, MachineBasicBlock::iterator InsertPos);
 
     /// finishBlock - Clean up register live-range state.
     ///
@@ -242,8 +241,8 @@ namespace llvm {
 
     BitVector &getScheduledTrees() { return ScheduledTrees; }
 
-    void viewGraph(const Twine &Name, const Twine &Title) LLVM_OVERRIDE;
-    void viewGraph() LLVM_OVERRIDE;
+    void viewGraph(const Twine &Name, const Twine &Title) override;
+    void viewGraph() override;
 
   protected:
 

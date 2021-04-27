@@ -13,17 +13,18 @@
 
 #include "PatmosSubtarget.h"
 #include "Patmos.h"
+#include "MCTargetDesc/PatmosMCTargetDesc.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/StringExtras.h"
 
+using namespace llvm;
+
+#define DEBUG_TYPE "patmos-subtarget"
 
 #define GET_SUBTARGETINFO_TARGET_DESC
 #define GET_SUBTARGETINFO_CTOR
 #include "PatmosGenSubtargetInfo.inc"
-
-using namespace llvm;
-
 
 /// StackCacheBlockSize - Block size of the stack cache in bytes (default: 4,
 /// i.e., word-sized).
@@ -96,8 +97,10 @@ static cl::opt<PatmosSubtarget::CFLType> PatmosCFLType("mpatmos-cfl",
 
 PatmosSubtarget::PatmosSubtarget(const Triple &TT,
                                  StringRef CPU,
-                                 StringRef FS) :
-  PatmosGenSubtargetInfo(TT, CPU, FS)
+                                 StringRef FS, const PatmosTargetMachine &TM, CodeGenOpt::Level L) :
+  PatmosGenSubtargetInfo(TT, CPU, FS), TSInfo(),InstrInfo(new PatmosInstrInfo(TM)),
+  FrameLowering(new PatmosFrameLowering(*this)),
+  TLInfo(new PatmosTargetLowering(TM, *this)), OptLevel(L)
 {
   auto CPUName = CPU;
   if (CPUName.empty()) CPUName = "generic";
@@ -108,9 +111,7 @@ PatmosSubtarget::PatmosSubtarget(const Triple &TT,
   InstrItins = getInstrItineraryForCPU(CPUName);
 }
 
-bool PatmosSubtarget::enablePostRAScheduler(CodeGenOpt::Level OptLevel,
-                                   TargetSubtargetInfo::AntiDepBreakMode& Mode,
-                                   RegClassVector& CriticalPathRCs) const {
+bool PatmosSubtarget::enablePostRAScheduler() const {
   return hasPostRAScheduler(OptLevel);
 }
 
@@ -147,10 +148,11 @@ PatmosSubtarget::CFLType PatmosSubtarget::getCFLType() const {
 unsigned PatmosSubtarget::getDelaySlotCycles(const MachineInstr &MI) const {
   if (MI.isBundle()) {
     const MachineBasicBlock *MBB = MI.getParent();
-    auto I = MI, E = MBB->instr_end();
+    auto I = &MI;
+    auto E = MBB->instr_end();
     unsigned delay = 0;
-    while ((++I != E) && I.isInsideBundle()) {
-      delay = std::max(delay, getDelaySlotCycles(I));
+    while ((++I != &*E) && I->isInsideBundle()) {
+      delay = std::max(delay, getDelaySlotCycles(*I));
     }
     return delay;
   }
@@ -185,14 +187,7 @@ bool PatmosSubtarget::canIssueInSlot(unsigned SchedClass, unsigned Slot) const {
   const InstrStage* IS = InstrItins.beginStage(SchedClass);
   auto FuncUnits = IS->getUnits();
 
-  switch (Slot) {
-  case 0:
-    return FuncUnits & PatmosGenericItinerariesFU::FU_ALU0;
-  case 1:
-    return FuncUnits & PatmosGenericItinerariesFU::FU_ALU1;
-  default:
-    return false;
-  }
+  return llvm::canIssueInSlotForUnits(Slot, FuncUnits);
 }
 
 unsigned PatmosSubtarget::getMinSubfunctionAlignment() const {

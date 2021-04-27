@@ -89,6 +89,18 @@ createPatmosObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
   return new PatmosTargetELFStreamer(S);
 }
 
+bool llvm::canIssueInSlotForUnits(unsigned Slot, llvm::InstrStage::FuncUnits &units)
+{
+  switch (Slot) {
+  case 0:
+    return units & PatmosGenericItinerariesFU::FU_ALU0;
+  case 1:
+    return units & PatmosGenericItinerariesFU::FU_ALU1;
+  default:
+    return false;
+  }
+}
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetMC() {
   // Register the MC asm info.
   RegisterMCAsmInfoFn X(getThePatmosTarget(), createPatmosMCAsmInfo);

@@ -42,7 +42,7 @@ public:
     MCDisassembler(STI, Ctx), MII(T.createMCInstrInfo()) {
   }
 
-  ~PatmosDisassembler() {
+  ~PatmosDisassembler() override {
     if (MII) delete MII;
     MII = 0;
   }

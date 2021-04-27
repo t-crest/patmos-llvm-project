@@ -118,11 +118,11 @@ public:
 };
 
 class PatmosInstrInfo : public PatmosGenInstrInfo {
-  PatmosTargetMachine &PTM;
+  const PatmosTargetMachine &PTM;
   const PatmosRegisterInfo RI;
   const PatmosSubtarget &PST;
 public:
-  explicit PatmosInstrInfo(PatmosTargetMachine &TM);
+  explicit PatmosInstrInfo(const PatmosTargetMachine &TM);
 
   /// getRegisterInfo - TargetInstrInfo is a superset of MRegister info.  As
   /// such, whenever a client has an instance of instruction info, it should
@@ -139,37 +139,27 @@ public:
                              unsigned &SrcOpIdx2) const override;
 
   void copyPhysReg(MachineBasicBlock &MBB,
-                   MachineBasicBlock::iterator I, DebugLoc DL,
-                   unsigned DestReg, unsigned SrcReg,
-                   bool KillSrc) const;
+                   MachineBasicBlock::iterator I, const DebugLoc &DL,
+                   MCRegister DstReg, MCRegister SrcReg,
+                   bool KillSrc) const override;
 
   void storeRegToStackSlot(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MI,
-                           unsigned SrcReg, bool isKill,
+                           Register SrcReg, bool isKill,
                            int FrameIndex,
                            const TargetRegisterClass *RC,
-                           const TargetRegisterInfo *TRI) const;
+                           const TargetRegisterInfo *TRI) const override;
   void loadRegFromStackSlot(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MI,
-                            unsigned DestReg, int FrameIdx,
+                            Register DestReg, int FrameIdx,
                             const TargetRegisterClass *RC,
-                            const TargetRegisterInfo *TRI) const;
+                            const TargetRegisterInfo *TRI) const override;
 
-  /// isStoreToStackSlot - If the specified machine instruction is a direct
-  /// store to a stack slot, return the virtual or physical register number of
-  /// the source reg along with the FrameIndex of the loaded stack slot.  If
-  /// not, return 0.  This predicate must return 0 if the instruction has
-  /// any side effects other than storing to the stack slot.
-  unsigned isStoreToStackSlot(const MachineInstr *MI,
-                              int &FrameIndex) const;
+  unsigned isStoreToStackSlot(const MachineInstr &MI,
+                              int &FrameIndex) const override;
 
-  /// isLoadFromStackSlot - If the specified machine instruction is a direct
-  /// load from a stack slot, return the virtual or physical register number of
-  /// the destination along with the FrameIndex of the loaded stack slot.  If
-  /// not, return 0.  This predicate must return 0 if the instruction has
-  /// any side effects other than loading from the stack slot.
-  unsigned isLoadFromStackSlot(const MachineInstr *MI,
-                               int &FrameIndex) const;
+  unsigned isLoadFromStackSlot(const MachineInstr &MI,
+                               int &FrameIndex) const override;
 
   /// insertNoop - Insert a noop into the instruction stream at the specified
   /// point.

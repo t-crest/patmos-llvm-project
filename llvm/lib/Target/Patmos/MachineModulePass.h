@@ -31,8 +31,6 @@ class MachineModulePass : public ModulePass {
 protected:
   explicit MachineModulePass(char &ID) : ModulePass(ID) {}
 
-  virtual void preparePassManager(PMStack &);
-
 public:
   /// runOnMachineModule - This method must be overloaded to perform the
   /// desired machine code transformation or analysis.

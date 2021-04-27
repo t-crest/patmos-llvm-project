@@ -34,54 +34,51 @@ namespace llvm {
     MCSymbol *CurrCodeEnd;
 
   public:
-    PatmosAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
-      : AsmPrinter(TM, Streamer), MCInstLowering(OutContext, *this), CurrCodeEnd(0)
+    PatmosAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
+      : AsmPrinter(TM, std::move(Streamer)), MCInstLowering(OutContext, *this), CurrCodeEnd(0)
     {
       if (!(PTM = static_cast<PatmosTargetMachine*>(&TM))) {
         llvm_unreachable("PatmosAsmPrinter must be initialized with a Patmos target configuration.");
       }
-      PTM->setMCSaveTempLabels(true);
+      PTM->Options.MCOptions.MCSaveTempLabels = true;
 
       FStartAlignment = PTM->getSubtargetImpl()->getMinSubfunctionAlignment();
     }
 
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Assembly Printer";
     }
 
-    virtual void EmitFunctionEntryLabel();
+    void emitFunctionEntryLabel() override;
 
-    virtual void EmitBasicBlockStart(const MachineBasicBlock *MBB);
-    virtual void EmitBasicBlockBegin(const MachineBasicBlock *MBB);
-    virtual void EmitBasicBlockEnd(const MachineBasicBlock *);
+    void emitBasicBlockStart(const MachineBasicBlock &MBB) override;
+    void emitBasicBlockBegin(const MachineBasicBlock &MBB);
+    void emitBasicBlockEnd(const MachineBasicBlock &) override;
 
-    virtual void EmitFunctionBodyEnd();
+    void emitFunctionBodyEnd() override;
 
     // called in the framework for instruction printing
-    virtual void EmitInstruction(const MachineInstr *MI);
+    void emitInstruction(const MachineInstr *MI) override;
 
     /// EmitDotSize - Emit a .size directive using SymEnd - SymStart.
-    void EmitDotSize(MCSymbol *SymStart, MCSymbol *SymEnd);
+    void emitDotSize(MCSymbol *SymStart, MCSymbol *SymEnd);
 
     /// isBlockOnlyReachableByFallthough - Return true if the basic block has
     /// exactly one predecessor and the control transfer mechanism between
     /// the predecessor and this block is a fall-through.
     ///
     /// This overrides AsmPrinter's implementation to handle delay slots.
-    virtual bool isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const;
+    bool isBlockOnlyReachableByFallthrough(const MachineBasicBlock *MBB) const override;
 
     //===------------------------------------------------------------------===//
     // Inline Asm Support
     //===------------------------------------------------------------------===//
 
-    virtual bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
-                                 unsigned AsmVariant, const char *ExtraCode,
-                                 raw_ostream &OS);
+    bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                         const char *ExtraCode, raw_ostream &OS) override;
 
-    virtual bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
-                                       unsigned AsmVariant,
-                                       const char *ExtraCode,
-                                       raw_ostream &OS);
+    bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
+                               const char *ExtraCode, raw_ostream &OS) override;
   private:
     /// mark the start of an subfunction relocation area.
     /// Alignment is in log2(bytes).

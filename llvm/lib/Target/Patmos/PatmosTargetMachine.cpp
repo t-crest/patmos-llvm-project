@@ -17,17 +17,17 @@
 #include "PatmosSchedStrategy.h"
 #include "PatmosStackCacheAnalysis.h"
 #include "TargetInfo/PatmosTargetInfo.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/MachineFunctionAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
-
+#include "llvm/Transforms/Utils.h"
 
 using namespace llvm;
 
@@ -41,7 +41,7 @@ static ScheduleDAGInstrs *createPatmosVLIWMachineSched(MachineSchedContext *C) {
   // scheduler that allows for VLIW bundling or something, similar to the
   // PatmosPostRAScheduler. Should still be split into a generic ScheduleDAG
   // scheduler and a specialised PatmosSchedStrategy.
-  ScheduleDAGMI *PS = new ScheduleDAGMI(C, new PatmosVLIWSchedStrategy());
+  ScheduleDAGMI *PS = new ScheduleDAGMI(C, std::make_unique<PatmosVLIWSchedStrategy>(), false);
   return PS;
 }
 
@@ -70,14 +70,14 @@ namespace {
     const std::string DefaultRoot;
 
   public:
-    PatmosPassConfig(PatmosTargetMachine *TM, PassManagerBase &PM)
+    PatmosPassConfig(PatmosTargetMachine &TM, PassManagerBase &PM)
      : TargetPassConfig(TM, PM), DefaultRoot("main")
     {
       // Enable preRA MI scheduler.
-      if (TM->getSubtargetImpl()->usePreRAMIScheduler(getOptLevel())) {
+      if (TM.getSubtargetImpl()->usePreRAMIScheduler(getOptLevel())) {
         enablePass(&MachineSchedulerID);
       }
-      if (TM->getSubtargetImpl()->usePatmosPostRAScheduler(getOptLevel())) {
+      if (TM.getSubtargetImpl()->usePatmosPostRAScheduler(getOptLevel())) {
         initializePatmosPostRASchedulerPass(*PassRegistry::getPassRegistry());
         substitutePass(&PostRASchedulerID, &PatmosPostRASchedulerID);
       }
@@ -91,20 +91,25 @@ namespace {
       return *getPatmosTargetMachine().getSubtargetImpl();
     }
 
-    virtual ScheduleDAGInstrs *
-    createMachineScheduler(MachineSchedContext *C) const {
+    ScheduleDAGInstrs *
+    createMachineScheduler(MachineSchedContext *C) const override {
       return createPatmosVLIWMachineSched(C);
     }
 
-    virtual bool addInstSelector() {
-      addPass(createPatmosISelDag(getPatmosTargetMachine()));
+    ScheduleDAGInstrs *
+    createPostMachineScheduler(MachineSchedContext *C) const override {
+      llvm_unreachable("unimplemented");
+    }
+
+    bool addInstSelector() override {
+      addPass(createPatmosISelDag(getPatmosTargetMachine(), getOptLevel()));
       return false;
     }
 
     //
     /// addPreISelPasses - This method should add any "last minute" LLVM->LLVM
     /// passes (which are run just before instruction selector).
-    virtual bool addPreISel() {
+    bool addPreISel() override {
       if (PatmosSinglePathInfo::isEnabled()) {
         // Single-path transformation requires a single exit node
         addPass(createUnifyFunctionExitNodesPass());
@@ -120,27 +125,25 @@ namespace {
     /// addPreRegAlloc - This method may be implemented by targets that want to
     /// run passes immediately before register allocation. This should return
     /// true if -print-machineinstrs should print after these passes.
-    virtual bool addPreRegAlloc() {
+    void addPreRegAlloc() override {
       // For -O0, add a pass that removes dead instructions to avoid issues
       // with spill code in naked functions containing function calls with
       // unused return values.
       if (getOptLevel() == CodeGenOpt::None) {
         addPass(&DeadMachineInstructionElimID);
       }
-      return true;
     }
 
     /// addPostRegAlloc - This method may be implemented by targets that want to
     /// run passes after register allocation pass pipeline but before
     /// prolog-epilog insertion.  This should return true if -print-machineinstrs
     /// should print after these passes.
-    virtual bool addPostRegAlloc() {
+    void addPostRegAlloc() override {
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSPMarkPass(getPatmosTargetMachine()));
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
         addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
       }
-      return false;
     }
 
 
@@ -148,8 +151,7 @@ namespace {
     /// run passes after prolog-epilog insertion and before the second instruction
     /// scheduling pass.  This should return true if -print-machineinstrs should
     /// print after these passes.
-    virtual bool addPreSched2() {
-      addPass(createPatmosPMLProfileImport(getPatmosTargetMachine()));
+    void addPreSched2() override {
 
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
@@ -177,11 +179,10 @@ namespace {
       if (EnableStackCacheAnalysis) {
         addPass(createPatmosStackCacheAnalysis(getPatmosTargetMachine()));
       }
-      return true;
     }
 
 
-    virtual void addBlockPlacement() {
+    void addBlockPlacement() override {
       // The block placement passes are added after the post-RA scheduler.
       // We do want to have our branches created by this pass scheduled by the
       // post-RA scheduler and we do not handle delay-slots in
@@ -193,7 +194,7 @@ namespace {
     /// addPreEmitPass - This pass may be implemented by targets that want to run
     /// passes immediately before machine code is emitted.  This should return
     /// true if -print-machineinstrs should print out the code after the passes.
-    virtual bool addPreEmitPass(){
+    void addPreEmitPass() override {
 
       // Post-RA MI Scheduler does bundling and delay slots itself. Otherwise,
       // add passes to handle them.
@@ -212,60 +213,38 @@ namespace {
       addPass(createPatmosDelaySlotKillerPass(getPatmosTargetMachine()));
 
       addPass(createPatmosEnsureAlignmentPass(getPatmosTargetMachine()));
-
-      // following pass is a peephole pass that does neither modify
-      // the control structure nor the size of basic blocks.
-      addPass(createPatmosBypassFromPMLPass(getPatmosTargetMachine()));
-
-      return true;
     }
-
-    /// addSerializePass - Install a pass that serializes the internal representation
-    /// of the compiler to PML format
-    virtual bool addSerializePass(std::string& OutFile,
-                                  ArrayRef<std::string> Roots,
-                                  std::string &BitcodeFile,
-				  bool SerializeAll) {
-      if (OutFile.empty())
-        return false;
-
-
-      addPass(createPatmosModuleExportPass(
-          getPatmosTargetMachine(),
-          OutFile, BitcodeFile,
-          Roots.empty() ? ArrayRef<std::string>(DefaultRoot) : Roots,
-	  SerializeAll
-          ));
-
-      return true;
-    }
-
   };
 } // namespace
 
+static Reloc::Model getEffectiveRelocModel(bool JIT,
+                                           Optional<Reloc::Model> RM) {
+  if (!RM.hasValue() || JIT)
+    return Reloc::Static;
+  return *RM;
+}
+
 PatmosTargetMachine::PatmosTargetMachine(const Target &T,
-                                         StringRef TT,
+                                         const Triple &TT,
                                          StringRef CPU,
                                          StringRef FS,
-                                         TargetOptions O,
-                                         Reloc::Model RM, CodeModel::Model CM,
-                                         CodeGenOpt::Level L)
-  : LLVMTargetMachine(T, TT, CPU, FS, O, RM, CM, L),
-    Subtarget(TT, CPU, FS),
-
-    // Keep this in sync with clang/lib/Basic/Targets.cpp and
-    // compiler-rt/lib/patmos/*.ll
-    // Note: Both ABI and Preferred Alignment must be 32bit for all supported
-    // types, backend does not support different stack alignment.
-    DL("E-S32-p:32:32:32-i8:8:8-i16:16:16-i32:32:32-i64:32:32-f64:32:32-a0:0:32-s0:32:32-v64:32:32-v128:32:32-n32"),
-
-    InstrInfo(*this), TLInfo(*this), TSInfo(*this),
-    FrameLowering(*this),
-    InstrItins(Subtarget.getInstrItineraryData())
+                                         const TargetOptions &Options,
+                                         Optional<Reloc::Model> RM,
+                                         Optional<CodeModel::Model> CM,
+                                         CodeGenOpt::Level L, bool JIT)
+  : LLVMTargetMachine(
+      T,
+      // Keep this in sync with clang/lib/Basic/Targets.cpp and
+      // compiler-rt/lib/patmos/*.ll
+      // Note: Both ABI and Preferred Alignment must be 32bit for all supported
+      // types, backend does not support different stack alignment.
+      "E-S32-p:32:32:32-i8:8:8-i16:16:16-i32:32:32-i64:32:32-f64:32:32-a0:0:32-s0:32:32-v64:32:32-v128:32:32-n32",
+      TT, CPU, FS, Options, getEffectiveRelocModel(JIT, RM), getEffectiveCodeModel(CM, CodeModel::Small), L),
+    Subtarget(TT, CPU, FS, *this, L), InstrInfo(*this), TSInfo(), TLOF(std::make_unique<PatmosTargetObjectFile>())
 {
   initAsmInfo();
 }
 
 TargetPassConfig *PatmosTargetMachine::createPassConfig(PassManagerBase &PM) {
-  return new PatmosPassConfig(this, PM);
+  return new PatmosPassConfig(*this, PM);
 }

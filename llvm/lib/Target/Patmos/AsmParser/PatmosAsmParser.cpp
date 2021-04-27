@@ -45,12 +45,12 @@ class PatmosAsmParser : public MCTargetAsmParser {
   #include "PatmosGenAsmMatcher.inc"
 
 public:
-  PatmosAsmParser(MCSubtargetInfo &sti, MCAsmParser &parser,
-                  const MCInstrInfo &mii)
-    : MCTargetAsmParser(), Parser(parser), MII(mii),
+  PatmosAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
+                  const MCInstrInfo &MII, const MCTargetOptions &Options)
+    : MCTargetAsmParser(Options, sti, MII), Parser(parser), MII(MII),
       InBundle(false), BundleCounter(0)
   {
-    IssueWidth = sti.getSchedModel()->IssueWidth;
+    IssueWidth = sti.getSchedModel().IssueWidth;
 
     switch (parser.getAssemblerDialect()) {
     case 0: ParseBytes = PrintAsEncoded; break;
@@ -59,42 +59,45 @@ public:
     }
   }
 
-  virtual bool ParsePrefix(SMLoc &PrefixLoc, SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                           bool &HasPrefix, StringRef PrevToken);
+  bool ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands,
+                   bool &HasPrefix, StringRef PrevToken);
 
-  virtual bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
-                                SmallVectorImpl<MCParsedAsmOperand*> &Operands);
+  bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
+                                OperandVector &Operands) override;
 
-  virtual bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc);
+  bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
 
-  virtual bool ParseDirective(AsmToken DirectiveID);
+  bool ParseDirective(AsmToken DirectiveID) override;
 
-  virtual bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
-                               SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                               MCStreamer &Out, unsigned &ErrorInfo, 
-			       bool MatchingInlineAsm);
+  bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+       OperandVector &Operands,
+       MCStreamer &Out, uint64_t &ErrorInfo,
+       bool MatchingInlineAsm) override;
+
+  OperandMatchResultTy
+  tryParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
 
   void EatToEndOfStatement();
 
 private:
-  bool ParseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, unsigned OpNo);
+  bool ParseOperand(OperandVector &Operands, unsigned OpNo);
 
-  bool ParseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool EmitError = true);
+  bool ParseRegister(OperandVector &Operands, bool EmitError = true);
 
   /// ParseRegister - This version does not lex the last token so the end token can be retrieved
   bool ParseRegister(unsigned &RegNo, bool Required);
 
-  bool ParseMemoryOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands);
+  bool ParseMemoryOperand(OperandVector &Operands);
 
   /// ParsePredicateOperand - parse a predicate operand including an optional negate flag. Adds two
   /// operands.
   /// \param checkClass - if true, only add the flag operand if the register is a predicate register
-  bool ParsePredicateOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool checkClass = false);
+  bool ParsePredicateOperand(OperandVector &Operands, bool checkClass = false);
 
-  bool ParseImmediate(SmallVectorImpl<MCParsedAsmOperand*> &Operands);
+  bool ParseImmediate(OperandVector &Operands);
 
   /// ParseToken - Check if the Lexer is currently over the given token kind, and add it as operand if so.
-  bool ParseToken(SmallVectorImpl<MCParsedAsmOperand*> &Operands, AsmToken::TokenKind Kind);
+  bool ParseToken(OperandVector &Operands, AsmToken::TokenKind Kind);
 
   /// isPredSrcOperand - Check whether the operand might be a predicate source operand (i.e., has a negate flag)
   bool isPredSrcOperand(StringRef Mnemonic, unsigned OpNo);
@@ -197,16 +200,16 @@ struct PatmosOperand : public MCParsedAsmOperand {
     void addExpr(MCInst &Inst, const MCExpr *Expr) const {
       // Add as immediate when possible.  Null MCExpr = 0.
       if (Expr == 0)
-        Inst.addOperand(MCOperand::CreateImm(0));
+        Inst.addOperand(MCOperand::createImm(0));
       else if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr))
-        Inst.addOperand(MCOperand::CreateImm(CE->getValue()));
+        Inst.addOperand(MCOperand::createImm(CE->getValue()));
       else
-        Inst.addOperand(MCOperand::CreateExpr(Expr));
+        Inst.addOperand(MCOperand::createExpr(Expr));
     }
 
     void addRegOperands(MCInst &Inst, unsigned N) const {
       assert(N == 1 && "Invalid number of operands!");
-      Inst.addOperand(MCOperand::CreateReg(getReg()));
+      Inst.addOperand(MCOperand::createReg(getReg()));
     }
 
     void addImmOperands(MCInst &Inst, unsigned N) const {
@@ -217,7 +220,7 @@ struct PatmosOperand : public MCParsedAsmOperand {
     void addMemOperands(MCInst &Inst, unsigned N) const {
       assert(N == 2 && "Invalid number of operands!");
 
-      Inst.addOperand(MCOperand::CreateReg(getMemBase()));
+      Inst.addOperand(MCOperand::createReg(getMemBase()));
 
       addExpr(Inst, getMemOff());
     }
@@ -256,7 +259,7 @@ struct PatmosOperand : public MCParsedAsmOperand {
 
     static PatmosOperand *CreateConstant(int value, SMLoc S, SMLoc E, MCContext &Ctx) {
       PatmosOperand *Op = new PatmosOperand(Immediate);
-      Op->Imm.Val = MCConstantExpr::Create(value, Ctx);
+      Op->Imm.Val = MCConstantExpr::create(value, Ctx);
       Op->StartLoc = S;
       Op->EndLoc = E;
       return Op;
@@ -282,7 +285,7 @@ struct PatmosOperand : public MCParsedAsmOperand {
 void PatmosOperand::print(raw_ostream &OS) const {
   switch (Kind) {
   case Immediate:
-    getImm()->print(OS);
+    getImm()->print(OS, nullptr);
     break;
   case Register:
     OS << "<register ";
@@ -316,18 +319,18 @@ void PatmosOperand::print(raw_ostream &OS) const {
 
 bool PatmosAsmParser::
 MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
-                        SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                        MCStreamer &Out, unsigned &ErrorInfo, 
+                        SmallVectorImpl<std::unique_ptr<MCParsedAsmOperand>> &Operands,
+                        MCStreamer &Out, uint64_t &ErrorInfo,
 			bool MatchingInlineAsm) {
   MCInst Inst;
   SMLoc ErrorLoc;
   
   // Extract the predicate operands, as 'MatchInstructionImpl' cannot 
   // handle them. They will be reinstated later.
-  auto p = Operands[1];
-  auto flag = Operands[2];
-  Operands.erase(next(Operands.begin()));
-  Operands.erase(next(Operands.begin()));
+  auto &p = Operands[1];
+  auto &flag = Operands[2];
+  Operands.erase(std::next(Operands.begin()));
+  Operands.erase(std::next(Operands.begin()));
 
   switch (MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm, 0))
   {
@@ -343,13 +346,13 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
     // Insert the predicate register
     Inst.insert(
-      next(Inst.begin(), insert_pred_at),
-      MCOperand::CreateReg(static_cast<PatmosOperand*>(p)->getReg())
+      std::next(Inst.begin(), insert_pred_at),
+      MCOperand::createReg(p->getReg())
     );
 
     // Insert the predicate flag.
     int64_t flag_value;
-    static_cast<PatmosOperand*>(flag)->getImm()->EvaluateAsAbsolute(flag_value);
+    static_cast<PatmosOperand*>(&*flag)->getImm()->evaluateAsAbsolute(flag_value);
     // For some instructions a stray immediate operand is present at this point
     // that should not be there. It is a remnant of a '=' being represented by it
     // before the call to 'MatchInstructionImpl'.
@@ -363,13 +366,13 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     // works). If this is fixed in the tablegen, such that the immediate is no longer
     // there at this point, a new immediate should always be created for the flag.	
     // For now, the if statement below is a workaround.
-    if ( !next(Inst.begin(),insert_pred_flag_at)->isImm() || Inst.getNumOperands()<3 ) {
-      Inst.insert(next(Inst.begin(),insert_pred_flag_at), MCOperand::CreateImm(0));
+    if ( !std::next(Inst.begin(),insert_pred_flag_at)->isImm() || Inst.getNumOperands()<3 ) {
+      Inst.insert(std::next(Inst.begin(),insert_pred_flag_at), MCOperand::createImm(0));
     }
-    next(Inst.begin(),insert_pred_flag_at)->setImm(flag_value);
+    std::next(Inst.begin(),insert_pred_flag_at)->setImm(flag_value);
 
     // Add bundle marker
-    Inst.addOperand(MCOperand::CreateImm(InBundle));
+    Inst.addOperand(MCOperand::createImm(InBundle));
 
     // If we have an ALUi immediate instruction and the immediate does not fit
     // 12bit, use ALUl version of instruction
@@ -486,7 +489,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
     BundleCounter = InBundle ? BundleCounter + 1 : 0;
 
-    Out.EmitInstruction(Inst);
+    Out.emitInstruction(Inst, getSTI());
     return false;
   }
   case Match_MissingFeature:
@@ -499,7 +502,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       if (ErrorInfo >= Operands.size())
         return Error(IDLoc, "too few operands for instruction");
 
-      ErrorLoc = ((PatmosOperand*)Operands[ErrorInfo])->getStartLoc();
+      ErrorLoc = static_cast<PatmosOperand*>(&*Operands[ErrorInfo])->getStartLoc();
       if (ErrorLoc == SMLoc()) ErrorLoc = IDLoc;
     }
 
@@ -509,8 +512,22 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   llvm_unreachable("Implement any new match types added!");
 }
 
+OperandMatchResultTy
+PatmosAsmParser::tryParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) {
+  if (ParseRegister(RegNo, StartLoc, EndLoc)) {
+    // syntax error
+    return OperandMatchResultTy::MatchOperand_ParseFail;
+  }
+  if (RegNo == 0) {
+    // missing register
+    return OperandMatchResultTy::MatchOperand_ParseFail;
+  }
+
+  return OperandMatchResultTy::MatchOperand_Success;
+}
+
 bool PatmosAsmParser::
-ParseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool EmitError) {
+ParseRegister(OperandVector &Operands, bool EmitError) {
   MCAsmLexer &Lexer = getLexer();
   SMLoc S = Lexer.getLoc();
 
@@ -527,7 +544,7 @@ ParseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool EmitError) {
   SMLoc E = Lexer.getLoc();
   Lexer.Lex();
 
-  Operands.push_back(PatmosOperand::CreateReg(RegNo, S, E));
+  Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateReg(RegNo, S, E)));
 
   return false;
 }
@@ -576,7 +593,7 @@ ParseRegister(unsigned &RegNo, bool Required) {
 }
 
 bool PatmosAsmParser::
-ParseMemoryOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands)  {
+ParseMemoryOperand(OperandVector &Operands)  {
   MCAsmLexer &Lexer = getLexer();
   SMLoc StartLoc = Lexer.getLoc();
 
@@ -590,14 +607,16 @@ ParseMemoryOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands)  {
 
     // add default register
     SMLoc EndLoc = Lexer.getLoc();
-    Operands.push_back(PatmosOperand::CreateReg(Patmos::R0, StartLoc, EndLoc));
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateReg(Patmos::R0, StartLoc, EndLoc)));
 
   } else {
 
     if (Lexer.is(AsmToken::RBrac)) {
       // Default offset
       SMLoc E = Lexer.getLoc();
-      Operands.push_back(PatmosOperand::CreateConstant(0, E, E, getParser().getContext()));
+      Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+          PatmosOperand::CreateConstant(0, E, E, getParser().getContext())));
 
       return ParseToken(Operands, AsmToken::RBrac);
 
@@ -617,7 +636,7 @@ ParseMemoryOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands)  {
 }
 
 bool PatmosAsmParser::
-ParsePredicateOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool checkClass)  {
+ParsePredicateOperand(OperandVector &Operands, bool checkClass)  {
   MCAsmLexer &Lexer = getLexer();
   SMLoc StartLoc = Lexer.getLoc();
 
@@ -634,7 +653,7 @@ ParsePredicateOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool check
   }
 
   if (checkClass) {
-    PatmosOperand *Op = (PatmosOperand*)Operands.back();
+    PatmosOperand *Op = (PatmosOperand*)&*Operands.back();
     if (!Op->isReg()) return Error(Lexer.getLoc(), "magic happened: we found a register but the operand is not a register");
 
     // TODO There really should be a nicer way of doing this, but we do not have access to the RegisterInfo stuff here
@@ -647,13 +666,14 @@ ParsePredicateOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, bool check
     }
   }
 
-  Operands.push_back(PatmosOperand::CreateFlag(flag, StartLoc, RegLoc, getParser().getContext()));
+  Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+      PatmosOperand::CreateFlag(flag, StartLoc, RegLoc, getParser().getContext())));
 
   return false;
 }
 
 bool PatmosAsmParser::
-ParseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, unsigned OpNo)  {
+ParseOperand(OperandVector &Operands, unsigned OpNo)  {
   MCAsmLexer &Lexer = getLexer();
 
   // Handle all the various operand types here: Imm, reg, memory, predicate, label
@@ -669,7 +689,7 @@ ParseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, unsigned OpNo)  {
   }
   if (Lexer.is(AsmToken::Dollar)) {
 
-    StringRef Mnemonic = ((PatmosOperand*)Operands[0])->getToken();
+    StringRef Mnemonic = ((PatmosOperand*)&*Operands[0])->getToken();
     if (isPredSrcOperand(Mnemonic, OpNo)) {
       return ParsePredicateOperand(Operands, true);
     }
@@ -685,7 +705,7 @@ ParseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands, unsigned OpNo)  {
   return ParseImmediate(Operands);
 }
 
-bool PatmosAsmParser::ParseImmediate(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+bool PatmosAsmParser::ParseImmediate(OperandVector &Operands) {
   MCAsmLexer &Lexer = getLexer();
   SMLoc S = Lexer.getLoc();
 
@@ -701,12 +721,13 @@ bool PatmosAsmParser::ParseImmediate(SmallVectorImpl<MCParsedAsmOperand*> &Opera
     if (getParser().parseExpression(EVal, E))
       return true;
 
-    Operands.push_back(PatmosOperand::CreateImm(EVal, S, E));
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateImm(EVal, S, E)));
     return false;
   }
 }
 
-bool PatmosAsmParser::ParseToken(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
+bool PatmosAsmParser::ParseToken(OperandVector &Operands,
                                  AsmToken::TokenKind Kind)
 {
   MCAsmLexer &Lexer = getLexer();
@@ -715,7 +736,8 @@ bool PatmosAsmParser::ParseToken(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
     return Error(Lexer.getLoc(), "unexpected token");
   }
 
-  Operands.push_back(PatmosOperand::CreateToken(Lexer.getTok().getString(), Lexer.getLoc()));
+  Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+      PatmosOperand::CreateToken(Lexer.getTok().getString(), Lexer.getLoc())));
   Lexer.Lex();
 
   return false;
@@ -723,7 +745,7 @@ bool PatmosAsmParser::ParseToken(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
 
 
 bool PatmosAsmParser::
-ParsePrefix(SMLoc &PrefixLoc, SmallVectorImpl<MCParsedAsmOperand*> &Operands,
+ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands,
     bool &HasGuard, StringRef PrevToken)
 {
   MCAsmLexer &Lexer = getLexer();
@@ -781,7 +803,7 @@ ParsePrefix(SMLoc &PrefixLoc, SmallVectorImpl<MCParsedAsmOperand*> &Operands,
 
 bool PatmosAsmParser::
 ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
-                 SmallVectorImpl<MCParsedAsmOperand*> &Operands)
+                 OperandVector &Operands)
 {
   bool HasGuard = false;
   ParsePrefix(NameLoc, Operands, HasGuard, Name);
@@ -805,22 +827,24 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
   StringRef Mnemonic = Name.slice(0, Next);
 
   Operands.insert(Operands.begin(),
-                  PatmosOperand::CreateToken(Mnemonic, NameLoc));
+      std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateToken(Mnemonic, NameLoc)));
 
   if (Next != StringRef::npos) {
     // there is a format/modifier token in mnemonic, add as first operand
     StringRef Format = Name.slice(Next, StringRef::npos);
     Operands.insert(Operands.begin() + 1,
-                    PatmosOperand::CreateToken(Format, NameLoc));
+        std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateToken(Format, NameLoc)));
   }
 
   // If this instruction has no guard, we just add a default one.
   // We do not yet know if the instruction actually requires one, so we might need to undo this
   // if we do not find a match (if we actually have instructions that have no guard).
   if (!HasGuard) {
-    Operands.push_back(PatmosOperand::CreateReg(Patmos::P0, NameLoc, NameLoc));
-    Operands.push_back(PatmosOperand::CreateFlag(false, NameLoc, NameLoc,
-                                                 getParser().getContext()));
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateReg(Patmos::P0, NameLoc, NameLoc)));
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateFlag(false, NameLoc, NameLoc,
+                                                 getParser().getContext())));
   }
 
   unsigned OpNo = 0;
@@ -897,7 +921,7 @@ bool PatmosAsmParser::ParseDirectiveWord(unsigned Size, SMLoc L) {
       if (getParser().parseExpression(Value, E))
         return true;
 
-      getParser().getStreamer().EmitValue(Value, Size);
+      getParser().getStreamer().emitValue(Value, Size);
 
       if (getLexer().is(AsmToken::EndOfStatement))
         break;
@@ -959,10 +983,10 @@ bool PatmosAsmParser::ParseDirectiveFStart(SMLoc L) {
   }
   Parser.Lex();
 
-  PatmosTargetStreamer &PTS = static_cast<PatmosTargetStreamer&>(
+  PatmosTargetStreamer *PTS = static_cast<PatmosTargetStreamer*>(
                                  getParser().getStreamer().getTargetStreamer());
 
-  PTS.EmitFStart(Start, Length, (unsigned)Align);
+  PTS->EmitFStart(Start, Length, (unsigned)Align);
 
   return false;
 }

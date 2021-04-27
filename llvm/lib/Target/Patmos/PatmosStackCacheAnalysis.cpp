@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "patmos-stack-cache-analysis"
 #undef PATMOS_PRINT_USER_BOUNDS
 #undef PATMOS_TRACE_SENS_REMOVAL
 #undef PATMOS_TRACE_BB_LIVEAREA
@@ -35,7 +34,6 @@
 #include "llvm/ADT/SCCIterator.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/PMLExport.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Program.h"
@@ -44,6 +42,7 @@
 #include <map>
 #include <set>
 #include <fstream>
+#include <sstream>
 
 /// Utility for deleting owned members of an object
 #define DELETE_MEMBERS(vec) \
@@ -56,6 +55,8 @@
   yaml::type y ## name
 
 using namespace llvm;
+
+#define DEBUG_TYPE "patmos-stack-cache-analysis"
 
 INITIALIZE_PASS(PatmosStackCacheAnalysisInfo, "scainfo",
                 "Stack Cache Analysis Info", false, true)
@@ -227,11 +228,6 @@ namespace llvm {
   bool operator <(const SCAEdge &a, const SCAEdge &b);
   llvm::raw_ostream &operator <<(llvm::raw_ostream &O, ilp_prefix Prefix);
 
-  namespace yaml {
-    template <>
-      struct MappingTraits< SCANode >;
-  }
-
   /// Set of SCANodes.
   typedef std::set<SCANode*> SCANodeSet;
 
@@ -326,15 +322,6 @@ namespace llvm {
         RemainingOccupancy(0), SpillCost(spillcost),
         HasCallFreePath(hascallfreepath), IsVisible(false), IsValid(false)
     {}
-
-    void initYAML(const PatmosSubtarget &STC)
-    {
-      if (Node->getMF())
-        yFunction = Node->getMF()->getName();
-      else
-        yFunction = "none";
-      ySpillBlocks = SpillCost.first; // export in bytes
-    }
 
     /// Returns the associated call graph node.
     MCGNode *getMCGNode() const
@@ -462,11 +449,6 @@ namespace llvm {
     {
       return Children;
     }
-
-    YAML_MEMBER(Name, Id);
-    YAML_MEMBER(Name, Function);
-    YAML_MEMBER(Name, SpillBlocks);
-    friend struct yaml::MappingTraits<SCANode*>;
   };
 
   /// A graph representing context-sensitive information on the spill costs at
@@ -484,9 +466,8 @@ namespace llvm {
     /// Subtarget information (stack cache sizes)
     const PatmosSubtarget &STC;
 
-    unsigned yamlId;
   public:
-    SpillCostAnalysisGraph(const PatmosSubtarget &s) : STC(s), yamlId(100) {}
+    SpillCostAnalysisGraph(const PatmosSubtarget &s) : STC(s) {}
 
     /// makeRoot - Construct the root node of the SCA graph.
     SCANode *makeRoot(MCGNode *node, unsigned int maxdisplacment,
@@ -500,8 +481,6 @@ namespace llvm {
       // create the root node.
       Root = new SCANode(node, occupancyCosts, maxdisplacment, spillCosts,
                          hascallfreepath);
-
-      Root->yId = yamlId++;
 
       // store the root node.
       Nodes[std::make_pair(node, occupancyCosts)] = Root;
@@ -532,7 +511,6 @@ namespace llvm {
         // create a new node
         result = new SCANode(node, occupancy, maxdisplacment, spillcost,
                              hascallfreepath);
-        result->yId = yaml::Name(yamlId++);
 
         // store the newly created node
         Nodes[std::make_pair(node, occupancy)] = result;
@@ -717,8 +695,8 @@ namespace llvm {
           i++) {
         // TODO: maybe add support for unknown functions.
         if (!(*i)->isUnknown() &&
-            hasInfo((*i)->getMF()->getFunction()->getName()))
-          return getInfo((*i)->getMF()->getFunction()->getName());
+            hasInfo((*i)->getMF()->getFunction().getName().str()))
+          return getInfo((*i)->getMF()->getFunction().getName().str());
       }
 
       dbgs() << "Error: Missing bounds for SCC: (";
@@ -751,73 +729,6 @@ namespace llvm {
       return tmp != Infos.end();
     }
   };
-
-  namespace yaml {
-    template <>
-      struct MappingTraits<SCANode*> {
-        static void mapping(IO &io, SCANode *&n) {
-          assert(n);
-          io.mapRequired("id", n->yId);
-          io.mapRequired("function", n->yFunction);
-          io.mapRequired("spillsize", n->ySpillBlocks);
-        }
-      };
-    YAML_IS_PTR_SEQUENCE_VECTOR(SCANode)
-
-    struct SCAEdge {
-      Name Src;
-      Name Dst;
-      Name CallBlock;
-      Name CallIndex;
-      Name CallBlocki;
-      SCAEdge(Name src, Name dst, Name bb, unsigned idx, unsigned i)
-        : Src(src), Dst(dst), CallBlock(bb), CallIndex(idx), CallBlocki(i) {}
-    };
-    template <>
-      struct MappingTraits<SCAEdge*> {
-        static void mapping(IO &io, SCAEdge *&e) {
-          assert(e);
-          io.mapRequired("src", e->Src);
-          io.mapRequired("dst", e->Dst);
-          io.mapRequired("callblock", e->CallBlock);
-          io.mapRequired("callblocki", e->CallBlocki);
-          io.mapRequired("callindex", e->CallIndex);
-        }
-      };
-    YAML_IS_PTR_SEQUENCE_VECTOR(SCAEdge)
-
-    struct SCAGraph {
-      std::vector<SCANode*> N;
-      std::vector<SCAEdge*> E;
-      SCAGraph() {}
-      ~SCAGraph() {
-        DELETE_MEMBERS(E);
-      }
-      void addEdge(SCANode *src, SCANode *dst,
-          const MachineBasicBlock *MBB, unsigned index) {
-        E.push_back(new SCAEdge(src->yId, dst->yId,
-                                MBB->getName(), index, MBB->getNumber()));
-      }
-    };
-
-    template <>
-      struct MappingTraits< SCAGraph > {
-        static void mapping(IO &io, SCAGraph& g) {
-          io.mapRequired("nodes",   g.N);
-          io.mapRequired("edges",   g.E);
-        }
-      };
-
-    struct SCADoc {
-      SCAGraph SCAG;
-    };
-    template <>
-    struct MappingTraits< SCADoc > {
-      static void mapping(IO &io, SCADoc& doc) {
-        io.mapRequired("sca-graph", doc.SCAG);
-      }
-    };
-  } // end namespace yaml
 
   /// Pass to analyze the occupancy and displacement of Patmos' stack cache.
   class PatmosStackCacheAnalysis : public MachineModulePass {
@@ -970,7 +881,7 @@ namespace llvm {
     static char ID;
 
     PatmosStackCacheAnalysis(const PatmosTargetMachine &tm) :
-        MachineModulePass(ID), STC(tm.getSubtarget<PatmosSubtarget>()),
+        MachineModulePass(ID), STC(*tm.getSubtargetImpl()),
         TII(*tm.getInstrInfo()), SCAGraph(STC), BI(BoundsFile)
     {
       initializePatmosCallGraphBuilderPass(*PassRegistry::getPassRegistry());
@@ -1246,11 +1157,11 @@ namespace llvm {
 
       // get SCCs
       typedef scc_iterator<MCallGraph> PCGSCC_iterator;
-      for(PCGSCC_iterator s(scc_begin(G)); !s.isAtEnd(); s++) {
+      for(PCGSCC_iterator s(scc_begin(G)); !s.isAtEnd(); ++s) {
 
         // keep track of call graph nodes and their SCCs.
-        SCCs.push_back(std::make_pair(*s, s.hasLoop()));
-        for(MCGNodes::iterator n((*s).begin()), ne((*s).end()); n != ne; n++) {
+        SCCs.push_back(std::make_pair(*s, s.hasCycle()));
+        for(auto n = s->begin(), ne = s->end(); n != ne; n++) {
           SCCMap[*n] = &SCCs.back();
         }
 
@@ -1435,7 +1346,7 @@ namespace llvm {
           // optimal, but this works too).
           for(MachineFunction::iterator i(MF->begin()), ie(MF->end()); i != ie;
               i++) {
-            WL.insert(i);
+            WL.insert(&*i);
           }
 
           // process until the work list becomes empty
@@ -1544,7 +1455,7 @@ namespace llvm {
           // optimal, but this works too).
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            WL.insert(j);
+            WL.insert(&*j);
           }
 
           // process until the work list becomes empty
@@ -1628,8 +1539,8 @@ namespace llvm {
           // optimal, but this works too).
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            WL.insert(j);
-            INs[j] = getBytesReserved(*i);
+            WL.insert(&*j);
+            INs[&*j] = getBytesReserved(*i);
           }
 
           // process until the work list becomes empty
@@ -1742,7 +1653,7 @@ namespace llvm {
 
       // open LP file.
       SmallString<1024> LPname;
-      error_code err = sys::fs::createUniqueDirectory("stack", LPname);
+      std::error_code err = sys::fs::createUniqueDirectory("stack", LPname);
       if (err) {
         errs() << "Error creating temp .lp file: " << err.message() << "\n";
         return std::numeric_limits<unsigned int>::max();
@@ -1750,9 +1661,9 @@ namespace llvm {
 
       sys::path::append(LPname, "scc.lp");
 
-      std::string ErrMsg;
+      std::error_code ErrMsg;
       raw_fd_ostream OS(LPname.c_str(), ErrMsg);
-      if (!ErrMsg.empty()) {
+      if (!ErrMsg) {
         errs() << "Error: Failed to open file '" << LPname.str()
                << "' for writing!\n";
         return std::numeric_limits<unsigned int>::max();
@@ -2029,11 +1940,11 @@ namespace llvm {
 
       // get SCCs
       typedef scc_iterator<MCallGraph> PCGSCC_iterator;
-      for(PCGSCC_iterator s(scc_begin(G)); !s.isAtEnd(); s++) {
+      for(PCGSCC_iterator s(scc_begin(G)); !s.isAtEnd(); ++s) {
 
         // keep track of call graph nodes and their SCCs.
-        SCCs.push_back(std::make_pair(*s, s.hasLoop()));
-        for(MCGNodes::iterator n((*s).begin()), ne((*s).end()); n != ne; n++) {
+        SCCs.push_back(std::make_pair(*s, s.hasCycle()));
+        for(auto n = s->begin(), ne = s->end(); n != ne; ++n) {
           SCCMap[*n] = &SCCs.back();
         }
       }
@@ -2178,8 +2089,8 @@ namespace llvm {
           // optimal, but this works too).
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            WL.insert(j);
-            INs[j] = getBytesReserved(*i);
+            WL.insert(&*j);
+            INs[&*j] = getBytesReserved(*i);
           }
 
           // process until the work list becomes empty
@@ -2236,7 +2147,7 @@ namespace llvm {
           ie(MBB->instr_end()); i != ie; i++) {
         if (i->isCall()) {
           // find call site
-          MCGSite *site = Node->findSite(i);
+          MCGSite *site = Node->findSite(&*i);
           assert(site);
 
           childDisplacement = std::max(childDisplacement,
@@ -2254,14 +2165,14 @@ namespace llvm {
           // if all fits, the SENS can be removed.
           unsigned int filling = remove ? 0u : ensure + childDisplacement -
                                                STC.getStackCacheSize();
-          ENSs[i] = filling;
+          ENSs[&*i] = filling;
 
           // store worst-case filling at call sites and basic block entry
-          WorstCaseEnsureBound[i] = filling;
+          WorstCaseEnsureBound[&*i] = filling;
 
           assert(filling != 0 || remove);
 
-          if (!remove && !TII.isPredicated(i)) {
+          if (!remove && !TII.isPredicated(*i)) {
             childDisplacement = std::min(childDisplacement,
                                          STC.getStackCacheSize() - ensure);
           }
@@ -2307,7 +2218,7 @@ namespace llvm {
           // but this works too).
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            WL.insert(j);
+            WL.insert(&*j);
           }
 
           // process until the work list becomes empty
@@ -2381,7 +2292,7 @@ namespace llvm {
         tmp << "U" << (void*)N;
       }
       else
-        tmp << "X" << N->getMF()->getFunction()->getName();
+        tmp << "X" << N->getMF()->getFunction().getName();
       return tmp.str();
     }
 
@@ -2400,14 +2311,18 @@ namespace llvm {
       unsigned int result = Maximize ? std::numeric_limits<unsigned int>::max():
                                        std::numeric_limits<unsigned int>::min();
 
-      std::vector<const char*> args;
-      args.push_back(Solve_ilp.c_str());
+      std::vector<StringRef> args;
+      args.push_back(Solve_ilp);
       args.push_back(LPname);
-      args.push_back(0);
+      args.push_back("\0");
 
       std::string ErrMsg;
-      if (sys::ExecuteAndWait(sys::FindProgramByName(Solve_ilp),
-                                       &args[0],0,0,0,0,&ErrMsg)) {
+      auto progName = sys::findProgramByName(Solve_ilp);
+    if (progName && sys::ExecuteAndWait(StringRef(*progName),
+                              llvm::ArrayRef<StringRef>(args),
+                              llvm::None,
+                              llvm::ArrayRef<Optional<StringRef>>(),
+                              0,0,&ErrMsg)) {
         report_fatal_error("calling ILP solver (" + Solve_ilp + "): " + ErrMsg);
       }
       else {
@@ -2455,7 +2370,7 @@ namespace llvm {
 
       // open LP file.
       SmallString<1024> LPname;
-      error_code err = sys::fs::createUniqueDirectory("stack", LPname);
+      std::error_code err = sys::fs::createUniqueDirectory("stack", LPname);
       if (err) {
         errs() << "Error creating temp .lp file: " << err.message() << "\n";
         return std::numeric_limits<unsigned int>::max();
@@ -2463,9 +2378,9 @@ namespace llvm {
 
       sys::path::append(LPname, "scc.lp");
 
-      std::string ErrMsg;
-      raw_fd_ostream OS(LPname.c_str(), ErrMsg);
-      if (!ErrMsg.empty()) {
+      std::error_code ErrCode;
+      raw_fd_ostream OS(LPname.c_str(), ErrCode);
+      if (!ErrCode) {
         errs() << "Error: Failed to open file '" << LPname.str()
                << "' for writing!\n";
         return std::numeric_limits<unsigned int>::max();
@@ -2513,7 +2428,7 @@ namespace llvm {
            << "\t" << ilp_name(W, *n);
 
         if (!(*n)->getCallee()->isUnknown())
-          OS << "\t\\ " << (*n)->getCallee()->getMF()->getFunction()->getName();
+          OS << "\t\\ " << (*n)->getCallee()->getMF()->getFunction().getName();
       }
 
       // entries do not matter here
@@ -2719,7 +2634,7 @@ namespace llvm {
       // see if the block contains a call
       for(MachineBasicBlock::instr_iterator i(MBB->instr_begin()),
           ie(MBB->instr_end()); i != ie && is_call_free; i++) {
-        if (i->isCall() && !TII.isPredicated(i))
+        if (i->isCall() && !TII.isPredicated(*i))
           is_call_free = false;
       }
 
@@ -2754,11 +2669,11 @@ namespace llvm {
           // initialize work list -- initially we assume
           for(MachineFunction::iterator i(MF->begin()), ie(MF->end()); i != ie;
               i++) {
-            WL.insert(i);
+            WL.insert(&*i);
 
             // initially assume the basic block does not contain a call and a
             // path to a sink exists without any calls.
-            OUTs[i] = true;
+            OUTs[&*i] = true;
           }
 
           // process until the work list becomes empty
@@ -2773,7 +2688,7 @@ namespace llvm {
           }
 
           // see if the entry node contains a call-free path
-          is_call_free = OUTs[MF->begin()];
+          is_call_free = OUTs[&*MF->begin()];
         }
 
         IsCallFree[*i] = is_call_free;
@@ -2804,14 +2719,14 @@ namespace llvm {
           ie(MBB->instr_end()); i != ie; i++) {
         if (i->isCall()) {
           // find call site
-          MCGSite *site = Node->findSite(i);
+          MCGSite *site = Node->findSite(&*i);
           assert(site);
 
           // store the worst-case occupancy before the call site, i.e., for the
           // functions potentially entered through calls from this site
           WorstCaseSiteOccupancy[site] = worstOccupancy;
 
-          if (!TII.isPredicated(i)) {
+          if (!TII.isPredicated(*i)) {
             // get the worst-case occupancy after the call
             unsigned int worstCallOccupancy =
                 STC.getStackCacheSize() - getMinDisplacement(site->getCallee());
@@ -2820,7 +2735,7 @@ namespace llvm {
             worstOccupancy = std::min(worstOccupancy, worstCallOccupancy);
           }
         }
-        else if (i->getOpcode() == Patmos::SENSi && !TII.isPredicated(i)) {
+        else if (i->getOpcode() == Patmos::SENSi && !TII.isPredicated(*i)) {
           unsigned int ensure = i->getOperand(2).getImm() * 4;
           worstOccupancy = std::max(ensure, worstOccupancy);
         }
@@ -2857,14 +2772,14 @@ namespace llvm {
           ie(MBB->instr_end()); i != ie; i++) {
         if (i->isCall()) {
           // find call site
-          MCGSite *site = Node->findSite(i);
+          MCGSite *site = Node->findSite(&*i);
           assert(site);
 
           // store the worst-case occupancy before the call site, i.e., for the
           // functions potentially entered through calls from this site
           WorstCaseSpillDirty[site] = worstSpillDirty;
 
-          if (!TII.isPredicated(i)) {
+          if (!TII.isPredicated(*i)) {
             unsigned int minDisplacement= getMinDisplacement(site->getCallee());
 
             // update the LP's position
@@ -2981,7 +2896,7 @@ namespace llvm {
           // visit all basic blocks
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            computeWorstCaseSavingOccupancy(*i, j);
+            computeWorstCaseSavingOccupancy(*i, &*j);
           }
         }
       }
@@ -3056,7 +2971,7 @@ namespace llvm {
           // visit all basic blocks
           for(MachineFunction::iterator j(MF->begin()), je(MF->end()); j != je;
               j++) {
-            computeWorstCaseRestoringOccupancy(*i, j);
+            computeWorstCaseRestoringOccupancy(*i, &*j);
           }
         }
       }
@@ -3101,8 +3016,8 @@ namespace llvm {
           MachineFunction *MF = (*i)->getMF();
 
           // initialize work list.
-          INs[MF->begin()] = STC.getStackCacheSize();
-          WL.insert(MF->begin());
+          INs[&*MF->begin()] = STC.getStackCacheSize();
+          WL.insert(&*MF->begin());
 
           // process until the work list becomes empty
           while (!WL.empty()) {
@@ -3141,8 +3056,8 @@ namespace llvm {
         MachineFunction *MF = (*i)->getMF();
 
         // initialize work list.
-        INs[MF->begin()] = STC.getStackCacheSize();
-        WL.insert(MF->begin());
+        INs[&*MF->begin()] = STC.getStackCacheSize();
+        WL.insert(&*MF->begin());
 
 #ifdef PATMOS_TRACE_WORST_SITE_OCCUPANCY
         dbgs() << "\\\\\\\\\\\\\\\\\\\\\\\\\\\\ "
@@ -3494,7 +3409,7 @@ namespace llvm {
             assert(tmp % STC.getStackCacheBlockSize() == 0);
 
             // convert bytes back to blocks
-            info->Reserves[I] = tmp; // export in bytes
+            info->Reserves[&*I] = tmp; // export in bytes
           }
         }
       }
@@ -3504,7 +3419,7 @@ namespace llvm {
     }
 
     /// runOnModule - determine the state of the stack cache for each call site.
-    virtual bool runOnMachineModule(const Module &M)
+    bool runOnMachineModule(const Module &M) override
     {
       PatmosCallGraphBuilder &PCGB(getAnalysis<PatmosCallGraphBuilder>());
       const MCallGraph &G(*PCGB.getCallGraph());
@@ -3552,14 +3467,11 @@ namespace llvm {
         computeWorstCaseRestoringOccupancy(G);
       }
 
-      if (!SCAPMLExport.empty())
-        exportPML(G, SCAGraph);
-
       return false;
     }
 
     /// getPassName - Return the pass' name.
-    virtual const char *getPassName() const {
+    StringRef getPassName() const override {
       return "Patmos Stack Cache Analysis";
     }
 
@@ -3573,61 +3485,10 @@ namespace llvm {
              E = BB->instr_end(); Ins != E; ++Ins)
         {
           if (Ins->isCall()) {
-            info->CallIDs[Ins] = Index;
-            MiMap[Ins] = std::make_pair(BB, Index++);
+            info->CallIDs[&*Ins] = Index;
+            MiMap[&*Ins] = std::make_pair(&*BB, Index++);
           }
         }
-      }
-    }
-
-    void exportPML(const MCallGraph &G, const SpillCostAnalysisGraph &scag) {
-      yaml::SCADoc YDoc;
-
-      std::set<MachineFunction*> Seen;
-      for (MCGSCANodeMap::const_iterator I = scag.getNodes().begin(),
-          E = scag.getNodes().end(); I != E; ++I) {
-        SCANode *n = I->second;
-        n->initYAML(STC);
-        YDoc.SCAG.N.push_back(n);
-
-        MachineFunction *mf = n->getMCGNode()->getMF();
-        if (!Seen.count(mf)) {
-          mapIndices(*mf);
-          Seen.insert(mf);
-        }
-
-        SCAEdgeSet &e = n->getChildren();
-        for (SCAEdgeSet::iterator I = e.begin(), E = e.end(); I != E; ++I) {
-          MInstrIndex::iterator it = MiMap.find(I->getSite()->getMI());
-          int cidx = -1;
-          if (it != MiMap.end())
-            cidx = it->second.second;
-          YDoc.SCAG.addEdge(I->getCaller(), I->getCallee(),
-              it->second.first, cidx);
-        }
-
-      }
-
-      yaml::Output *Output;
-      assert(!SCAPMLExport.empty());
-      StringRef OutFileName(SCAPMLExport);
-      tool_output_file *OutFile;
-      std::string ErrorInfo;
-      OutFile = new tool_output_file(OutFileName.str().c_str(), ErrorInfo);
-      if (!ErrorInfo.empty()) {
-        delete OutFile;
-        errs() << "[mc2yml] Opening Export File failed: " << OutFileName << "\n";
-        errs() << "[mc2yml] Reason: " << ErrorInfo;
-        report_fatal_error("Exporting stack analysis results to PML failed!");
-      }
-      else {
-        Output = new yaml::Output(OutFile->os());
-      }
-      *Output << YDoc;
-      if (OutFile) {
-        OutFile->keep();
-        delete Output;
-        delete OutFile;
       }
     }
   };
@@ -3672,6 +3533,9 @@ namespace llvm {
   }
 
   template <> struct GraphTraits<SpillCostAnalysisGraph> {
+    using GraphType = typename llvm::SpillCostAnalysisGraph;
+    using NodeRef = typename llvm::SCANode*;
+
     typedef SCANode NodeType;
     class ChildIteratorType
     {
@@ -3711,12 +3575,12 @@ namespace llvm {
       }
     };
 
-    static inline ChildIteratorType child_begin(NodeType *N)
+    static inline ChildIteratorType child_begin(NodeRef N)
     {
       return N->getChildren().begin();
     }
 
-    static inline ChildIteratorType child_end(NodeType *N)
+    static inline ChildIteratorType child_end(NodeRef N)
     {
       return N->getChildren().end();
     }
@@ -3758,15 +3622,15 @@ namespace llvm {
       }
     };
 
-    static nodes_iterator nodes_begin(const SpillCostAnalysisGraph &G)
+    static nodes_iterator nodes_begin(const GraphType &G)
     {
       return G.getNodes().begin();
     }
-    static nodes_iterator nodes_end (const SpillCostAnalysisGraph &G)
+    static nodes_iterator nodes_end (const GraphType &G)
     {
       return G.getNodes().end();
     }
-    static unsigned size (const SpillCostAnalysisGraph &G)
+    static unsigned size (const GraphType &G)
     {
       return G.getNodes().size();
     }
@@ -3781,7 +3645,7 @@ namespace llvm {
       return "scagraph";
     }
 
-    static bool isNodeHidden(const SCANode *N, const SpillCostAnalysisGraph &G)
+    static bool isNodeHidden(const SCANode *N)
     {
       return !N->isVisible();
     }
@@ -3819,7 +3683,7 @@ namespace llvm {
       if (mcgNode->isUnknown())
         s << "<UNKNOWN-" << *mcgNode->getType() << ">";
       else {
-        s << mcgNode->getMF()->getFunction()->getName();
+        s << mcgNode->getMF()->getFunction().getName();
       }
 
       s << (N->hasCallFreePath() ? "* (occ:" : " (occ:")

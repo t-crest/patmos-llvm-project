@@ -11,25 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MachineModulePass.h"
 #include "llvm/IR/LegacyPassManagers.h"
 #include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/CodeGen/MachineFunctionAnalysis.h"
-#include "llvm/CodeGen/MachineModulePass.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Module.h"
 
 using namespace llvm;
-
-void MachineModulePass::preparePassManager(PMStack &PMS) {
-  assert(!PMS.empty() && "No pass manager found, should not happen.");
-
-  MachineFunctionAnalysis *MFA = (MachineFunctionAnalysis*)
-                PMS.top()->findAnalysisPass(&MachineFunctionAnalysis::ID, true);
-  if (MFA) {
-    MFA->preserveMF();
-  }
-  ModulePass::preparePassManager(PMS);
-}
 
 bool MachineModulePass::runOnModule(Module &M) {
   bool Changed = runOnMachineModule(M);
@@ -37,14 +25,12 @@ bool MachineModulePass::runOnModule(Module &M) {
 }
 
 void MachineModulePass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addPreserved<MachineFunctionAnalysis>();
-
   // MachineModulePass preserves all LLVM IR passes, but there's no
   // high-level way to express this. Instead, just list a bunch of
   // passes explicitly. This does not include setPreservesCFG,
   // because CodeGen overloads that to mean preserving the MachineBasicBlock
   // CFG in addition to the LLVM IR CFG.
-  AU.addPreserved<AliasAnalysis>();
+  AU.addPreserved<AAResultsWrapperPass>();
   AU.addPreserved("scalar-evolution");
   AU.addPreserved("iv-users");
   AU.addPreserved("memdep");
