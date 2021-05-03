@@ -17,6 +17,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/StringExtras.h"
+#include <math.h>
 
 using namespace llvm;
 
@@ -191,11 +192,11 @@ bool PatmosSubtarget::canIssueInSlot(unsigned SchedClass, unsigned Slot) const {
 }
 
 unsigned PatmosSubtarget::getMinSubfunctionAlignment() const {
-  return ceil(log2(MinSubfunctionAlign));
+  return ceil(log2((unsigned)MinSubfunctionAlign));
 }
 
 unsigned PatmosSubtarget::getMinBasicBlockAlignment() const {
-  return ceil(log2(MinBasicBlockAlign));
+  return ceil(log2((unsigned)MinBasicBlockAlign));
 }
 
 unsigned PatmosSubtarget::getStackCacheSize() const {
