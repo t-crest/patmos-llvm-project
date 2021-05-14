@@ -32,7 +32,7 @@ for.cond:                                         ; preds = %for.inc, %entry
   br i1 %cmp, label %for.body, label %for.end, !llvm.loop !0
 
 for.body:                                         ; preds = %for.cond
-  %0 = load volatile i32* @_1
+  %0 = load volatile i32, i32* @_1
   br label %for.inc
 
 for.inc:                                          ; preds = %for.body
@@ -45,5 +45,5 @@ for.end:                                          ; preds = %for.cond
   ret i32 %x.0
 }
 
-!0 = metadata !{metadata !0, metadata !1}
-!1 = metadata !{metadata !"llvm.loop.bound", i32 0, i32 4}
+!0 = !{!0, !1}
+!1 = !{!"llvm.loop.bound", i32 0, i32 4}

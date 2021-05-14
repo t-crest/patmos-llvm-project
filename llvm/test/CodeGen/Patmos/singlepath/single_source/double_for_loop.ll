@@ -38,7 +38,7 @@ entry:
   %i1 = alloca i32
   store i32 %cond, i32* %0
   store i32 0, i32* %x
-  %1 = load i32* %0
+  %1 = load i32, i32* %0
   %2 = srem i32 %1, 2
   %3 = icmp ne i32 %2, 0
   br i1 %3, label %if.then, label %if.else
@@ -48,22 +48,22 @@ if.then:                                          ; preds = %entry
   br label %for.cond
 
 for.cond:                                         ; preds = %for.inc, %if.then
-  %4 = load i32* %i
-  %5 = load i32* %0
+  %4 = load i32, i32* %i
+  %5 = load i32, i32* %0
   %6 = icmp slt i32 %4, %5
   br i1 %6, label %for.body, label %for.end, !llvm.loop !1
 
 for.body:                                         ; preds = %for.cond
-  %7 = load i32* %i
-  %8 = load volatile i32* @_1
+  %7 = load i32, i32* %i
+  %8 = load volatile i32, i32* @_1
   %9 = add nsw i32 %7, %8
-  %10 = load i32* %x
+  %10 = load i32, i32* %x
   %11 = add nsw i32 %10, %9
   store i32 %11, i32* %x
   br label %for.inc
 
 for.inc:                                          ; preds = %for.body
-  %12 = load i32* %i
+  %12 = load i32, i32* %i
   %13 = add nsw i32 %12, 1
   store i32 %13, i32* %i
   br label %for.cond
@@ -76,23 +76,23 @@ if.else:                                          ; preds = %entry
   br label %for.cond2
 
 for.cond2:                                        ; preds = %for.inc4, %if.else
-  %14 = load i32* %i1
-  %15 = load i32* %0
+  %14 = load i32, i32* %i1
+  %15 = load i32, i32* %0
   %16 = mul nsw i32 2, %15
   %17 = icmp slt i32 %14, %16
   br i1 %17, label %for.body3, label %for.end5, !llvm.loop !3
 
 for.body3:                                        ; preds = %for.cond2
-  %18 = load i32* %i1
-  %19 = load volatile i32* @_2
+  %18 = load i32, i32* %i1
+  %19 = load volatile i32, i32* @_2
   %20 = add nsw i32 %18, %19
-  %21 = load i32* %x
+  %21 = load i32, i32* %x
   %22 = add nsw i32 %21, %20
   store i32 %22, i32* %x
   br label %for.inc4
 
 for.inc4:                                         ; preds = %for.body3
-  %23 = load i32* %i1
+  %23 = load i32, i32* %i1
   %24 = add nsw i32 %23, 1
   store i32 %24, i32* %i1
   br label %for.cond2
@@ -101,11 +101,11 @@ for.end5:                                         ; preds = %for.cond2
   br label %if.end
 
 if.end:                                           ; preds = %for.end5, %for.end
-  %25 = load i32* %x
+  %25 = load i32, i32* %x
   ret i32 %25
 }
 
-!1 = metadata !{metadata !1, metadata !2}
-!2 = metadata !{metadata !"llvm.loop.bound", i32 0, i32 9}
-!3 = metadata !{metadata !3, metadata !4}
-!4 = metadata !{metadata !"llvm.loop.bound", i32 0, i32 19}
+!1 = !{!1, !2}
+!2 = !{!"llvm.loop.bound", i32 0, i32 9}
+!3 = !{!3, !4}
+!4 = !{!"llvm.loop.bound", i32 0, i32 19}

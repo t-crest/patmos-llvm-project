@@ -35,7 +35,7 @@ define i32 @main()  {
 ; CHECK-NOT: .align
 ; CHECK-LABEL: # %entry
 entry:
-  %0 = load volatile i32* @_7
+  %0 = load volatile i32, i32* @_7
   %tobool = icmp eq i32 %0, 7
   br i1 %tobool, label %if.else, label %if.then
 

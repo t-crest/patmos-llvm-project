@@ -1,10 +1,11 @@
 ; RUN: %test_no_runtime_execution
 
 define i32 @main() {
-entry:  
-  %stack_var_1 = alloca i32, i32 2
+entry:    
+  %stack_var = alloca [2 x i32]
+  %stack_var_1 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 0
   store i32 15, i32* %stack_var_1
-  %stack_var_2 = getelementptr inbounds i32* %stack_var_1, i32 1
+  %stack_var_2 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 1
   store i32 16, i32* %stack_var_2
   
   %asm_result = call { i32, i32 } asm "

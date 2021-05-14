@@ -59,38 +59,38 @@
 
 define i32 @init_func()  {
 entry:
-  %0 = load volatile i32* @cond
-  %1 = load volatile i32* @cond
+  %0 = load volatile i32, i32* @cond
+  %1 = load volatile i32, i32* @cond
   %cmp = icmp slt i32 %1, 7
   br i1 %cmp, label %if.then, label %if.else34
 
 if.then:                                          ; preds = %entry
-  %2 = load volatile i32* @cond
+  %2 = load volatile i32, i32* @cond
   %cmp1 = icmp slt i32 %2, 6
   br i1 %cmp1, label %if.then2, label %if.else30
 
 if.then2:                                         ; preds = %if.then
-  %3 = load volatile i32* @cond
+  %3 = load volatile i32, i32* @cond
   %cmp3 = icmp slt i32 %3, 5
   br i1 %cmp3, label %if.then4, label %if.else26
 
 if.then4:                                         ; preds = %if.then2
-  %4 = load volatile i32* @cond
+  %4 = load volatile i32, i32* @cond
   %cmp5 = icmp slt i32 %4, 4
   br i1 %cmp5, label %if.then6, label %if.else22
 
 if.then6:                                         ; preds = %if.then4
-  %5 = load volatile i32* @cond
+  %5 = load volatile i32, i32* @cond
   %cmp7 = icmp slt i32 %5, 3
   br i1 %cmp7, label %if.then8, label %if.else18
 
 if.then8:                                         ; preds = %if.then6
-  %6 = load volatile i32* @cond
+  %6 = load volatile i32, i32* @cond
   %cmp9 = icmp slt i32 %6, 2
   br i1 %cmp9, label %if.then10, label %if.else14
 
 if.then10:                                        ; preds = %if.then8
-  %7 = load volatile i32* @cond
+  %7 = load volatile i32, i32* @cond
   %cmp11 = icmp slt i32 %7, 1
   br i1 %cmp11, label %if.then12, label %if.else
 

@@ -2,11 +2,12 @@
 
 define i32 @main() {
 entry:  
-  %stack_var_1 = alloca i8, i32 4
+  %stack_var = alloca [4 x i8]
+  %stack_var_1 = getelementptr [4 x i8], [4 x i8]* %stack_var, i32 0, i32 0
   store i8 2, i8* %stack_var_1
-  %stack_var_2 = getelementptr inbounds i8* %stack_var_1, i32 1
+  %stack_var_2 = getelementptr [4 x i8], [4 x i8]* %stack_var, i32 0, i32 1
   store i8 3, i8* %stack_var_2
-  
+    
   %asm_result = call { i32, i32 } asm "
 		lbc	$0	=	[$2]	
 		lbc	$1	=	[$2 + 1]	

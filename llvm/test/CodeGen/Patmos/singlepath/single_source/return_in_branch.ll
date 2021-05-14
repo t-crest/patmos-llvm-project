@@ -25,17 +25,17 @@
 
 define i32 @main(i32 %x) {
 entry:
-  %0 = load volatile i32* @_5
+  %0 = load volatile i32, i32* @_5
   %cmp = icmp sgt i32 %0, %x
   br i1 %cmp, label %if.then, label %if.else
 
 if.then:                                          ; preds = %entry
-  %1 = load volatile i32* @_1
+  %1 = load volatile i32, i32* @_1
   %add = add nsw i32 %x, %1
   br label %return
 
 if.else:                                          ; preds = %entry
-  %2 = load volatile i32* @_2
+  %2 = load volatile i32, i32* @_2
   %sub = sub nsw i32 %x, %2
   br label %return
 

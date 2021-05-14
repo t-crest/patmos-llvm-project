@@ -21,7 +21,7 @@
 ; CHECK-NEXT: main:
 define i32 @main()  {
 entry:
-  %0 = load volatile i32* @_7
+  %0 = load volatile i32, i32* @_7
   %tobool = icmp eq i32 %0, 7
   br i1 %tobool, label %if.else, label %if.then
 
@@ -47,7 +47,7 @@ if.end:                                           ; preds = %if.else, %if.then
 ; CHECK-NEXT: main2:
 define i32 @main2()  {
 entry:
-  %0 = load volatile i32* @_7
+  %0 = load volatile i32, i32* @_7
   %tobool = icmp eq i32 %0, 7
   br i1 %tobool, label %if.else, label %if.then
 
@@ -56,12 +56,12 @@ entry:
 ; CHECK-NEXT: [[ELSE_BLOCK]]:
 if.else:                                          ; preds = %entry
   %1 = sub nsw i32 %0, 7
-  %2 = load volatile i32* @_7
-  %3 = load volatile i32* @_7
-  %4 = load volatile i32* @_7
-  %5 = load volatile i32* @_7
-  %6 = load volatile i32* @_7
-  %7 = load volatile i32* @_7
+  %2 = load volatile i32, i32* @_7
+  %3 = load volatile i32, i32* @_7
+  %4 = load volatile i32, i32* @_7
+  %5 = load volatile i32, i32* @_7
+  %6 = load volatile i32, i32* @_7
+  %7 = load volatile i32, i32* @_7
   br label %if.end
  
 ; CHECK: .align 8

@@ -21,7 +21,7 @@ for.cond:                                         ; preds = %for.inc, %entry
 ; CHECK: Loop has no bound
 
 for.body:                                         ; preds = %for.cond
-  %0 = load volatile i32* @_1
+  %0 = load volatile i32, i32* @_1
   br label %for.inc
 
 for.inc:                                          ; preds = %for.body

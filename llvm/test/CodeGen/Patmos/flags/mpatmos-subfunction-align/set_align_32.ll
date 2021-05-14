@@ -37,7 +37,7 @@
 ; ALIGN-NEXT: {{[0-9]*[0|2|4|6|8|a|c|e]4}}:
 define i32 @main()  {
 entry:
-  %0 = load volatile i32* @_7
+  %0 = load volatile i32, i32* @_7
   %tobool = icmp eq i32 %0, 7
   br i1 %tobool, label %if.else, label %if.then
 

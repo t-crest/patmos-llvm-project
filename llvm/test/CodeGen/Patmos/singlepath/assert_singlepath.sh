@@ -9,12 +9,8 @@
 #
 # usage:
 # It takes >= 6 arguments:
-#	1. The path to LLVM's binary folder. E.g. '$t-crest-home/llvm/build/bin'.
-#		May contain a '.'. If so, everything after (and including) the '.' is ignored.
-#		This allows the use of llvm-lit's substition, where 'llc' will give the correct path.
-#		I.e. llvm-lit will substitue 'llc' for '$t-crest-home/llvm/build/bin/./llc' which will work.
-#		The llvm binary folder must be exactly 3 levels below '$t-crest-home', otherwise the script
-#		will fail.
+#	1. The path to an LLVM binary, e.g., LLC.
+#		Doesn't matter which one, as it is only used to get path to the binary file directory.
 #	2. The path to the source program to test.
 #	3. The path to the temporary file available to the test.
 #	4. The path to the _start.ll to link with the test program
@@ -203,7 +199,7 @@ fi
 
 # Takes the path to LLVM's build binaries and removes 
 # everything after (and including) the first '.'
-bin_dir=(${1//./ })
+bin_dir=$(dirname "$1")
 
 # The source file to test
 bitcode="$2"

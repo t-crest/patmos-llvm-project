@@ -1,7 +1,7 @@
 ; RUN: %test_no_runtime_execution
 define i32 @main() {
 entry:
-  %0 = call i32 (i32)* @func(i32 4)
+  %0 = call i32 @func(i32 4)
   
   ; Check correctness
   %correct = icmp eq i32 %0, 19	; (4 * 4) + 3 = 19

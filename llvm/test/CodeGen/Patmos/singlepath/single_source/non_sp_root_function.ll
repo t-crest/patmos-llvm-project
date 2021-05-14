@@ -24,7 +24,7 @@
 
 define i32 @non_root(i32 %x)  {
 entry:
-  %0 = load volatile i32* @_2
+  %0 = load volatile i32, i32* @_2
   %add = add nsw i32 %0, %x
   ret i32 %add
 }

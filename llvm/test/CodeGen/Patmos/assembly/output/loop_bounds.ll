@@ -30,6 +30,6 @@ for.end:                                          ; preds = %for.cond
   ret i32 %x.0
 }
 
-!0 = metadata !{metadata !0, metadata !1}
-!1 = metadata !{metadata !"llvm.loop.bound", i32 0, i32 99}
+!0 = !{!0, !1}
+!1 = !{!"llvm.loop.bound", i32 0, i32 99}
 

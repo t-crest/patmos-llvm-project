@@ -33,7 +33,7 @@ while.cond:                                       ; preds = %if.end, %entry
   br i1 %cmp, label %while.body, label %while.end, !llvm.loop !0
 
 while.body:                                       ; preds = %while.cond
-  %0 = load volatile i32* @_7
+  %0 = load volatile i32, i32* @_7
   %cmp1 = icmp eq i32 %x.addr.0, %0
   br i1 %cmp1, label %while.end, label %if.end
 
@@ -46,5 +46,5 @@ while.end:                                        ; preds = %while.body, %while.
   ret i32 %add
 }
 
-!0 = metadata !{metadata !0, metadata !1}
-!1 = metadata !{metadata !"llvm.loop.bound", i32 0, i32 5}
+!0 = !{!0, !1}
+!1 = !{!"llvm.loop.bound", i32 0, i32 5}

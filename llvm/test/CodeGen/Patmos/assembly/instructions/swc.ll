@@ -1,9 +1,10 @@
 ; RUN: %test_no_runtime_execution
 
 define i32 @main() {
-entry:  
-  %stack_var_1 = alloca i32, i32 2
-  %stack_var_2 = getelementptr inbounds i32* %stack_var_1, i32 1
+entry:    
+  %stack_var = alloca [2 x i32]
+  %stack_var_1 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 0
+  %stack_var_2 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 1
   
   call void asm "
 		swc	[$0]		=	$1	
@@ -13,8 +14,8 @@ entry:
 	(i32* %stack_var_1, i32 24, i32 25)
 	
   ; Extract results
-  %result_1 = load i32* %stack_var_1
-  %result_2 = load i32* %stack_var_2
+  %result_1 = load i32, i32* %stack_var_1
+  %result_2 = load i32, i32* %stack_var_2
   
   ; Check correctness
   %correct_1 = icmp eq i32 %result_1, 24

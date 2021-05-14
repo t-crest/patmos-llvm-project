@@ -26,7 +26,7 @@ entry:
 
 do.body:                                          ; preds = %do.cond, %entry
   %y.0 = phi i32 [ 0, %entry ], [ %add, %do.cond ]
-  %0 = load volatile i32* @_1
+  %0 = load volatile i32, i32* @_1
   %add = add nsw i32 %y.0, %0
   br label %do.cond, !llvm.loop !0
 
@@ -38,5 +38,5 @@ do.end:                                           ; preds = %do.cond
   ret i32 %add
 }
 
-!0 = metadata !{metadata !0, metadata !1}
-!1 = metadata !{metadata !"llvm.loop.bound", i32 1, i32 9}
+!0 = !{!0, !1}
+!1 = !{!"llvm.loop.bound", i32 1, i32 9}
