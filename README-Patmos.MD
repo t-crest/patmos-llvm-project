@@ -25,6 +25,17 @@ Tools:
 - `master`: Primary development branch.
 - `upstream`: Only for tracking the upstream LLVM repository. Should only be used to pull in new versions of LLVM and not to make any changes to them. [See more here](#anch-updating-llvm).
 
+### Cloning
+
+The LLVM project is very large so we can save some time by avoiding cloning the part we don't use for Patmos.
+The following commands with clone only the parts of the Patmos LLVM repository that we actually use:
+
+```
+git clone --filter=blob:none --sparse git@github.com:t-crest/patmos-llvm-project
+cd patmos-llvm-project
+git sparse-checkout add /.github /llvm /clang
+```
+
 ### Build
 
 Ensure all the above reqruirements are met and that the tools are available on the PATH.
