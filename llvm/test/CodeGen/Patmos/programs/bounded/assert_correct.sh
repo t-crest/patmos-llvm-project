@@ -30,7 +30,8 @@
 #		E.g. the argument '"1 2=3 4"' will run the program with input '1 2' and
 #		expect the output '3 4'.
 #
-# Additionally, the script ensures that all runs of the program produce equivalent pasim statistics.
+# Additionally, if the LLC arguments designate single-path code,
+# the script ensures that all runs of the program produce equivalent pasim statistics.
 # This means the same number of instructions (and type of instruction) are fetched 
 # (but not retired/discarded), the same number of cycles are spent in the function, 
 # and the same number of operations are executed. This ensures that the code is singlepath. 
@@ -110,27 +111,28 @@ EndOfPython
 # Argument 3 is the execution arguments (see top of file for description).
 # Tests that the output of the program match the expected output. If not, reports an error.
 # Returns the cleaned statistics.
-execute_and_stat(){
+function execute_and_stat(){
 	# Split the execution argument into input and expected output.
 	
 	# We rename spaces such that they are not recognized as list separators when we split
 	# the input from the expected output
-	placeholder="<!!SPACE!!>"
-	no_space=${2// /$placeholder}
-	split=(${no_space//=/ })
+	local placeholder="<!!SPACE!!>"
+	local no_space=${2// /$placeholder}
+	local split=(${no_space//=/ })
 	
 	#We now reinsert the spaces
-	input=${split[0]//$placeholder/ }
-	expected_out=${split[1]//$placeholder/ }
+	local input=${split[0]//$placeholder/ }
+	local expected_out=${split[1]//$placeholder/ }
 	
 	# The final name of the ELF to execute
-	exec=$1_$input
+	local exec=$1_$input
 	
-	ret_code=0
+	local ret_code=0
 	
 	# Final generation of ELF with added input
 	patmos-ld -nostdlib -static -o $exec $1 --defsym input=$input
 	if [ $? -ne 0 ]; then
+		echo $2
 		echo "Failed to generate executable from '$1' for argument '$input'."
 		return 1
 	fi
@@ -204,8 +206,8 @@ bin_dir=$(dirname "$1")
 # The source file to test
 bitcode="$2"
 
-# The temporary file available to the test
-temp="$3"
+# The object file of the program
+compiled="$3"
 
 # The object file of the start function to be linked with the program
 start_function="$4"
@@ -216,25 +218,28 @@ llc_args="$5"
 # The first execution argument
 exec_arg="$6"
 
-# The object file of the program
-compiled="$temp"
+if [[ $llc_args == *"-mpatmos-singlepath="* ]]; then
+	using_singlepath=1
+else 
+	using_singlepath=0
+fi
 
 # Try to compile the program to rule out compile errors. Throw out the result.
-$bin_dir/llc $bitcode $llc_args -filetype=obj -mpatmos-singlepath=main -o $compiled
+$bin_dir/llc $bitcode $llc_args -filetype=obj -o $compiled
 if [ $? -ne 0 ]; then 
 	echo "Failed to compile '$bitcode'."
 	exit 1
 fi
 
 # Link start function with program
-$bin_dir/llvm-link -nostdlib -B=static $start_function $bitcode -o $compiled
+$bin_dir/llvm-link $start_function $bitcode -o $compiled
 if [ $? -ne 0 ]; then 
 	echo "Failed to link '$bitcode' and '$start_function'."
 	exit 1
 fi
 
 # Compile into object file (not ELF yet)
-$bin_dir/llc $compiled $llc_args -filetype=obj -mpatmos-singlepath=main -o $compiled
+$bin_dir/llc $compiled $llc_args -filetype=obj -o $compiled
 if [ $? -ne 0 ]; then 
 	echo "Failed to compile '$bitcode'."
 	exit 1
@@ -259,16 +264,18 @@ for i in "${@:7}"
 do
 	if [ $ret_code -ne 0 ] ; then
 		# If an error has already been encountered, stop.
-		continue
+		break
 	fi
 	rest_stats=$(execute_and_stat "$compiled" "$i")
 	if [ $? -ne 0 ]; then
 		# There was an error in executing the program or cleaning the stats
 		ret_code=1 
 	fi
-	if ! diff <(echo "$first_stats") <(echo "$rest_stats") ; then
-		echo "The execution of '$compiled' for execution arguments '$exec_arg' and '$i' weren't equivalent."
-		ret_code=1 
+	if [ $using_singlepath -ne 0 ] ; then
+		if ! diff <(echo "$first_stats") <(echo "$rest_stats") ; then
+			echo "The execution of '$compiled' for execution arguments '$exec_arg' and '$i' weren't equivalent."
+			ret_code=1 
+		fi
 	fi
 done
 
