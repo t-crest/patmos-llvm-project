@@ -129,7 +129,6 @@ PatmosTargetLowering::PatmosTargetLowering(const PatmosTargetMachine &tm,
   setOperationAction(ISD::CTTZ , MVT::i32, Expand);
   setOperationAction(ISD::CTLZ , MVT::i32, Expand);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Expand);
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
 
   setOperationAction(ISD::SIGN_EXTEND, MVT::i8,  Expand);
@@ -162,11 +161,6 @@ PatmosTargetLowering::PatmosTargetLowering(const PatmosTargetMachine &tm,
   setOperationAction(ISD::BR_CC,     MVT::i32,   Expand);
   setOperationAction(ISD::BR_CC,     MVT::Other, Expand);
 
-  setOperationAction(ISD::SETGT,  MVT::i32, Expand);
-  setOperationAction(ISD::SETGE,  MVT::i32, Expand);
-  setOperationAction(ISD::SETUGT, MVT::i32, Expand);
-  setOperationAction(ISD::SETUGE, MVT::i32, Expand);
-
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Expand);
 
   // handling of variadic parameters
@@ -180,6 +174,7 @@ PatmosTargetLowering::PatmosTargetLowering(const PatmosTargetMachine &tm,
 
   setOperationAction(ISD::PCMARKER,  MVT::Other, Expand);
   // TODO expand floating point stuff?
+
 }
 
 
