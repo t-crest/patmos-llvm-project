@@ -326,9 +326,9 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   SMLoc ErrorLoc;
   
   // Extract the predicate operands, as 'MatchInstructionImpl' cannot 
-  // handle them. They will be reinstated later.
-  auto &p = Operands[1];
-  auto &flag = Operands[2];
+  // handle them.
+  auto p = std::move(Operands[1]);
+  auto flag = std::move(Operands[2]);
   Operands.erase(std::next(Operands.begin()));
   Operands.erase(std::next(Operands.begin()));
 
