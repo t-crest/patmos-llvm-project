@@ -30,7 +30,6 @@
 
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosSinglePathInfo.h"
-#include "MachineModulePass.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -55,7 +54,7 @@ STATISTIC(NumSPCleared, "Number of functions cleared again");
 
 namespace {
 
-class PatmosSPMark : public MachineModulePass {
+class PatmosSPMark : public MachineFunctionPass {
 private:
   typedef std::deque<MachineFunction*> Worklist;
 
@@ -90,22 +89,21 @@ private:
    * Go through all instructions of the given machine function and find
    * calls that do not call a single-path function.
    * These calls are rewritten with rewriteCall().
-   * Any newly reachable 'sp-maybe' functions are put on the worklist W.
+   * Any newly reachable 'sp-maybe' are then also called.
    */
-  void scanAndRewriteCalls(MachineFunction *MF, Worklist &W);
+  void scanAndRewriteCalls(MachineFunction &MF);
 
   /**
    * Remove all cloned 'sp-maybe' machine functions that are not marked as
    * single-path in PatmosMachineFunctionInfo.
    */
-  void removeUncalledSPFunctions(const Module &M);
+  void removeUncalledSPFunctions(MachineFunction &MF);
 
 public:
   static char ID; // Pass identification, replacement for typeid
 
   PatmosSPMark(PatmosTargetMachine &tm)
-    : MachineModulePass(ID), TM(tm) {
-      MMI = &getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
+    : MachineFunctionPass(ID), TM(tm) {
   }
 
   /// getPassName - Return the pass' name.
@@ -113,63 +111,40 @@ public:
     return "Patmos Single-Path Mark (machine code)";
   }
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineModuleInfoWrapperPass>();
-    AU.setPreservesAll();
-    MachineModulePass::getAnalysisUsage(AU);
-  }
-
   bool doInitialization(Module &M) override {
     return false;
   }
 
-  bool doFinalization(Module &M) override {
-    return false;
-  }
-
-  bool runOnMachineModule(const Module &M) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 };
 
 } // end anonymous namespace
 
 char PatmosSPMark::ID = 0;
 
-ModulePass *llvm::createPatmosSPMarkPass(PatmosTargetMachine &tm) {
+MachineFunctionPass *llvm::createPatmosSPMarkPass(PatmosTargetMachine &tm) {
   return new PatmosSPMark(tm);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 
-bool PatmosSPMark::runOnMachineModule(const Module &M) {
+bool PatmosSPMark::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG( dbgs() <<
-         "[Single-Path] Mark functions reachable from single-path roots\n");
-  assert(MMI);
+         "[Single-Path] Mark function reachable from single-path roots\n");
 
-  Worklist W;
-  // initialize the worklist with machine functions that have either
-  // sp-root or sp-reachable function attribute
-  for(Module::const_iterator F(M.begin()), FE(M.end()); F != FE; ++F) {
-    if (F->hasFnAttribute("sp-root") || F->hasFnAttribute("sp-reachable")) {
-      // get the machine-level function
-      MachineFunction *MF = MMI->getMachineFunction(*F);
-      assert( MF );
-      PatmosMachineFunctionInfo *PMFI =
-        MF->getInfo<PatmosMachineFunctionInfo>();
-      PMFI->setSinglePath();
-      NumSPTotal++; // bump STATISTIC
-      W.push_back(MF);
-    }
+  MMI = &getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
+
+  if (MF.getFunction().hasFnAttribute("sp-root") || MF.getFunction().hasFnAttribute("sp-reachable")) {
+    PatmosMachineFunctionInfo *PMFI =
+      MF.getInfo<PatmosMachineFunctionInfo>();
+    PMFI->setSinglePath();
+    NumSPTotal++; // bump STATISTIC
+
+    scanAndRewriteCalls(MF);
   }
 
-  // process worklist
-  while (!W.empty()) {
-    MachineFunction *MF = W.front();
-    W.pop_front();
-    scanAndRewriteCalls(MF, W);
-  }
-
-  removeUncalledSPFunctions(M);
+  removeUncalledSPFunctions(MF);
 
   // We either have rewritten calls or removed superfluous functions.
   return true;
@@ -227,9 +202,9 @@ PatmosSPMark::getCallTargetMFOrAbort(MachineBasicBlock::iterator MI, MachineFunc
   return MF;
 }
 
-void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
-  LLVM_DEBUG(dbgs() << "In function '" << MF->getName() << "':\n");
-  for (MachineFunction::iterator MBB = MF->begin(), MBBE = MF->end();
+void PatmosSPMark::scanAndRewriteCalls(MachineFunction &MF) {
+  LLVM_DEBUG(dbgs() << "In function '" << MF.getName() << "':\n");
+  for (MachineFunction::iterator MBB = MF.begin(), MBBE = MF.end();
                                  MBB != MBBE; ++MBB) {
     for( MachineBasicBlock::iterator MI = MBB->begin(),
                                      ME = MBB->getFirstTerminator();
@@ -256,7 +231,7 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
           if (!PMFI->isSinglePath()) {
             PMFI->setSinglePath();
             // add the new single-path function to the worklist
-            W.push_back(MF);
+            scanAndRewriteCalls(*MF);
 
             NumSPTotal++; // bump STATISTIC
             NumSPMaybe++; // bump STATISTIC
@@ -295,31 +270,26 @@ void PatmosSPMark::rewriteCall(MachineInstr *MI) {
 }
 
 
-void PatmosSPMark::removeUncalledSPFunctions(const Module &M) {
-  for(Module::const_iterator F(M.begin()), FE(M.end()); F != FE; ++F) {
-    if (F->hasFnAttribute("sp-maybe")) {
-      // get the machine-level function
-      MachineFunction *MF = MMI->getMachineFunction(*F);
-      assert( MF );
-      PatmosMachineFunctionInfo *PMFI =
-        MF->getInfo<PatmosMachineFunctionInfo>();
+void PatmosSPMark::removeUncalledSPFunctions(MachineFunction &MF) {
+  if (MF.getFunction().hasFnAttribute("sp-maybe")) {
+    PatmosMachineFunctionInfo *PMFI =
+      MF.getInfo<PatmosMachineFunctionInfo>();
 
-      if (!PMFI->isSinglePath()) {
-        LLVM_DEBUG(dbgs() << "  Remove function: " << F->getName() << "\n");
-        // delete all MBBs
-        while (MF->begin() != MF->end()) {
-          MF->begin()->eraseFromParent();
-        }
-        // insert a new single MBB with a single return instruction
-        MachineBasicBlock *EmptyMBB = MF->CreateMachineBasicBlock();
-        MF->push_back(EmptyMBB);
+    if (!PMFI->isSinglePath()) {
+      LLVM_DEBUG(dbgs() << "  Remove function: " << MF.getName() << "\n");
+      // delete all MBBs
+      while (MF.begin() != MF.end()) {
+        MF.begin()->eraseFromParent();
+      }
+      // insert a new single MBB with a single return instruction
+      MachineBasicBlock *EmptyMBB = MF.CreateMachineBasicBlock();
+      MF.push_back(EmptyMBB);
 
-        DebugLoc DL;
-        AddDefaultPred(BuildMI(*EmptyMBB, EmptyMBB->end(), DL,
-            TM.getInstrInfo()->get(Patmos::RET)));
-        NumSPCleared++; // bump STATISTIC
-      };
-    }
+      DebugLoc DL;
+      AddDefaultPred(BuildMI(*EmptyMBB, EmptyMBB->end(), DL,
+          TM.getInstrInfo()->get(Patmos::RET)));
+      NumSPCleared++; // bump STATISTIC
+    };
   }
 }
 

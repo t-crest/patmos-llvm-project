@@ -23,6 +23,7 @@
 namespace llvm {
   class PatmosTargetMachine;
   class ModulePass;
+  class MachineFunctionPass;
   class formatted_raw_ostream;
   class PassRegistry;
 
@@ -33,7 +34,7 @@ namespace llvm {
 
   FunctionPass *createPatmosISelDag(PatmosTargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
   ModulePass   *createPatmosSPClonePass();
-  ModulePass   *createPatmosSPMarkPass(PatmosTargetMachine &tm);
+  MachineFunctionPass *createPatmosSPMarkPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosSinglePathInfoPass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPPreparePass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPBundlingPass(const PatmosTargetMachine &tm);
@@ -43,16 +44,7 @@ namespace llvm {
                                                 bool ForceDisable);
   FunctionPass *createPatmosFunctionSplitterPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosDelaySlotKillerPass(PatmosTargetMachine &tm);
-  FunctionPass *createPatmosExportPass(PatmosTargetMachine &TM,
-                                       std::string& Filename,
-                                       std::string& BitcodeFilename);
   FunctionPass *createPatmosEnsureAlignmentPass(PatmosTargetMachine &tm);
-
-  ModulePass *createPatmosModuleExportPass(PatmosTargetMachine &TM,
-                                           std::string& Filename,
-                                           std::string& BitcodeFilename,
-                                           ArrayRef<std::string> Roots,
-					   bool SerializeAll);
   ModulePass *createPatmosCallGraphBuilder();
   ModulePass *createPatmosStackCacheAnalysis(const PatmosTargetMachine &tm);
   ModulePass *createPatmosStackCacheAnalysisInfo(const PatmosTargetMachine &tm);
