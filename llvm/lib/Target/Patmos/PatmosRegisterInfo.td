@@ -24,23 +24,9 @@ class PatmosSPR<bits<4> num, string n> : PatmosReg<n> {
   field bits<4> Num = num;
 }
 
-//TODO define a subreg for the predicate register file in SZ
-//     P# then are subregs of this subreg
-/*
-class PatmosSPRWithSubregs<bits<4> num, string n, list<PatmosReg> subregs>
-  : RegisterWithSubRegs<n, subregs> {
- field bits<4> Num = num;
- let Namespace = "Patmos";
-}
-*/
-
-
 class PatmosPRED<bits<3> num, string n> : PatmosReg<n> {
   field bits<3> Num = num;
 }
-
-
-
 
 //===----------------------------------------------------------------------===//
 //  Registers
@@ -87,9 +73,6 @@ def P4  : PatmosPRED<4, "p4">, DwarfRegNum<[54]>;
 def P5  : PatmosPRED<5, "p5">, DwarfRegNum<[55]>;
 def P6  : PatmosPRED<6, "p6">, DwarfRegNum<[56]>;
 def P7  : PatmosPRED<7, "p7">, DwarfRegNum<[57]>;
-
-//def PRF : PatmosPRF<"pred", [P0, P1, P2, P3, P4, P5, P6, P7]>;
-//def SZ  : PatmosSPRWithSubRegs< 0,  "sz", [PRF]>;
 
 let Aliases = [P0, P1, P2, P3, P4, P5, P6, P7] in
 def S0  : PatmosSPR< 0,  "s0">, DwarfRegNum<[0]>; // zero

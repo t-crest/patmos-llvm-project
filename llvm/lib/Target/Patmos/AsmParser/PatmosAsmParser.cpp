@@ -59,8 +59,7 @@ public:
     }
   }
 
-  bool ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands,
-                   bool &HasPrefix, StringRef PrevToken);
+  bool ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands, StringRef PrevToken);
 
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
                                 OperandVector &Operands) override;
@@ -81,6 +80,9 @@ public:
 
 private:
   bool ParseOperand(OperandVector &Operands, unsigned OpNo);
+
+  /// Parses the instruction guard, e.g. '(!$p1)', or produces the default instead.
+  bool ParseGuard(SMLoc NameLoc, OperandVector &Operands);
 
   bool ParseRegister(OperandVector &Operands, bool EmitError = true);
 
@@ -324,13 +326,6 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 			bool MatchingInlineAsm) {
   MCInst Inst;
   SMLoc ErrorLoc;
-  
-  // Extract the predicate operands, as 'MatchInstructionImpl' cannot 
-  // handle them.
-  auto p = std::move(Operands[1]);
-  auto flag = std::move(Operands[2]);
-  Operands.erase(std::next(Operands.begin()));
-  Operands.erase(std::next(Operands.begin()));
 
   switch (MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm, 0))
   {
@@ -343,33 +338,6 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     // i.e. after the output operands (also called definitions)
     auto insert_pred_at = MID.getNumDefs();
     auto insert_pred_flag_at = insert_pred_at + 1;
-
-    // Insert the predicate register
-    Inst.insert(
-      std::next(Inst.begin(), insert_pred_at),
-      MCOperand::createReg(p->getReg())
-    );
-
-    // Insert the predicate flag.
-    int64_t flag_value;
-    static_cast<PatmosOperand*>(&*flag)->getImm()->evaluateAsAbsolute(flag_value);
-    // For some instructions a stray immediate operand is present at this point
-    // that should not be there. It is a remnant of a '=' being represented by it
-    // before the call to 'MatchInstructionImpl'.
-    // We overwrite this immediate value with the flag, if its there.
-    // Otherwise we make a new immediate for the flag.
-    //
-    // Note:
-    // I don't know why the immediate is there for instruction with '=', 
-    // it probably has something to do
-    // with how the tablegen is implemented (which dictates how 'MatchInstructionImpl' 
-    // works). If this is fixed in the tablegen, such that the immediate is no longer
-    // there at this point, a new immediate should always be created for the flag.	
-    // For now, the if statement below is a workaround.
-    if ( !std::next(Inst.begin(),insert_pred_flag_at)->isImm() || Inst.getNumOperands()<3 ) {
-      Inst.insert(std::next(Inst.begin(),insert_pred_flag_at), MCOperand::createImm(0));
-    }
-    std::next(Inst.begin(),insert_pred_flag_at)->setImm(flag_value);
 
     // Add bundle marker
     Inst.addOperand(MCOperand::createImm(InBundle));
@@ -705,6 +673,34 @@ ParseOperand(OperandVector &Operands, unsigned OpNo)  {
   return ParseImmediate(Operands);
 }
 
+bool PatmosAsmParser::ParseGuard(SMLoc NameLoc, OperandVector &Operands) {
+  MCAsmLexer &Lexer = getLexer();
+
+  if (Lexer.is(AsmToken::LParen)) {
+    // If a guard is given, parse it
+    Lexer.Lex();
+
+    if (ParsePredicateOperand(Operands)) {
+      return true;
+    }
+
+    if (Lexer.isNot(AsmToken::RParen)) {
+      return true;
+    }
+    Lexer.Lex();
+
+  } else {
+    // If no guard is given, choose the default.
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateReg(Patmos::P0, NameLoc, NameLoc)));
+    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
+        PatmosOperand::CreateFlag(false, NameLoc, NameLoc,
+                                                 getParser().getContext())));
+  }
+
+  return false;
+}
+
 bool PatmosAsmParser::ParseImmediate(OperandVector &Operands) {
   MCAsmLexer &Lexer = getLexer();
   SMLoc S = Lexer.getLoc();
@@ -745,8 +741,7 @@ bool PatmosAsmParser::ParseToken(OperandVector &Operands,
 
 
 bool PatmosAsmParser::
-ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands,
-    bool &HasGuard, StringRef PrevToken)
+ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands, StringRef PrevToken)
 {
   MCAsmLexer &Lexer = getLexer();
 
@@ -779,25 +774,6 @@ ParsePrefix(SMLoc &PrefixLoc, OperandVector &Operands,
     }
   }
 
-  // If it starts with '(', assume this is a guard, and try to parse it, otherwise skip
-  if (PrevToken != "(") {
-    if (Lexer.isNot(AsmToken::LParen)) {
-      return false;
-    }
-    Lexer.Lex();
-  }
-
-  HasGuard = true;
-
-  if (ParsePredicateOperand(Operands)) {
-    return true;
-  }
-
-  if (Lexer.isNot(AsmToken::RParen)) {
-    return true;
-  }
-  Lexer.Lex();
-
   return false;
 }
 
@@ -805,11 +781,10 @@ bool PatmosAsmParser::
 ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
                  OperandVector &Operands)
 {
-  bool HasGuard = false;
-  ParsePrefix(NameLoc, Operands, HasGuard, Name);
+  ParsePrefix(NameLoc, Operands, Name);
 
   MCAsmLexer &Lexer = getLexer();
-  if (Name == "{" || Name == "(") {
+  if (Name == "{") {
     // The prefix has some tokens. Therefore, 'Name' doesn't contain
     // the mnemonic. We need it to do so.	
     if (Lexer.isNot(AsmToken::Identifier) && Lexer.isNot(AsmToken::String)) {
@@ -836,16 +811,7 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
         std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateToken(Format, NameLoc)));
   }
 
-  // If this instruction has no guard, we just add a default one.
-  // We do not yet know if the instruction actually requires one, so we might need to undo this
-  // if we do not find a match (if we actually have instructions that have no guard).
-  if (!HasGuard) {
-    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
-        PatmosOperand::CreateReg(Patmos::P0, NameLoc, NameLoc)));
-    Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(
-        PatmosOperand::CreateFlag(false, NameLoc, NameLoc,
-                                                 getParser().getContext())));
-  }
+  ParseGuard(NameLoc, Operands);
 
   unsigned OpNo = 0;
 

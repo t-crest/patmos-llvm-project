@@ -43,9 +43,11 @@ namespace llvm {
     void printInstPrefix(const MCInst *MI, raw_ostream &O);
 
     void printOperand(const MCInst *MI, unsigned OpNo,
-                      raw_ostream &O, const char *Modifier = 0);
+                      raw_ostream &O);
     void printPredicateOperand(const MCInst *MI, unsigned OpNo,
-                               raw_ostream &O, const char *Modifier = 0);
+                               raw_ostream &O);
+    void printGuardOperand(const MCInst *MI, unsigned OpNo,
+                               raw_ostream &O);
     void printPCRelTargetOperand(const MCInst *MI, unsigned OpNo,
                                     raw_ostream &O);
 

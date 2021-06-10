@@ -35,9 +35,8 @@ def FCFLrt  : Format<15>; // Program flow control with registers
 //  Describe Patmos instructions format here
 //
 
-
 // Generic Patmos Format
-class PatmosInstBase<dag outs, dag ins, // SizeVal sz,
+class PatmosInstBase<dag outs, dag ins,
                  list<dag> pattern, Format form, InstrItinClass itin>
       : Instruction
 {
@@ -80,16 +79,15 @@ class PatmosInst<dag outs, dag ins,
                  string op, string asmstr, list<dag> pattern, Format form, InstrItinClass itin>
       : PatmosInstBase<outs, ins, pattern, form, itin>
 {
-  // We ignore the predicate when printing, as it is output before the mnemonic
-  let AsmString   = op # "\t" # asmstr;
-  bits<4> p;
-  let Inst{30-27} = p;
+  bits<4> g; // Instruction guard
+  let Inst{30-27} = g;
+  let AsmString   = op # "\t\t" # "$g" # "\t" # asmstr;
 
   let isPredicable = 1; // we have a fully predicated instruction set
 }
 
 // Generic instruction, not predicated (mainly for pseudo instructions)
-class PatmosInstNoP<dag outs, dag ins, // SizeVal sz,
+class PatmosInstNoP<dag outs, dag ins,
                  string op, string asmstr, list<dag> pattern, Format form, InstrItinClass itin>
       : PatmosInstBase<outs, ins, pattern, form, itin>
 {
@@ -162,7 +160,7 @@ class ALUl<bits<4> func,
   let ImmSigned = 1;
 
   let Inst{63} = 1;
-  let Inst{62-59} = p;
+  let Inst{62-59} = g;
   let Inst{58-54} = 0b11111;
   let Inst{53-49} = rd;
   let Inst{48-44} = rs1;
@@ -170,7 +168,6 @@ class ALUl<bits<4> func,
   let Inst{38-36} = 0b000;
   let Inst{35-32} = func;
   let Inst{31-0}  = imm;
-
 }
 
 

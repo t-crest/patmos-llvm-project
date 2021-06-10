@@ -2,12 +2,12 @@
 define i32 @main() {
 entry:
   %0 = call { i32, i32 } asm sideeffect "
-			mov		$$p1	=	$2
-			mov		$$p2	=	$3
-	( $$p1)	li		$0		=	1		# We use predicate 'li' to extract the value
-	(!$$p1)	li		$0		=	0		# of a predicate register, to avoid using
-	( $$p2)	li		$1		=	1		# 'bcopy', which isn't currently supported 
-	(!$$p2)	li		$1		=	0		# by inline assembly
+		mov				$$p1	=	$2
+		mov				$$p2	=	$3
+		li		( $$p1)	$0		=	1		# We use predicate 'li' to extract the value
+		li		(!$$p1)	$0		=	0		# of a predicate register, to avoid using
+		li		( $$p2)	$1		=	1		# 'bcopy', which isn't currently supported 
+		li		(!$$p2)	$1		=	0		# by inline assembly
 	", "=r,=r,r,r,~{p1},~{p2}"
 	(i32 0, i32 8)
   

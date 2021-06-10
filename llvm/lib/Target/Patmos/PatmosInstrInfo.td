@@ -70,25 +70,28 @@ def brjt          : SDNode<"ISD::BR_JT", SDTBrjt,  [SDNPHasChain]>;
 // Patmos Operand Definitions.
 //===----------------------------------------------------------------------===//
 
-//def RegisterOperandClass : AsmOperandClass {
-//  let Name = "Register";
-//  let ParserMethod = "";
-//}
-
-// Patmos default predicate operand.
+// Patmos instruction guard
 // actually this is a pair of MachineOperands, where
 // the first is the predicate register
 // and the second is the inversion flag
-def pred : PredicateOperand<i1, (ops PRegs:$preg, i1imm:$neg),
+def guard : PredicateOperand<i1, (ops PRegs:$preg, i1imm:$neg),
                                      (ops (i1 zero_reg), (i1 0))> {
-  let PrintMethod = "printPredicateOperand";
+  let PrintMethod = "printGuardOperand";
   let EncoderMethod = "getPredOperandEncoding";
   let DecoderMethod = "DecodePredRegisterClass";
 
 }
 
+// Patmos setable guard
+// like guard but no default values and used for non-guard predicates
+def guardset : PredicateOperand<i1, (ops PRegs:$preg, i1imm:$neg), (ops )> {
+  let PrintMethod = "printGuardOperand";
+  let EncoderMethod = "getPredOperandEncoding";
+  let DecoderMethod = "DecodePredRegisterClass";
+}
+
 // Patmos setable predicate operand
-// like pred but no default values
+// For non-guard predicates
 def predset : PredicateOperand<i1, (ops PRegs:$preg, i1imm:$neg), (ops )> {
   let PrintMethod = "printPredicateOperand";
   let EncoderMethod = "getPredOperandEncoding";
@@ -314,34 +317,34 @@ let isTerminator=1, isBranch=1, hasDelaySlot=1, ImmSigned=1 in {
 
   // unconditional
   let isBarrier=1, isCodeGenOnly=1, Defs=[RTR] in
-  def BRu : CFLi<0b01, 0b1, (outs), (ins pred:$p, pcreltarget:$target),
+  def BRu : CFLi<0b01, 0b1, (outs), (ins guard:$g, pcreltarget:$target),
                  "br", "$target", [(br bb:$target)]>;
 
   // conditional
   let isBarrier=0, Defs=[RTR] in
-  def BR  : CFLi<0b01, 0b1, (outs), (ins predset:$p, pcreltarget:$target),
-                 "br", "$target", [(brcond predsel:$p, bb:$target)]>;
+  def BR  : CFLi<0b01, 0b1, (outs), (ins guardset:$g, pcreltarget:$target),
+                 "br", "$target", [(brcond predsel:$g, bb:$target)]>;
 
   // indirect-unconditional
   let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1 in
-  def BRRu: CFLrs<0b01, 0b1, (outs), (ins pred:$p, RRegs:$rs),
+  def BRRu: CFLrs<0b01, 0b1, (outs), (ins guard:$g, RRegs:$rs),
                   "br", "$rs", [(brind RRegs:$rs)]>;
 
   // indirect-conditional
   let isIndirectBranch=1, isBarrier=0, hasSideEffects = 0 in
-  def BRR : CFLrs<0b01, 0b1, (outs), (ins pred:$p, RRegs:$rs),
+  def BRR : CFLrs<0b01, 0b1, (outs), (ins guard:$g, RRegs:$rs),
                   "br", "$rs", []>;
 
   // jumptable-unconditional
   let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1,
       hasSideEffects = 0 in
-  def BRTu: CFLrs<0b01, 0b1, (outs), (ins pred:$p, RRegs:$rs, jtpat:$jtidx),
+  def BRTu: CFLrs<0b01, 0b1, (outs), (ins guard:$g, RRegs:$rs, jtpat:$jtidx),
                   "br", "$rs", []>;
 
   // jumptable-conditional
   let isIndirectBranch=1, isBarrier=0, isCodeGenOnly=1,
       hasSideEffects = 0 in
-  def BRT : CFLrs<0b01, 0b1, (outs), (ins pred:$p, RRegs:$rs, jtpat:$jtidx),
+  def BRT : CFLrs<0b01, 0b1, (outs), (ins guard:$g, RRegs:$rs, jtpat:$jtidx),
                   "br", "$rs", []>;
 
 
@@ -350,32 +353,32 @@ let isTerminator=1, isBranch=1, hasDelaySlot=1, ImmSigned=1 in {
   let hasSideEffects = 0, mayStall = 1 in { // due to lacking pattern
     // unconditional
     let isBarrier=1, isCodeGenOnly=1 in
-    def BRCFu : CFLi<0b10, 0b1, (outs), (ins pred:$p, uimm22s2:$target),
+    def BRCFu : CFLi<0b10, 0b1, (outs), (ins guard:$g, uimm22s2:$target),
                      "brcf", "$target", []>;
 
     // conditional
     let isBarrier=0 in
-    def BRCF  : CFLi<0b10, 0b1, (outs), (ins predset:$p, uimm22s2:$target),
+    def BRCF  : CFLi<0b10, 0b1, (outs), (ins guardset:$g, uimm22s2:$target),
                      "brcf", "$target", []>;
 
     // indirect-unconditional
     let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFRu: CFLrt<0b10, 0b1, (outs), (ins pred:$p, RRegs:$rs1),
+    def BRCFRu: CFLrt<0b10, 0b1, (outs), (ins guard:$g, RRegs:$rs1),
                       "brcf", "$rs1", []>;
 
     // indirect-conditional
     let isIndirectBranch=1, isBarrier=0, rs2 = 0 in
-    def BRCFR : CFLrt<0b10, 0b1, (outs), (ins pred:$p, RRegs:$rs1),
+    def BRCFR : CFLrt<0b10, 0b1, (outs), (ins guard:$g, RRegs:$rs1),
                       "brcf", "$rs1", []>;
 
     // jumptable-unconditional
     let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFTu: CFLrt<0b10, 0b1, (outs), (ins pred:$p, RRegs:$rs1, jtpat:$jtidx),
+    def BRCFTu: CFLrt<0b10, 0b1, (outs), (ins guard:$g, RRegs:$rs1, jtpat:$jtidx),
                       "brcf", "$rs1", []>;
 
     // jumptable-conditional
     let isIndirectBranch=1, isBarrier=0, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFT : CFLrt<0b10, 0b1, (outs), (ins pred:$p, RRegs:$rs1, jtpat:$jtidx),
+    def BRCFT : CFLrt<0b10, 0b1, (outs), (ins guard:$g, RRegs:$rs1, jtpat:$jtidx),
                       "brcf", "$rs1", []>;
   }
 }
@@ -389,65 +392,65 @@ let isTerminator=1, isBranch=1, hasDelaySlot=0, ImmSigned=1 in {
 
   // unconditional
   let isBarrier=1, isCodeGenOnly=1, Defs=[RTR] in
-  def BRNDu : CFLi<0b01, 0b0, (outs), (ins pred:$p, pcreltarget:$target),
+  def BRNDu : CFLi<0b01, 0b0, (outs), (ins guard:$g, pcreltarget:$target),
                  "brnd", "$target", [(br bb:$target)]>;
 
   // conditional
   let isBarrier=0, Defs=[RTR] in
-  def BRND  : CFLi<0b01, 0b0, (outs), (ins predset:$p, pcreltarget:$target),
-                 "brnd", "$target", [(brcond predsel:$p, bb:$target)]>;
+  def BRND  : CFLi<0b01, 0b0, (outs), (ins guardset:$g, pcreltarget:$target),
+                 "brnd", "$target", [(brcond predsel:$g, bb:$target)]>;
 
   // indirect-unconditional
   let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1 in
-  def BRRNDu: CFLrs<0b01, 0b0, (outs), (ins pred:$p, RRegs:$rs),
+  def BRRNDu: CFLrs<0b01, 0b0, (outs), (ins guard:$g, RRegs:$rs),
                      "brnd", "$rs", [(brind RRegs:$rs)]>;
 
   // indirect-conditional
   let isIndirectBranch=1, isBarrier=0, hasSideEffects = 0 in
-  def BRRND : CFLrs<0b01, 0b0, (outs), (ins pred:$p, RRegs:$rs),
+  def BRRND : CFLrs<0b01, 0b0, (outs), (ins guard:$g, RRegs:$rs),
                    "brnd", "$rs", []>;
 
   // jumptable-unconditional
   let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1,
       hasSideEffects = 0 in
-  def BRTNDu: CFLrs<0b01, 0b0, (outs), (ins pred:$p, RRegs:$rs, jtpat:$jtidx),
+  def BRTNDu: CFLrs<0b01, 0b0, (outs), (ins guard:$g, RRegs:$rs, jtpat:$jtidx),
                      "brnd", "$rs", []>;
 
   // jumptable-conditional
   let isIndirectBranch=1, isBarrier=0, isCodeGenOnly=1,
       hasSideEffects = 0 in
-  def BRTND : CFLrs<0b01, 0b0, (outs), (ins pred:$p, RRegs:$rs, jtpat:$jtidx),
+  def BRTND : CFLrs<0b01, 0b0, (outs), (ins guard:$g, RRegs:$rs, jtpat:$jtidx),
                    "brnd", "$rs", []>;
 
   let hasSideEffects = 0, mayStall = 1 in { // due to lacking pattern
     // unconditional
     let isBarrier=1, isCodeGenOnly=1 in
-    def BRCFNDu : CFLi<0b10, 0b0, (outs), (ins pred:$p, uimm22s2:$target),
+    def BRCFNDu : CFLi<0b10, 0b0, (outs), (ins guard:$g, uimm22s2:$target),
                        "brcfnd", "$target", []>;
 
     // conditional
     let isBarrier=0 in
-    def BRCFND  : CFLi<0b10, 0b0, (outs), (ins predset:$p, uimm22s2:$target),
+    def BRCFND  : CFLi<0b10, 0b0, (outs), (ins guardset:$g, uimm22s2:$target),
                        "brcfnd", "$target", []>;
 
     // indirect-unconditional
     let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFRNDu: CFLrt<0b10, 0b0, (outs), (ins pred:$p, RRegs:$rs1),
+    def BRCFRNDu: CFLrt<0b10, 0b0, (outs), (ins guard:$g, RRegs:$rs1),
                          "brcfnd", "$rs1", []>;
 
     // indirect-conditional
     let isIndirectBranch=1, isBarrier=0, rs2 = 0 in
-    def BRCFRND : CFLrt<0b10, 0b0, (outs), (ins pred:$p, RRegs:$rs1),
+    def BRCFRND : CFLrt<0b10, 0b0, (outs), (ins guard:$g, RRegs:$rs1),
                        "brcfnd", "$rs1", []>;
 
     // jumptable-unconditional
     let isIndirectBranch=1, isBarrier=1, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFTNDu: CFLrt<0b10, 0b0, (outs), (ins pred:$p, RRegs:$rs1, jtpat:$jtidx),
+    def BRCFTNDu: CFLrt<0b10, 0b0, (outs), (ins guard:$g, RRegs:$rs1, jtpat:$jtidx),
                          "brcfnd", "$rs1", []>;
 
     // jumptable-conditional
     let isIndirectBranch=1, isBarrier=0, isCodeGenOnly=1, rs2 = 0 in
-    def BRCFTND : CFLrt<0b10, 0b0, (outs), (ins pred:$p, RRegs:$rs1, jtpat:$jtidx),
+    def BRCFTND : CFLrt<0b10, 0b0, (outs), (ins guard:$g, RRegs:$rs1, jtpat:$jtidx),
                        "brcfnd", "$rs1", []>;
   }
 }
@@ -464,10 +467,10 @@ let isCall=1, hasDelaySlot=1, mayStall=1,
 
   // NOTE: This has to be kept consistent with HasPCRELImmediate in PatmosInstrInfo.h
 
-  def CALL : CFLi<0b00, 0b1, (outs), (ins pred:$p, uimm22s2:$target),
+  def CALL : CFLi<0b00, 0b1, (outs), (ins guard:$g, uimm22s2:$target),
                   "call", "$target", [(PatmosCall uimm22s2:$target)]>;
 
-  def CALLR: CFLrs<0b00, 0b1, (outs), (ins pred:$p, RRegs:$rs),
+  def CALLR: CFLrs<0b00, 0b1, (outs), (ins guard:$g, RRegs:$rs),
                    "call", "$rs", [(PatmosCall RRegs:$rs)]>;
 }
 
@@ -479,30 +482,30 @@ let isCall=1, hasDelaySlot=0, mayStall=1,
 
   // NOTE: This has to be kept consistent with HasPCRELImmediate in PatmosInstrInfo.h
 
-  def CALLND : CFLi<0b00, 0b0, (outs), (ins pred:$p, uimm22s2:$target),
+  def CALLND : CFLi<0b00, 0b0, (outs), (ins guard:$g, uimm22s2:$target),
                   "callnd", "$target", [(PatmosCall uimm22s2:$target)]>;
 
-  def CALLRND : CFLrs<0b00, 0b0, (outs), (ins pred:$p, RRegs:$rs),
+  def CALLRND : CFLrs<0b00, 0b0, (outs), (ins guard:$g, RRegs:$rs),
                      "callnd", "$rs", [(PatmosCall RRegs:$rs)]>;
 }
 
 let isReturn=1, isTerminator=1, isBarrier=1, hasDelaySlot=1, mayStall=1,
     hasExtraSrcRegAllocReq = 1, hasSideEffects = 0 in { // due to missing pattern
   let  Uses = [SRB, SRO] in
-    def RET  : CFLri<0b00, 0b1, (outs), (ins pred:$p),
+    def RET  : CFLri<0b00, 0b1, (outs), (ins guard:$g),
                      "ret", "", []>;
   let  Uses = [SXB, SXO] in
-    def XRET : CFLri<0b01, 0b1, (outs), (ins pred:$p),
+    def XRET : CFLri<0b01, 0b1, (outs), (ins guard:$g),
                      "xret", "", []>;
 }
 
 let isReturn=1, isTerminator=1, isBarrier=1, hasDelaySlot=0, mayStall=1,
     hasSideEffects = 0 in { // due to missing pattern
   let  Uses = [SRB, SRO] in
-    def RETND  : CFLri<0b00, 0b0, (outs), (ins pred:$p),
+    def RETND  : CFLri<0b00, 0b0, (outs), (ins guard:$g),
                       "retnd", "", []>;
   let  Uses = [SXB, SXO] in
-    def XRETND : CFLri<0b01, 0b0, (outs), (ins pred:$p),
+    def XRETND : CFLri<0b01, 0b0, (outs), (ins guard:$g),
                        "xretnd", "", []>;
 }
 
@@ -511,7 +514,7 @@ let isCall=1, hasDelaySlot=0,
   Defs = [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16,
           R17, R18, R19, R20,
           SL, SH, SRB, SRO, SXB, SXO, S11, S12, S13, S14, S15] in {
-  def TRAP : CFLi<0b11, 0b0, (outs), (ins pred:$p, uimm5:$target),
+  def TRAP : CFLi<0b11, 0b0, (outs), (ins guard:$g, uimm5:$target),
   	  	   	 	  "trap", "$target", []>;
 }	
 
@@ -520,12 +523,12 @@ let isCall=1, hasDelaySlot=0,
 //===----------------------------------------------------------------------===//
 
 let Defs = [SS, ST], Uses = [SS, ST] in {
-  def SRESi  : STCi<0b00, (outs), (ins pred:$p, uimm18s2:$imm), "sres",   "$imm", []>;
-  def SENSi  : STCi<0b01, (outs), (ins pred:$p, uimm18s2:$imm), "sens",   "$imm", []>;
-  def SFREEi : STCi<0b10, (outs), (ins pred:$p, uimm18s2:$imm), "sfree",  "$imm", []>;
-  def SSPILLi: STCi<0b11, (outs), (ins pred:$p, uimm18s2:$imm), "sspill", "$imm", []>;
-  def SENSr  : STCr<0b01, (outs), (ins pred:$p, RRegs:$rs), "sens",   "$rs", []>;
-  def SSPILLr: STCr<0b11, (outs), (ins pred:$p, RRegs:$rs), "sspill", "$rs", []>;
+  def SRESi  : STCi<0b00, (outs), (ins guard:$g, uimm18s2:$imm), "sres",   "$imm", []>;
+  def SENSi  : STCi<0b01, (outs), (ins guard:$g, uimm18s2:$imm), "sens",   "$imm", []>;
+  def SFREEi : STCi<0b10, (outs), (ins guard:$g, uimm18s2:$imm), "sfree",  "$imm", []>;
+  def SSPILLi: STCi<0b11, (outs), (ins guard:$g, uimm18s2:$imm), "sspill", "$imm", []>;
+  def SENSr  : STCr<0b01, (outs), (ins guard:$g, RRegs:$rs), "sens",   "$rs", []>;
+  def SSPILLr: STCr<0b11, (outs), (ins guard:$g, RRegs:$rs), "sspill", "$rs", []>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -535,34 +538,34 @@ let Defs = [SS, ST], Uses = [SS, ST] in {
 
 // no short immediates
 multiclass BinArithLR<bits<4> func, string asmop, SDNode opnode, bit isrCommutable=0> {
-  def l : ALUl <func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, i32imm:$imm),
+  def l : ALUl <func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, i32imm:$imm),
                 asmop, "$rd = $rs1, $imm",
                 [(set RRegs:$rd, (opnode RRegs:$rs1, (i32 imm:$imm)))]>;
 
   let isCommutable = isrCommutable in
-  def r : ALUr <func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, RRegs:$rs2),
+  def r : ALUr <func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, RRegs:$rs2),
                 asmop, "$rd = $rs1, $rs2",
                 [(set RRegs:$rd, (opnode RRegs:$rs1, RRegs:$rs2))]>;
 
   // overwrite variants
   let Constraints = "$rold = $rd", isCodeGenOnly=1, hasSideEffects = 0 in {
-    def l_ow : ALUl<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, i32imm:$imm, RRegs:$rold),
+    def l_ow : ALUl<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, i32imm:$imm, RRegs:$rold),
                  asmop, "$rd = $rs1, $imm", []>;
 
     let isCommutable = isrCommutable in
-    def r_ow : ALUr<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, RRegs:$rs2, RRegs:$rold),
+    def r_ow : ALUr<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, RRegs:$rs2, RRegs:$rold),
                  asmop, "$rd = $rs1, $rs2", []>;
   }
 }
 
 // also support short immediates
 multiclass BinArithILR<bits<4> func, string asmop, SDNode opnode, bit isrCommutable=0> {
-  def i : ALUi<func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, uimm12:$imm),
+  def i : ALUi<func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, uimm12:$imm),
                asmop, "$rd = $rs1, $imm",
                [(set RRegs:$rd, (opnode RRegs:$rs1, (i32 uimm12:$imm)))]>;
 
   let Constraints = "$rold = $rd", isCodeGenOnly=1, hasSideEffects = 0 in
-  def i_ow : ALUi<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, uimm12:$imm, RRegs:$rold),
+  def i_ow : ALUi<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, uimm12:$imm, RRegs:$rold),
                asmop, "$rd = $rs1, $imm", []>;
   // also L and R
   defm NAME : BinArithLR<func, asmop, opnode, isrCommutable>;
@@ -570,33 +573,33 @@ multiclass BinArithILR<bits<4> func, string asmop, SDNode opnode, bit isrCommuta
 
 // same as above with pattern fragments instead of simple sdnodes
 multiclass BinArithLRpfg<bits<4> func, string asmop, PatFrag pfg, bit isrCommutable=0> {
-  def l : ALUl<func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, i32imm:$imm),
+  def l : ALUl<func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, i32imm:$imm),
                asmop, "$rd = $rs1, $imm",
                [(set RRegs:$rd, (pfg RRegs:$rs1, imm:$imm))]>;
 
   let isCommutable = isrCommutable in
-  def r : ALUr<func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, RRegs:$rs2),
+  def r : ALUr<func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, RRegs:$rs2),
                asmop, "$rd = $rs1, $rs2",
                [(set RRegs:$rd, (pfg RRegs:$rs1, RRegs:$rs2))]>;
 
   // overwrite variants
   let Constraints = "$rold = $rd", isCodeGenOnly=1, hasSideEffects = 0 in {
-    def l_ow : ALUl<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, i32imm:$imm, RRegs:$rold),
+    def l_ow : ALUl<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, i32imm:$imm, RRegs:$rold),
                  asmop, "$rd = $rs1, $imm", []>;
 
     let isCommutable = isrCommutable in
-    def r_ow : ALUr<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, RRegs:$rs2, RRegs:$rold),
+    def r_ow : ALUr<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, RRegs:$rs2, RRegs:$rold),
                  asmop, "$rd = $rs1, $rs2", []>;
   }
 }
 
 multiclass BinArithILRpfg<bits<4> func, string asmop, PatFrag pfg, bit isrCommutable=0> {
-  def i : ALUi<func, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, uimm12:$imm),
+  def i : ALUi<func, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, uimm12:$imm),
                asmop, "$rd = $rs1, $imm",
                [(set RRegs:$rd, (pfg RRegs:$rs1, uimm12:$imm))]>;
 
   let Constraints = "$rold = $rd", isCodeGenOnly=1, hasSideEffects = 0 in
-  def i_ow : ALUi<func, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, uimm12:$imm, RRegs:$rold),
+  def i_ow : ALUi<func, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, uimm12:$imm, RRegs:$rold),
                asmop, "$rd = $rs1, $imm", []>;
   // also L and R
   defm NAME : BinArithLRpfg<func, asmop, pfg>;
@@ -628,11 +631,11 @@ defm SHADD2 : BinArithLRpfg <0b1101, "shadd2", shadd2>;
 
 // conditional addil/subi: add immediate only if predicate is set
 let Constraints = "$rs1 = $rd", isCodeGenOnly=1, hasSideEffects = 0 in {
-  def CADDi  : ALUi<0b0000, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, uimm12:$imm),
+  def CADDi  : ALUi<0b0000, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, uimm12:$imm),
                    "add", "$rd = $rs1, $imm", []>;
-  def CSUBi  : ALUi<0b0001, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, uimm12:$imm),
+  def CSUBi  : ALUi<0b0001, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, uimm12:$imm),
                    "sub", "$rd = $rs1, $imm", []>;
-  def CADDl  : ALUl<0b0000, (outs RRegs:$rd), (ins predset:$p, RRegs:$rs1, i32imm:$imm),
+  def CADDl  : ALUl<0b0000, (outs RRegs:$rd), (ins guardset:$g, RRegs:$rs1, i32imm:$imm),
                    "add", "$rd = $rs1, $imm", []>;
 }
 
@@ -640,15 +643,15 @@ let Constraints = "$rs1 = $rd", isCodeGenOnly=1, hasSideEffects = 0 in {
 let isAsCheapAsAMove = 1, imm = 0, ImmOpNo = 0 in {
   // mov Rd = Rs ... add Rd = Rs + 0
   let hasSideEffects = 0 in
-  def MOV : ALUi<0b0000, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1),
+  def MOV : ALUi<0b0000, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1),
                  "mov", "$rd = $rs1", []>;
 
   // conditional move, like mov with setable predicate
-  // $rs1 = $rd, only if the condition in $p is true, $r2 is written to $rd thus overwriting $rs1
+  // $rs1 = $rd, only if the condition in $g is true, $r2 is written to $rd thus overwriting $rs1
   let Constraints = "$old = $rd", isCodeGenOnly = 1 in
-  def CMOV : ALUi<0b0000, (outs RRegs:$rd), (ins predset:$p, RRegs:$old, RRegs:$new),
+  def CMOV : ALUi<0b0000, (outs RRegs:$rd), (ins guardset:$g, RRegs:$old, RRegs:$new),
                   "mov", "$rd = $new",
-                  [(set RRegs:$rd, (select predsel:$p, RRegs:$new, RRegs:$old))], IIC_ALUic> 
+                  [(set RRegs:$rd, (select predsel:$g, RRegs:$new, RRegs:$old))], IIC_ALUic> 
   {
     bits<5> new;
     let rs1 = new;
@@ -657,27 +660,27 @@ let isAsCheapAsAMove = 1, imm = 0, ImmOpNo = 0 in {
 
 // nop = sub r0 = r0 - 0
 let rd = 0, rs1 = 0, imm = 0, ImmOpNo = 0, hasSideEffects = 0 in
-def NOP : ALUi<0b0001, (outs ), (ins pred:$p),
+def NOP : ALUi<0b0001, (outs ), (ins guard:$g),
                "nop", "", []>;
 
 
 // neg Rd = -Rs ... sub Rd = R0 - Rs
 let rs1 = 0 in
-def NEG : ALUr<0b0001, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs2),
+def NEG : ALUr<0b0001, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs2),
                "neg", "$rd = $rs2",
                [(set RRegs:$rd, (ineg RRegs:$rs2))]>;
 
 
 // not Rd = ~Rs ... nor Rd = ~(Rs | R0)
 let rs2 = 0 in
-def NOT : ALUr<0b1011, (outs RRegs:$rd), (ins pred:$p, RRegs:$rs1),
+def NOT : ALUr<0b1011, (outs RRegs:$rd), (ins guard:$g, RRegs:$rs1),
                "not", "$rd = $rs1",
                [(set RRegs:$rd, (not RRegs:$rs1))]>;
 
 // clr Rd ... add Rd = R0 + 0
 let rs1 = 0, imm = 0, ImmOpNo = 0,
     hasSideEffects = 0 in
-def CLR : ALUi<0b0000, (outs RRegs:$rd), (ins pred:$p),
+def CLR : ALUi<0b0000, (outs RRegs:$rd), (ins guard:$g),
                  "clr", "$rd", []>;
 
 
@@ -690,17 +693,17 @@ let rs1 = 0,
 
   let isReMaterializable = 1 in {
     // li Rd = Immedate ... add Rd = r0 + Immediate (short, positive)
-    def LIi  : ALUi<0b0000, (outs RRegs:$rd), (ins pred:$p, uimm12:$imm),
+    def LIi  : ALUi<0b0000, (outs RRegs:$rd), (ins guard:$g, uimm12:$imm),
                     "li", "$rd = $imm",
                     [(set RRegs:$rd, (add R0, uimm12:$imm))]>;
     // li Rd = Immedate ... sub Rd = r0 - Immediate (short, negative)
-    def LIin : ALUi<0b0001, (outs RRegs:$rd), (ins pred:$p, nuimm12:$imm),
+    def LIin : ALUi<0b0001, (outs RRegs:$rd), (ins guard:$g, nuimm12:$imm),
                     "li", "$rd = -$imm",
                     [(set RRegs:$rd, (sub R0, nuimm12:$imm))]>;
     // li Rd = Immedate ... add Rd = r0 + Immediate (long immediate)
-    def LIl  : ALUl<0b0000, (outs RRegs:$rd), (ins pred:$p, i32imm:$imm),
+    def LIl  : ALUl<0b0000, (outs RRegs:$rd), (ins guard:$g, i32imm:$imm),
                     "li", "$rd = $imm",
-                    [(set RRegs:$rd, (add R0, (i32 imm:$imm)))]>;
+                    [(set RRegs:$rd, (add R0, (imm:$imm)))]>;
   }
 }
 
@@ -708,12 +711,12 @@ let rs1 = 0,
 // Multiply
 let Defs = [SL,SH], isCommutable = 1 in {
 def MUL  : ALUm <0b0000,
-              (outs ), (ins pred:$p, RRegs:$rs1, RRegs:$rs2),
+              (outs ), (ins guard:$g, RRegs:$rs1, RRegs:$rs2),
               "mul", "$rs1, $rs2",
               [(PatmosMul RRegs:$rs1, RRegs:$rs2)]>;
 
 def MULU : ALUm <0b0001,
-              (outs ), (ins pred:$p, RRegs:$rs1, RRegs:$rs2),
+              (outs ), (ins guard:$g, RRegs:$rs1, RRegs:$rs2),
               "mulu", "$rs1, $rs2",
               [(PatmosMulU RRegs:$rs1, RRegs:$rs2)]>;
 }
@@ -723,7 +726,7 @@ def MULU : ALUm <0b0001,
 let hasSideEffects = 0 in
 class Compare<string asmop, bits<4> opcode>
       : ALUc <opcode,
-              (outs PRegs:$pd), (ins pred:$p, RRegs:$rs1, RRegs:$rs2),
+              (outs PRegs:$pd), (ins guard:$g, RRegs:$rs1, RRegs:$rs2),
               asmop, "$pd = $rs1, $rs2", []>;
 
 def CMPEQ  : Compare <"cmpeq" , 0b0000>;
@@ -737,7 +740,7 @@ def BTEST  : Compare <"btest" , 0b0110>;
 let hasSideEffects = 0 in
 class CompareImm<string asmop, bits<4> opcode>
       : ALUci <opcode,
-              (outs PRegs:$pd), (ins pred:$p, RRegs:$rs1, uimm5:$imm),
+              (outs PRegs:$pd), (ins guard:$g, RRegs:$rs1, uimm5:$imm),
               asmop, "$pd = $rs1, $imm", []>;
 
 def CMPIEQ  : CompareImm <"cmpeq" , 0b0000>;
@@ -750,13 +753,13 @@ def BTESTI  : CompareImm <"btest" , 0b0110>;
 
 // Pseudo instr ISODD uses btest opcode
 let rs2 = 0 in
-def ISODD : ALUc <0b0110, (outs PRegs:$pd), (ins pred:$p, RRegs:$rs1),
+def ISODD : ALUc <0b0110, (outs PRegs:$pd), (ins guard:$g, RRegs:$rs1),
                   "isodd", "$pd = $rs1",
                   [(set PRegs:$pd, (i1 (trunc RRegs:$rs1)))]>;
 
 // Pseudo mov Pd <- Rs uses cmpneq with r0
 let rs2 = 0 in
-def MOVrp : ALUc <0b0001, (outs PRegs:$pd), (ins pred:$p, RRegs:$rs1),
+def MOVrp : ALUc <0b0001, (outs PRegs:$pd), (ins guard:$g, RRegs:$rs1),
                   "mov", "$pd = $rs1",
                   [(set PRegs:$pd, (setne RRegs:$rs1, (i32 0)))]>;
 
@@ -766,7 +769,7 @@ def MOVrp : ALUc <0b0001, (outs PRegs:$pd), (ins pred:$p, RRegs:$rs1),
 let hasSideEffects = 0 in
 class PredCombine<bits<4> opcode, string asmop, SDNode opnode>
       : ALUp <opcode,
-              (outs PRegs:$pd), (ins pred:$p, predset:$ps1, predset:$ps2),
+              (outs PRegs:$pd), (ins guard:$g, predset:$ps1, predset:$ps2),
               asmop, "$pd = $ps1, $ps2", [(set PRegs:$pd, (opnode predsel:$ps1, predsel:$ps2))]>;
 
 def POR:  PredCombine <0b0110, "por",  or>;
@@ -778,15 +781,15 @@ def PXOR: PredCombine <0b1010, "pxor", xor>;
 //mov uses or opcode (or Pd = Ps | !p0)
 let isAsCheapAsAMove=1, ps2 = 0b1000 in {
   let hasSideEffects = 0 in
-  def PMOV: ALUp <0b0110, (outs PRegs:$pd), (ins pred:$p, predset:$ps1),
+  def PMOV: ALUp <0b0110, (outs PRegs:$pd), (ins guard:$g, predset:$ps1),
                   "pmov", "$pd = $ps1", []>;
 
   // conditional move, like mov with setable predicate
-  // $rs1 = $rd, only if the condition in $p is true, $r2 is written to $rd thus overwriting $rs1
+  // $rs1 = $rd, only if the condition in $g is true, $r2 is written to $rd thus overwriting $rs1
   let Constraints = "$old.preg = $pd", isCodeGenOnly = 1 in
-  def PCMOV : ALUp<0b0110, (outs PRegs:$pd), (ins predset:$p, predset:$old, predset:$new),
+  def PCMOV : ALUp<0b0110, (outs PRegs:$pd), (ins guardset:$g, predset:$old, predset:$new),
                   "pmov", "$pd = $new",
-                  [(set PRegs:$pd, (select predsel:$p, predsel:$new, predsel:$old))]>
+                  [(set PRegs:$pd, (select predsel:$g, predsel:$new, predsel:$old))]>
   {
     bits<4> new;
     let ps1 = new;
@@ -795,13 +798,13 @@ let isAsCheapAsAMove=1, ps2 = 0b1000 in {
 
   // conditional predicate move, but the "new" operand (ps1) can have an inversion flag
   let Constraints = "$old = $pd", isCodeGenOnly = 1 in
-  def PCMOV2 : ALUp<0b0110, (outs PRegs:$pd), (ins predset:$p, PRegs:$old, predset:$ps1),
+  def PCMOV2 : ALUp<0b0110, (outs PRegs:$pd), (ins guardset:$g, PRegs:$old, predset:$ps1),
                   "mov", "$pd = $ps1", []>;
 }
 
 //pnot uses pxor opcode (pxor Pd = Ps, p0)
 let ps2 = 0b0000 in
-def PNOT: ALUp <0b1010, (outs PRegs:$pd), (ins pred:$p, predset:$ps1),
+def PNOT: ALUp <0b1010, (outs PRegs:$pd), (ins guard:$g, predset:$ps1),
                 "pnot", "$pd = $ps1", [(set PRegs:$pd, (not predsel:$ps1))]>;
 
 
@@ -811,36 +814,36 @@ let isAsCheapAsAMove = 1,
 {
   //set uses or opcode (or Pd = p0 | p0)
   let ps1 = 0, ps2 = 0 in
-  def PSET: ALUp <0b0110, (outs PRegs:$pd), (ins pred:$p),
+  def PSET: ALUp <0b0110, (outs PRegs:$pd), (ins guard:$g),
                   "pset", "$pd",
                   [(set PRegs:$pd, (i1 -1))]>;
 
   //clr uses xor opcode (xor Pd = p0 ^ p0)
   let ps1 = 0, ps2 = 0 in
-  def PCLR: ALUp <0b1010, (outs PRegs:$pd), (ins pred:$p),
+  def PCLR: ALUp <0b1010, (outs PRegs:$pd), (ins guard:$g),
                   "pclr", "$pd",
                   [(set PRegs:$pd, (i1 0))]>;
 }
 
 // Bitcopy
-def BCOPY : ALUb <(outs RRegs:$rd), (ins pred:$p, RRegs:$rs1, uimm5:$imm, predset:$ps),
+def BCOPY : ALUb <(outs RRegs:$rd), (ins guard:$g, RRegs:$rs1, uimm5:$imm, predset:$ps),
                   "bcopy", "$rd = $rs1, $imm, $ps",
                   [(set RRegs:$rd, (or (and RRegs:$rs1, (not (shl 1, (i32 uimm5:$imm)))),
                                        (shl (i32 (zext predsel:$ps)), (i32 uimm5:$imm))))]>;
 
 let rs1 = 0, imm = 0 in
-def MOVpr : ALUb <(outs RRegs:$rd), (ins pred:$p, predset:$ps),
+def MOVpr : ALUb <(outs RRegs:$rd), (ins guard:$g, predset:$ps),
                   "mov", "$rd = $ps",
                   [(set RRegs:$rd, (i32 (zext predsel:$ps)))]>;
-def : Pat<(anyext (i1 predsel:$p)), (MOVpr predsel:$p)>;
+def : Pat<(anyext (i1 predsel:$g)), (MOVpr predsel:$g)>;
 
 // move to special
 let hasExtraDefRegAllocReq = 1 in
-def MTS  : SPCt <(outs SRegs:$sd), (ins pred:$p, RRegs:$rs), "mts", "$sd = $rs", [] >;
+def MTS  : SPCt <(outs SRegs:$sd), (ins guard:$g, RRegs:$rs), "mts", "$sd = $rs", [] >;
 
 // move from special
 let hasExtraSrcRegAllocReq = 1, hasSideEffects = 0 in
-def MFS  : SPCf <(outs RRegs:$rd), (ins pred:$p, SRegs:$ss), "mfs", "$rd = $ss", [] >;
+def MFS  : SPCf <(outs RRegs:$rd), (ins guard:$g, SRegs:$ss), "mfs", "$rd = $ss", [] >;
 
 
 
@@ -852,27 +855,27 @@ multiclass LoadTyped<bits<3> ty, Operand immTy, string asmop>
   // load from stack cache
   let Uses = [ST] in
   def S  : LDT<ty, 0b0, 0b0, (outs RRegs:$rd),
-               (ins pred:$p, RRegs:$ra, immTy:$imm),
+               (ins guard:$g, RRegs:$ra, immTy:$imm),
                asmop # "s", "$rd = [$ra$imm]",
                [], IIC_LDs>;
 
   // load from local memory
   def L  : LDT<ty, 0b0, 0b1, (outs RRegs:$rd),
-               (ins pred:$p, RRegs:$ra, immTy:$imm),
+               (ins guard:$g, RRegs:$ra, immTy:$imm),
                asmop # "l", "$rd = [$ra$imm]",
                [], IIC_LD>;
 
   // load from data cache
   let mayStall = 1 in
   def C  : LDT<ty, 0b1, 0b0, (outs RRegs:$rd),
-               (ins pred:$p, RRegs:$ra, immTy:$imm),
+               (ins guard:$g, RRegs:$ra, immTy:$imm),
                asmop # "c", "$rd = [$ra$imm]",
                [], IIC_LD>;
 
   // load from main memory
   let mayStall = 1 in
   def M  : LDT<ty, 0b1, 0b1, (outs RRegs:$rd),
-               (ins pred:$p, RRegs:$ra, immTy:$imm),
+               (ins guard:$g, RRegs:$ra, immTy:$imm),
                asmop # "m", "$rd = [$ra$imm]",
                [], IIC_LD>;
 }
@@ -893,27 +896,27 @@ multiclass StoreTyped<bits<3> ty, Operand immTy, string asmop>
   // store to stack cache
   let Uses = [ST] in
   def S  : STT<ty, 0b00, (outs /*empty*/),
-               (ins pred:$p, RRegs:$ra, immTy:$imm, RRegs:$rs),
+               (ins guard:$g, RRegs:$ra, immTy:$imm, RRegs:$rs),
                asmop # "s", "[$ra$imm] = $rs",
                [], IIC_STs>;
 
   // store to local memory
   def L  : STT<ty, 0b01, (outs /*empty*/),
-               (ins pred:$p, RRegs:$ra, immTy:$imm, RRegs:$rs),
+               (ins guard:$g, RRegs:$ra, immTy:$imm, RRegs:$rs),
                asmop # "l", "[$ra$imm] = $rs",
                [], IIC_ST>;
 
   // store to data cache (and to main memory; with data cache allocation?)
   let mayStall = 1 in
   def C  : STT<ty, 0b10, (outs /*empty*/),
-               (ins pred:$p, RRegs:$ra, immTy:$imm, RRegs:$rs),
+               (ins guard:$g, RRegs:$ra, immTy:$imm, RRegs:$rs),
                asmop # "c", "[$ra$imm] = $rs",
                [], IIC_ST>;
 
   // store to main memory (no data cache allocate)
   let mayStall = 1 in
   def M  : STT<ty, 0b11, (outs /*empty*/),
-               (ins pred:$p, RRegs:$ra, immTy:$imm, RRegs:$rs),
+               (ins guard:$g, RRegs:$ra, immTy:$imm, RRegs:$rs),
                asmop # "m", "[$ra$imm] = $rs",
                [], IIC_ST>;
 }

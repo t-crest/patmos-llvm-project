@@ -2,15 +2,15 @@
 define i32 @main() {
 entry:
   %0 = call i32 asm "
-					li	$$r16 		= 	.loop
-					li	$0			= 	0
+				li				$$r16 		= 	.loop
+				li				$0			= 	0
 		.loop:
-					cmpeq	$$p1	=	$0, $1
-		(!$$p1)		br		$$r16
-					add		$0		=	$0, 1
-					add		$0		=	$0, 1
-					sub		$0		=	$0, 2	# After looping ends
-	", "=&r,r,~{r16}"
+				cmpeq			$$p1	=	$0, $1
+				br		(!$$p1)	$$r16
+				add				$0		=	$0, 1
+				add				$0		=	$0, 1
+				sub				$0		=	$0, 2	# After looping ends
+	", "=&r,r,~{r16},~{p1}"
 	(i32 32)
   
   ; Check correctness

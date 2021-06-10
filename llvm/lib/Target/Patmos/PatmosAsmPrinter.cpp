@@ -302,7 +302,7 @@ bool PatmosAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
   PatmosInstPrinter PIP(*OutContext.getAsmInfo(), *TM.getMCInstrInfo(),
                         *TM.getMCRegisterInfo());
 
-  PIP.printOperand(&MCI, OpNo, OS, ExtraCode);
+  PIP.printOperand(&MCI, OpNo, OS);
 
   return false;
 }

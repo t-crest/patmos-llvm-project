@@ -37,10 +37,19 @@ void PatmosInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                   StringRef Annot, const MCSubtargetInfo &STI,
                                   raw_ostream &O)
 {
-  // Prints bundle marker '{' and/or guard predicate.
-  // This is a workaround. They cannot be printed before the mnemonic by
+  auto instr_size = MII.get(MI->getOpcode()).getSize();
+  if (instr_size == 4) {
+    // We add 16 spaces to match the extra characters printed
+    // for long instructions' hex values
+    O << "                " ;
+  } else  {
+    assert(instr_size == 8 && "Invalid instruction size");
+  }
+
+  // Prints bundle marker '{'.
+  // This is a workaround. It cannot be printed before the mnemonic by
   // tablegen, otherwise we would not be able to generate matcher tables.
-  // We therefore skip printing them in the AsmString and print here before 
+  // We therefore skip printing it in the AsmString and print here before
   // the rest of the instruction.
   printInstPrefix(MI, O);
 
@@ -64,21 +73,6 @@ void PatmosInstPrinter::printInstPrefix(const MCInst *MI, raw_ostream &O) {
   } else {
     O << "  ";
   }
-
-  // Print the predicate register.
-  // This is a workaround. The guard cannot be printed before the mnemonic by
-  // tablegen, otherwise we would not be able to generate matcher tables.
-  // We therefore skip printing the guard in the AsmString and print it here
-  // as a prefix instead.
-  const MCInstrDesc &Desc = MII.get(MI->getOpcode());
-
-  if (Desc.isPredicable()) {
-    // We assume that the predicate is the first in operand!
-    printPredicateOperand(MI, Desc.getNumDefs(), O, "guard");
-  } else {
-    printDefaultGuard(O, true);
-  }
-  O << " ";
 }
 
 /// Returns true if the given opcode represents a load instruction.
@@ -134,7 +128,7 @@ bool isStoreInst(unsigned opcode) {
 }
 
 void PatmosInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
-                                     raw_ostream &O, const char *Modifier)
+                                     raw_ostream &O)
 {
   // Note: this code is not used to generate inline-assembly. See
   // PatmosAsmPrinter for that.
@@ -194,32 +188,34 @@ void PatmosInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
 }
 
 void PatmosInstPrinter::printPredicateOperand(const MCInst *MI, unsigned OpNo,
-                                              raw_ostream &O,
-                                              const char *Modifier)
+                                              raw_ostream &O)
 {
   unsigned reg  = MI->getOperand(OpNo  ).getReg();
   int      flag = MI->getOperand(OpNo+1).getImm();
 
-  if (Modifier && strcmp(Modifier, "skip") == 0) {
-    return;
+  O << ((flag)?"!":" ");
+  if (reg == Patmos::NoRegister) {
+    printRegisterName(Patmos::P0, O);
   }
+  else {
+    printRegisterName(reg, O);
+  }
+}
 
-  if (Modifier && strcmp(Modifier, "guard") == 0) {
-    if (reg == Patmos::NoRegister || ((reg == Patmos::P0) && !flag)) {
-      printDefaultGuard(O, false);
-    } else {
-      O << "(" << ((flag)?"!":" ");
-      printRegisterName(reg, O);
-      O << ")";
-    }
-  } else { // not "guard":
-    O << ((flag)?"!":" ");
-    if (reg == Patmos::NoRegister) {
-      printRegisterName(Patmos::P0, O);
-    }
-    else {
-      printRegisterName(reg, O);
-    }
+void PatmosInstPrinter::printGuardOperand(const MCInst *MI, unsigned OpNo,
+                                              raw_ostream &O)
+{
+  assert(OpNo <= 1 && "Guard predicate was not the first operand!");
+
+  unsigned reg  = MI->getOperand(OpNo  ).getReg();
+  int      flag = MI->getOperand(OpNo+1).getImm();
+
+  if (reg == Patmos::NoRegister || ((reg == Patmos::P0) && !flag)) {
+    printDefaultGuard(O, false);
+  } else {
+    O << "(" << ((flag)?"!":" ");
+    printRegisterName(reg, O);
+    O << ")";
   }
 }
 
