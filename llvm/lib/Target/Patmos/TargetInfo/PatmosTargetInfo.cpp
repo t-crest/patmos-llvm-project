@@ -33,43 +33,34 @@ void llvm::getMBBIRName(const MachineBasicBlock *MBB,
 std::pair<int,int> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
   if(MBB && MBB->getBasicBlock()) {
     if (auto loop_bound_meta = MBB->getBasicBlock()->getTerminator()->getMetadata("llvm.loop")) {
-
       // We ignore the first metadata operand, as it is always a self-reference
       // in "llvm.loop".
       for(int i = 1, end = loop_bound_meta->getNumOperands(); i < end; i++) {
-        auto meta_op = dyn_cast<ValueAsMetadata>(loop_bound_meta->getOperand(i))->getValue();
+        auto meta_op_node = dyn_cast<llvm::MDNode>(loop_bound_meta->getOperand(i).get());
+        meta_op_node->dump();
+        if( meta_op_node->getNumOperands() >= 1 ){
+          auto name = cast_or_null<MDString>(meta_op_node->getOperand(0));
+          auto min_node = cast_or_null<ValueAsMetadata>(meta_op_node->getOperand(1))->getValue();
+          auto max_node = cast_or_null<ValueAsMetadata>(meta_op_node->getOperand(2))->getValue();
+          if( name && name->getString() == "llvm.loop.bound") {
+            if(min_node && max_node &&
+               min_node->getType()->isIntegerTy() &&
+               max_node->getType()->isIntegerTy()
+             ) {
+              auto min = ((llvm::ConstantInt*) min_node)->getZExtValue();
+              auto max = ((llvm::ConstantInt*) max_node)->getZExtValue();
 
-        if (meta_op->getType()->isMetadataTy()) {
-          auto meta_op_node = (llvm::MDNode*) meta_op;
-
-          if( meta_op_node->getNumOperands() > 1 ){
-            auto name = dyn_cast<ValueAsMetadata>(meta_op_node->getOperand(0))->getValue();
-
-            if(
-                name->getType()->isMetadataTy() &&
-                name->getName() == "llvm.loop.bound" &&
-                meta_op_node->getNumOperands() == 3
-            ) {
-              auto min_node = dyn_cast<ValueAsMetadata>(meta_op_node->getOperand(1))->getValue();
-              auto max_node = dyn_cast<ValueAsMetadata>(meta_op_node->getOperand(2))->getValue();
-
-              if(min_node->getType()->isIntegerTy() && max_node->getType()->isIntegerTy()) {
-                auto min = ((llvm::ConstantInt*) min_node)->getZExtValue();
-                auto max = ((llvm::ConstantInt*) max_node)->getZExtValue();
-
-                return std::make_pair(min, max);
-              } else {
-                report_fatal_error(
-                          "Invalid loop bound in MBB: '" +
-                          MBB->getName() + "'!");
-              }
+              return std::make_pair(min, max);
+            } else {
+              report_fatal_error(
+                        "Invalid loop bounds in MBB: '" +
+                        MBB->getName() + "'!");
             }
           }
         }
       }
     }
   }
-
   return std::make_pair(-1, -1);
 }
 

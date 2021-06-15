@@ -96,6 +96,8 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   ((MachineBasicBlock &) MBB).setAlignment(Align(1));
   AsmPrinter::emitBasicBlockStart(MBB);
   ((MachineBasicBlock &) MBB).setAlignment(Align(align));
+
+  emitBasicBlockBegin(MBB);
 }
 
 void PatmosAsmPrinter::emitBasicBlockBegin(const MachineBasicBlock &MBB) {
