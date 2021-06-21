@@ -1,5 +1,5 @@
 ; RUN: llc < %s -mpatmos-max-subfunction-size=32 | FileCheck %s
-; RUN: llc < %s -mpatmos-max-subfunction-size=32 -filetype=obj -o %t -mforce-block-labels;\
+; RUN: llc < %s -mpatmos-max-subfunction-size=32 -filetype=obj -o %t --basicblock-sections=labels;\
 ; RUN: llvm-objdump %t -d -t | FileCheck %s --check-prefix OBJ
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,7 +13,6 @@
 
 ; CHECK: .type main,@function
 ; CHECK: main:
-; OBJ: main:
 define i32 @main()  {
 entry:
   ; First 24 bytes
@@ -26,7 +25,6 @@ entry:
 	()
 	
 ; CHECK: .type {{.LBB0_[0-9]}},@function
-; OBJ: [[INLINE1:.LBB0_[0-9]]]:
   ; Then 12 bytes
   %1 = call i32 asm "
       .inline_2:
@@ -37,7 +35,6 @@ entry:
 	(i32 %0)
 
 ; CHECK: .type {{.LBB0_[0-9]}},@function
-; OBJ: [[INLINE2:.LBB0_[0-9]]]:
   ; Then another 20 bytes
   %2 = call i32 asm "
       .inline_3:
@@ -48,13 +45,19 @@ entry:
 	(i32 %1)
 
 ; CHECK: .type {{.LBB0_[0-9]}},@function
-; OBJ: [[INLINE3:.LBB0_[0-9]]]:
   %3 = sub i32 %2, 15045
   ret i32 %3 ; =0
 }
 
 ; The following checks the type of the labels in the symbol table
-; OBJ: l F .text {{([[:xdigit:]]{8})}} [[INLINE1]]
-; OBJ: l F .text {{([[:xdigit:]]{8})}} [[INLINE2]]
-; OBJ: l F .text {{([[:xdigit:]]{8})}} [[INLINE3]]
+
+; We first find the addresses of the labels in our inline assembly.
+; OBJ: [[ADDRESS1:[[:xdigit:]]{8}]] l .text {{([[:xdigit:]]{8})}} .inline_1
+; OBJ: [[ADDRESS2:[[:xdigit:]]{8}]] l .text {{([[:xdigit:]]{8})}} .inline_2
+; OBJ: [[ADDRESS3:[[:xdigit:]]{8}]] l .text {{([[:xdigit:]]{8})}} .inline_3
+
+; We then check that these addresses are assigned with a label that is 'l' and 'F'
+; OBJ: [[ADDRESS1]] l F .text
+; OBJ: [[ADDRESS2]] l F .text
+; OBJ: [[ADDRESS3]] l F .text
 ; OBJ: g F .text {{([[:xdigit:]]{8})}} main

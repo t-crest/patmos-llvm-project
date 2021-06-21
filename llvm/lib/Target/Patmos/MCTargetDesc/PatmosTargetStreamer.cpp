@@ -39,22 +39,6 @@ PatmosTargetELFStreamer::PatmosTargetELFStreamer(MCStreamer &S)
 void PatmosTargetELFStreamer::EmitFStart(const MCSymbol *Start, 
 	      const MCExpr* Size, unsigned Alignment) 
 {
-  // Not used at the moment: This code is used to align the first *instruction*,
-  // not the first word (i.e., the size word). Since we need to align the
-  // size word, we can get by with an .align directive.
-  //
-  // Emit the padding and the size expression as fragment
-  // We may emit at most Alignment + 3 bytes, in case emitting just the
-  // expression will result in being one byte over the alignment. in this case
-  // we need to emit Alignment - 1 bytes of padding + 4 bytes of expression.
-  //MCExprAlignFragment *AF = new MCExprAlignFragment(Alignment, *Size, 4, 0, 1,
-  //                                                  Alignment + 3);
-  //AF->setEmitNops(true);
-  //
-  // TODO adding a fragment is not allowed from the outside, make this public
-  // or add an EmitAlignedSymbol function to MCStreamer
-  //getStreamer().insert(AF);
-
   getStreamer().emitCodeAlignment(Alignment);
   getStreamer().emitValue(Size, 4);
 

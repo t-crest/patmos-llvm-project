@@ -49,6 +49,10 @@ namespace llvm {
       return "Patmos Assembly Printer";
     }
 
+    void setMachineModuleInfo(MachineModuleInfo* mmi) {
+      MMI = mmi;
+    }
+
     void emitFunctionEntryLabel() override;
 
     void emitBasicBlockStart(const MachineBasicBlock &MBB) override;
@@ -79,6 +83,8 @@ namespace llvm {
 
     bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
                                const char *ExtraCode, raw_ostream &OS) override;
+
+    void mockEmitInlineAsmForSizeCount(const MachineInstr *MI) const;
   private:
     /// mark the start of an subfunction relocation area.
     /// Alignment is in log2(bytes).

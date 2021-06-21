@@ -691,7 +691,17 @@ PatmosInstrInfo::createPatmosInstrAnalyzer(MCContext &Ctx,
 
 unsigned int PatmosInstrInfo::getInstrSize(const MachineInstr *MI) const {
   if (MI->isInlineAsm()) {
-    return MI->getDesc().getSize();
+    PatmosAsmPrinter PAP((PatmosTargetMachine&)PTM,
+        createPatmosInstrAnalyzer(MI->getMF()->getContext(), *PTM.getInstrInfo()));
+    PAP.setMachineModuleInfo(&MI->getMF()->getMMI());
+
+    // This call will parse the inline asm and emit each instruction through PatmosInstrAnalyzer.
+    // PatmosInstrAnalyzer doesn't actually emit the instructions, instead it just sums their sizes.
+    PAP.mockEmitInlineAsmForSizeCount(MI);
+
+    // we then get back the PatmosInstrAnalyzer which now has summed
+    // the size of the instructions in the inline asm.
+    return ((PatmosInstrAnalyzer*)PAP.OutStreamer.get())->getSize();
   }
   else if (MI->isBundle()) {
     const MachineBasicBlock *MBB = MI->getParent();

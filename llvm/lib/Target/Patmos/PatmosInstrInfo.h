@@ -47,7 +47,7 @@ public:
 
   void changeSection(MCSection *Section, const MCExpr *Subsection) override {}
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override {
-    assert(Symbol->isUndefined() && "Cannot define a symbol twice!");
+    if (Symbol->isUndefined()) return;
     assert(getCurrentSection().first && "Cannot emit before setting section!");
     AssignFragment(Symbol, &getCurrentSection().first->getDummyFragment());
   }

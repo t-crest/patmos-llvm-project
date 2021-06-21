@@ -37,8 +37,8 @@ class PatmosTargetAsmStreamer : public PatmosTargetStreamer {
 public:
   PatmosTargetAsmStreamer(MCStreamer &S,formatted_raw_ostream &OS);
 
-  virtual void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
-                          unsigned Alignment);
+  void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
+                          unsigned Alignment) override;
 };
 
 // This part is for ELF object output
@@ -46,8 +46,8 @@ class PatmosTargetELFStreamer : public PatmosTargetStreamer {
 public:
   PatmosTargetELFStreamer(MCStreamer &S);
 
-  virtual void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
-                          unsigned Alignment);
+  void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
+                          unsigned Alignment) override;
 };
 
 }
