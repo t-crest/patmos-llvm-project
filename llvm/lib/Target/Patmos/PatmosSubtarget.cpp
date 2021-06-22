@@ -51,10 +51,6 @@ static cl::opt<unsigned> MinSubfunctionAlign("mpatmos-subfunction-align",
                            " the preceding size-declaration word) in bytes "
                            "(default: 16 byte aligned)."));
 
-static cl::opt<unsigned> MinBasicBlockAlign("mpatmos-basicblock-align",
-                   cl::init(0),
-                   cl::desc("Alignment for basic blocks in bytes "
-                           "(default: no alignment)."));
 
 static cl::opt<bool> BranchInsideCFLDelaySlots("mpatmos-nested-branches",
                      cl::init(false),
@@ -193,10 +189,6 @@ bool PatmosSubtarget::canIssueInSlot(unsigned SchedClass, unsigned Slot) const {
 
 unsigned PatmosSubtarget::getMinSubfunctionAlignment() const {
   return ceil(log2((unsigned)MinSubfunctionAlign));
-}
-
-unsigned PatmosSubtarget::getMinBasicBlockAlignment() const {
-  return ceil(log2((unsigned)MinBasicBlockAlign));
 }
 
 unsigned PatmosSubtarget::getStackCacheSize() const {

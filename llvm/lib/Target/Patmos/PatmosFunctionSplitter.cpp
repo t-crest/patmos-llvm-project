@@ -1225,7 +1225,7 @@ namespace llvm {
                "Artificial SCC header is not supposed to start a new region");
 
         unsigned block_size = block->Size +
-                             getMaxBlockMargin(PTM, region, region_size, block);
+                             getMaxBlockMargin(PTM, block->MBB->getAlignment(), region_size, block);
         bool has_call = block->HasCall;
 
 #ifdef PATMOS_TRACE_VISITS
@@ -1780,6 +1780,7 @@ namespace llvm {
     }
 
     static unsigned int getMaxBlockMargin(PatmosTargetMachine &PTM,
+                                          Align defaultAlign,
                                           ablock *region, unsigned &region_size,
                                           ablock *block)
     {
@@ -1792,7 +1793,7 @@ namespace llvm {
       // check how many branches we actually have in this block!
       int numBranches = block->NumBranches;
 
-      return getMaxBlockMargin(PTM, mightExit, mayFallthrough, numBranches);
+      return getMaxBlockMargin(PTM, defaultAlign, mightExit, mayFallthrough, numBranches);
     }
 
     static unsigned int getMaxBlockMargin(PatmosTargetMachine &PTM,
@@ -1811,7 +1812,7 @@ namespace llvm {
 
       bool mayFallthrough = mayFallThrough(PTM, MBB);
 
-      return getMaxBlockMargin(PTM, true, mayFallthrough, numBranches);
+      return getMaxBlockMargin(PTM, MBB->getAlignment(), true, mayFallthrough, numBranches);
     }
 
     /// getMaxRegionMargin - Get the maximum number of bytes needed to be
@@ -1821,9 +1822,10 @@ namespace llvm {
     /// numBranchesToFix - Number of branches in the block that might exit the
     ///                    region.
     static unsigned int getMaxBlockMargin(PatmosTargetMachine &PTM,
-                                        bool mightExitRegion = true,
-                                        bool mightFallthrough = true,
-                                        int numBranchesToFix = 0)
+                                          Align defaultAlign,
+                                          bool mightExitRegion = true,
+                                          bool mightFallthrough = true,
+                                          int numBranchesToFix = 0)
     {
       const PatmosSubtarget *PST = PTM.getSubtargetImpl();
 
@@ -1831,10 +1833,8 @@ namespace llvm {
       unsigned localDelay = PST->getCFLDelaySlotCycles(true);
       unsigned exitDelay = PST->getCFLDelaySlotCycles(false);
 
-      unsigned blockAlign = (1u << PST->getMinBasicBlockAlignment());
-
       // We must be conservative here, the address is not known (and may change)
-      unsigned alignSize = (blockAlign < 4) ? 0 : blockAlign - 4;
+      unsigned alignSize = (defaultAlign.value() < 4) ? 0 : defaultAlign.value() - 4;
 
       // we already have a BR, we only need to add a NOP if we change to BRCF
       unsigned branch_fixups = numBranchesToFix * (exitDelay - localDelay) * 4;
@@ -1892,10 +1892,10 @@ namespace llvm {
                                    MachineDominatorTree &MDT,
                                    MachinePostDominatorTree &MPDT)
     {
-      unsigned int branchFixup = getMaxBlockMargin(PTM, true, false, 1);
+      unsigned int branchFixup = getMaxBlockMargin(PTM, MBB->getAlignment(), true, false, 1);
 
       // make a new block
-      unsigned int curr_size = getMaxBlockMargin(PTM);
+      unsigned int curr_size = getMaxBlockMargin(PTM, MBB->getAlignment());
 
       unsigned int cache_size = PTM.getSubtargetImpl()->getMethodCacheSize();
 
@@ -2007,7 +2007,7 @@ namespace llvm {
           }
 
           // start anew, may fall through!
-          curr_size = getMaxBlockMargin(PTM) + i_size;
+          curr_size = getMaxBlockMargin(PTM, MBB->getAlignment()) + i_size;
           i = MBB->instr_begin();
         }
       }

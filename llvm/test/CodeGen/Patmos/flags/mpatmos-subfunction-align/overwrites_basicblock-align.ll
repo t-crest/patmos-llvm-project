@@ -1,9 +1,9 @@
-; RUN: llc < %s -mpatmos-subfunction-align=8 -mpatmos-basicblock-align=16 \
+; RUN: llc < %s -mpatmos-subfunction-align=8 --align-all-blocks=4 \
 ; RUN: -mpatmos-max-subfunction-size=80 | FileCheck %s
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 ;
-; Tests that when both -mpatmos-basicblock-align and -mpatmos-subfunction-align are used,
+; Tests that when both --align-all-blocks and -mpatmos-subfunction-align are used,
 ; -mpatmos-subfunction-align takes precedence for blocks starting a subfunction.
 ;
 ; We test this by having the first function be small enough to be in one subfunction,

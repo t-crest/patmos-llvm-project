@@ -28,8 +28,6 @@ namespace {
   private:
     unsigned MinSubfunctionAlignment;
 
-    unsigned MinBasicBlockAlignment;
-
     static char ID;
   public:
 
@@ -39,7 +37,6 @@ namespace {
       const PatmosSubtarget *PST = tm.getSubtargetImpl();
 
       MinSubfunctionAlignment = PST->getMinSubfunctionAlignment();
-      MinBasicBlockAlignment = PST->getMinBasicBlockAlignment();
     }
 
     StringRef getPassName() const override {
@@ -65,7 +62,7 @@ namespace {
         if (PMFI->isMethodCacheRegionEntry(&*i)) {
           align = MinSubfunctionAlignment;
         } else {
-          align = MinBasicBlockAlignment;
+          align = i->getAlignment().value();
         }
 
         if (align > i->getAlignment().value()) {

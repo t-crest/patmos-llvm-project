@@ -126,9 +126,6 @@ public:
   /// Get the minimum (sub)function alignment in log2(bytes).
   unsigned getMinSubfunctionAlignment() const;
 
-  /// Get the minimum basic block alignment in log2(bytes).
-  unsigned getMinBasicBlockAlignment() const;
-
   unsigned getStackCacheSize() const;
 
   unsigned getStackCacheBlockSize() const;
