@@ -1954,7 +1954,6 @@ namespace llvm {
         assert(!isPatmosCFL(FirstMI->getOpcode(), FirstMI->getDesc().TSFlags)
                || (delay_slot_margin > 0));
 #endif
-
         // check block + instruction size + max delay slot size of this instr.
         if (curr_size + i_size + tmp_live_margin + delay_slot_margin < MaxSize)
         {
@@ -2161,6 +2160,11 @@ namespace llvm {
 
     /// runOnMachineFunction - Run the function splitter on the given function.
     bool runOnMachineFunction(MachineFunction &MF) {
+
+      LLVM_DEBUG(dbgs() << "\n********** Patmos Function Splitter **********\n");
+      LLVM_DEBUG(dbgs() << "********** Function: " << MF.getFunction().getName() << "**********\n");
+      LLVM_DEBUG(MF.dump());
+
       // the pass got disabled?
       if (DisableFunctionSplitter)
         return false;
@@ -2169,12 +2173,21 @@ namespace llvm {
                                                      : STC.getMethodCacheSize();
       max_subfunc_size = std::min(max_subfunc_size, STC.getMethodCacheSize());
 
+
+
       unsigned prefer_subfunc_size = PreferSubfunctionSize ?
                                                        PreferSubfunctionSize
                                                      : max_subfunc_size;
       unsigned prefer_scc_size = PreferSCCSize ? PreferSCCSize
                                                : prefer_subfunc_size;
       prefer_subfunc_size = std::min(max_subfunc_size, prefer_subfunc_size);
+
+      if(prefer_subfunc_size < 64) {
+        // We avoid supporting subfunctions smaller than 64 bytes
+        // So than we don't have to split in the middle of delay slots
+        report_fatal_error("Subfunction size less than 64 bytes!.");
+      }
+
       prefer_scc_size = std::min(max_subfunc_size, prefer_scc_size);
 
       unsigned total_size = 0;
@@ -2198,9 +2211,6 @@ namespace llvm {
         total_size += bb_size;
       }
 
-      LLVM_DEBUG(dbgs() << "\nPatmos Function Splitter: "
-                   << MF.getFunction().getName() << ": " << total_size << "\n");
-
       TotalFunctions++;
 
       // splitting needed?
@@ -2215,7 +2225,6 @@ namespace llvm {
         agraph G(&MF, PTM, MPDT,
                  prefer_subfunc_size, prefer_scc_size, max_subfunc_size);
         G.transformSCCs();
-
         // compute regions -- i.e., split the function
         ablocks order;
         G.computeRegions(order);
@@ -2235,8 +2244,12 @@ namespace llvm {
         // Note: We rely on the PatmosEnsureAlignment pass to set alignments,
         // we do not do it in this pass.
 
-        return true;
+        blocks_splitted = true;
       }
+
+      LLVM_DEBUG(dbgs() << "\n********** Finnishing Patmos Function Splitter **********\n");
+      LLVM_DEBUG(dbgs() << "********** Function: " << MF.getFunction().getName() << "**********\n");
+      LLVM_DEBUG(MF.dump());
 
       return blocks_splitted;
     }
