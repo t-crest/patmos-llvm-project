@@ -176,6 +176,14 @@ namespace {
       }
     }
 
+
+    void addBlockPlacement() override {
+      // We leave this function empty to avoid LLVM's default
+      // probabilistic block placement pass, as it seems to
+      // mess with terminating instructions on some blocks,
+      // resulting in invalid branch targets.
+    }
+
     /// addPreEmitPass - This pass may be implemented by targets that want to run
     /// passes immediately before machine code is emitted.  This should return
     /// true if -print-machineinstrs should print out the code after the passes.

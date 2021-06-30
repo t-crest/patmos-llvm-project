@@ -28,7 +28,7 @@ namespace llvm {
     PatmosMCInstLower MCInstLowering;
 
     /// Alignment to use for FStart directives, in log2(bytes).
-    unsigned FStartAlignment;
+    Align FStartAlignment;
 
     // symbol to use for the end of the currently emitted subfunction
     MCSymbol *CurrCodeEnd;
@@ -87,9 +87,8 @@ namespace llvm {
     void mockEmitInlineAsmForSizeCount(const MachineInstr *MI) const;
   private:
     /// mark the start of an subfunction relocation area.
-    /// Alignment is in log2(bytes).
     void EmitFStart(MCSymbol *SymStart, MCSymbol *SymEnd,
-                       unsigned Alignment = 0);
+                    Align Alignment);
 
     bool isFStart(const MachineBasicBlock *MBB) const;
   };

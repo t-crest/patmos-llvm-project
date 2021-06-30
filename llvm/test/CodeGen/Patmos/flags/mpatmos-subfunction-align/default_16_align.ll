@@ -6,7 +6,7 @@
 ;
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 
-; CHECK: .align 16
+; CHECK: .p2align 4
 ; CHECK: .fstart	main, .Ltmp{{[0-9]}}-main, 16
 ; CHECK-NEXT: main:
 define i32 @main(i32 %cond)  {

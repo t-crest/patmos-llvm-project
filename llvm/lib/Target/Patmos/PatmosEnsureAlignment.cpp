@@ -36,7 +36,7 @@ namespace {
     {
       const PatmosSubtarget *PST = tm.getSubtargetImpl();
 
-      MinSubfunctionAlignment = PST->getMinSubfunctionAlignment();
+      MinSubfunctionAlignment = PST->getMinSubfunctionAlignment().value();
     }
 
     StringRef getPassName() const override {

@@ -1876,7 +1876,7 @@ namespace llvm {
         assert(it != MBB->end() && "Reached end of MBB before end of delay slot");
         assert(!it->isInlineAsm() && "Inline asm should not be in delay slot");
 
-        if (!PII->isPseudo(*it)) {
+        if (!PII->isPseudo(&*it)) {
           bytes += getInstrSize(&*it, PTM);
           --cycles;
         }

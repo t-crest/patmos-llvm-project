@@ -1,5 +1,5 @@
 ; RUN: llc < %s -mpatmos-subfunction-align=32 | FileCheck %s
-; RUN: llc < %s -mpatmos-subfunction-align=32 -filetype=obj -o %t -mforce-block-labels;\
+; RUN: llc < %s -mpatmos-subfunction-align=32 -filetype=obj -o %t;\
 ; RUN: patmos-ld %t -nostdlib -static -o %t --section-start .text=1;\
 ; RUN: llvm-objdump %t -d | FileCheck %s --check-prefix ALIGN
 ; RUN: LLC_ARGS="-mpatmos-subfunction-align=32"; %test_no_runtime_execution
@@ -29,12 +29,11 @@
 
 @_7 = global i32 7
 
-; CHECK: .align 32
+; CHECK: .p2align 5
 ; CHECK: .fstart	main, .Ltmp{{[0-9]}}-main, 32
 ; CHECK-NEXT: main:
 
-; ALIGN: main:
-; ALIGN-NEXT: {{[0-9]*[0|2|4|6|8|a|c|e]4}}:
+; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <main>:
 define i32 @main()  {
 entry:
   %0 = load volatile i32, i32* @_7

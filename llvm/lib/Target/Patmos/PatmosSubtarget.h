@@ -123,8 +123,8 @@ public:
   /// @see PatmosInstrInfo::canIssueInSlot
   bool canIssueInSlot(unsigned SchedClass, unsigned Slot) const;
 
-  /// Get the minimum (sub)function alignment in log2(bytes).
-  unsigned getMinSubfunctionAlignment() const;
+  /// Get the minimum (sub)function alignment.
+  Align getMinSubfunctionAlignment() const;
 
   unsigned getStackCacheSize() const;
 

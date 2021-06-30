@@ -95,10 +95,12 @@ namespace {
     }
 
     bool runOnMachineFunction(MachineFunction &F) {
-      bool Changed = false;
-      LLVM_DEBUG( dbgs() << "\n[DelaySlotFiller] "
-                    << F.getFunction().getName() << "\n" );
+      LLVM_DEBUG(dbgs() << "\n********** Patmos Delay Slot Filler **********\n");
+      LLVM_DEBUG(dbgs() << "********** Function: " << F.getFunction().getName() << "**********\n");
+      LLVM_DEBUG(F.dump());
 
+
+      bool Changed = false;
       // FIXME: check if Post-RA scheduler is enabled (by option or Subtarget),
       //        skip this loop (delay slot filling) in this case.
       for (MachineFunction::iterator FI = F.begin(), FE = F.end();
@@ -109,6 +111,10 @@ namespace {
       for (MachineFunction::iterator FI = F.begin(), FE = F.end();
            FI != FE; ++FI)
         Changed |= insertNOPs(*FI);
+
+      LLVM_DEBUG(dbgs() << "\n********** Finished Patmos Delay Slot Filler **********\n");
+      LLVM_DEBUG(dbgs() << "********** Function: " << F.getFunction().getName() << "**********\n");
+      LLVM_DEBUG(F.dump());
       return Changed;
     }
 

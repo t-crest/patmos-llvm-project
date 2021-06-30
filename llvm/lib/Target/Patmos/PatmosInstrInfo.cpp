@@ -308,7 +308,7 @@ int PatmosInstrInfo::findPrevDelaySlotEnd(MachineBasicBlock &MBB,
 
   while (II != MBB.begin()) {
     --II;
-    if (isPseudo(*II))
+    if (isPseudo(&*II))
       continue;
 
     // This code assumes that delay slots can not be completely inside other
@@ -547,29 +547,29 @@ PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) const {
 
 }
 
-bool PatmosInstrInfo::isPseudo(const MachineInstr &MI) const {
+bool PatmosInstrInfo::isPseudo(const MachineInstr *MI) const {
 
-  if (MI.isBundle()) {
-    auto II = &MI; ++II;
-    const MachineBasicBlock *MBB = MI.getParent();
+  if (MI->isBundle()) {
+    MachineBasicBlock::const_instr_iterator II(MI); ++II;
+    const MachineBasicBlock *MBB = MI->getParent();
 
-    while (II != &*MBB->instr_end() && II->isBundledWithPred()) {
-      if (!isPseudo(*II)) return false;
+    while (II != MBB->instr_end() && II->isBundledWithPred()) {
+      if (!isPseudo(&*II)) return false;
       II++;
     }
     return true;
   }
 
-  if (MI.isDebugValue())
+  if (MI->isDebugValue())
     return true;
 
   // We must emit inline assembly
-  if (MI.isInlineAsm())
+  if (MI->isInlineAsm())
     return false;
 
   // We check if MI has any functional units mapped to it.
   // If it doesn't, we ignore the instruction.
-  const MCInstrDesc& TID = MI.getDesc();
+  const MCInstrDesc& TID = MI->getDesc();
   unsigned SchedClass = TID.getSchedClass();
   const InstrStage* IS = PST.getInstrItineraryData()->beginStage(SchedClass);
   unsigned FuncUnits = IS->getUnits();
@@ -579,7 +579,7 @@ bool PatmosInstrInfo::isPseudo(const MachineInstr &MI) const {
 void PatmosInstrInfo::skipPseudos(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator &II) const
 {
-  while (II != MBB.instr_end() && isPseudo(*II)) {
+  while (II != MBB.instr_end() && isPseudo(&*II)) {
     II++;
   }
 }
@@ -590,7 +590,7 @@ MachineBasicBlock::iterator PatmosInstrInfo::prevNonPseudo(
 {
   auto J = II; --J;
 
-  while (J != MBB.begin() && isPseudo(*J)) {
+  while (J != MBB.begin() && isPseudo(&*J)) {
     --J;
   }
   return J;
@@ -626,14 +626,17 @@ bool PatmosInstrInfo::advanceCycles(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator &II,
                                     unsigned Cycles, bool StopOnInlineAsm) const
 {
-  for (unsigned i = 0; i < Cycles && II != MBB.end(); i++) {
-
+  if (II != MBB.end()) {
     II = nextNonPseudo(MBB, II);
 
-    if (StopOnInlineAsm && II->isInlineAsm()) {
-      // Should we stop on the last non-pseudo instruction instead?
-      II++;
-      return false;
+    for (unsigned i = 1; i < Cycles && II != MBB.end(); i++)
+    {
+      if (StopOnInlineAsm && II->isInlineAsm()) {
+        // Should we stop on the last non-pseudo instruction instead?
+        II++;
+        return false;
+      }
+      II = nextNonPseudo(MBB, II);
     }
   }
   return true;

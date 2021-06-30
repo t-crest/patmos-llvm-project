@@ -936,11 +936,11 @@ bool PatmosAsmParser::ParseDirectiveFStart(SMLoc L) {
     return Error(L, "unexpected token in directive");
   Parser.Lex();
 
-  int64_t Align;
-  if (getParser().parseAbsoluteExpression(Align)) {
+  int64_t align;
+  if (getParser().parseAbsoluteExpression(align)) {
     return true;
   }
-  if (Align < 0) {
+  if (align < 0) {
     return Error(L, "alignment value must be a positive value");
   }
 
@@ -952,7 +952,7 @@ bool PatmosAsmParser::ParseDirectiveFStart(SMLoc L) {
   PatmosTargetStreamer *PTS = static_cast<PatmosTargetStreamer*>(
                                  getParser().getStreamer().getTargetStreamer());
 
-  PTS->EmitFStart(Start, Length, (unsigned)Align);
+  PTS->EmitFStart(Start, Length, Align(align));
 
   return false;
 }

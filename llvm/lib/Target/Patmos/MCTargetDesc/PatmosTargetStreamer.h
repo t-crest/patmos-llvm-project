@@ -27,7 +27,7 @@ public:
   /// \param Size - The size of the block in bytes.
   /// \param Alignment - The alignment in bytes, should be a power of 2.
   virtual void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
-                          unsigned Alignment) = 0;
+                          Align Alignment) = 0;
 };
 
 // This part is for ascii assembly output
@@ -38,7 +38,7 @@ public:
   PatmosTargetAsmStreamer(MCStreamer &S,formatted_raw_ostream &OS);
 
   void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
-                          unsigned Alignment) override;
+                  Align Alignment) override;
 };
 
 // This part is for ELF object output
@@ -47,7 +47,7 @@ public:
   PatmosTargetELFStreamer(MCStreamer &S);
 
   void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
-                          unsigned Alignment) override;
+                  Align Alignment) override;
 };
 
 }

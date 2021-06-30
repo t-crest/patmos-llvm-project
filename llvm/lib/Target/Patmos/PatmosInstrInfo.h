@@ -248,7 +248,7 @@ public:
 
   /// isPseudo - check if the given machine instruction is emitted, i.e.,
   /// if the instruction is either inline asm or has some FU assigned to it.
-  bool isPseudo(const MachineInstr &MI) const;
+  bool isPseudo(const MachineInstr *MI) const;
 
   /// skipPseudos - Increment II to the next non-pseudo instruction if II is a
   /// pseudo instruction.

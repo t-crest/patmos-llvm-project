@@ -70,7 +70,7 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // between.
   auto align = MBB.getAlignment();
   if (align.value() && (MBB.getParent()->getBlockNumbered(0) != &MBB)) {
-      emitAlignment(Align(align));
+      emitAlignment(align);
   }
 
   // Then emit .fstart/.size if needed
@@ -97,7 +97,7 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // AsmPrinter::EmitBasicBlockStart doesn't also try to align the block
   ((MachineBasicBlock &) MBB).setAlignment(Align(1));
   AsmPrinter::emitBasicBlockStart(MBB);
-  ((MachineBasicBlock &) MBB).setAlignment(Align(align));
+  ((MachineBasicBlock &) MBB).setAlignment(align);
 
   emitBasicBlockBegin(MBB);
 }
@@ -175,10 +175,7 @@ void PatmosAsmPrinter::emitDotSize(MCSymbol *SymStart, MCSymbol *SymEnd) {
 }
 
 void PatmosAsmPrinter::EmitFStart(MCSymbol *SymStart, MCSymbol *SymEnd,
-                                     unsigned Alignment) {
-  // convert LLVM's log2-block alignment to bytes
-  unsigned AlignBytes = std::max(4u, 1u << Alignment);
-
+                                     Align Alignment) {
   // emit .fstart SymStart, SymEnd-SymStart
   const MCExpr *SizeExpr =
     MCBinaryExpr::createSub(MCSymbolRefExpr::create(SymEnd,   OutContext),
@@ -188,7 +185,7 @@ void PatmosAsmPrinter::EmitFStart(MCSymbol *SymStart, MCSymbol *SymEnd,
   PatmosTargetStreamer *PTS =
             static_cast<PatmosTargetStreamer*>(OutStreamer->getTargetStreamer());
 
-  PTS->EmitFStart(SymStart, SizeExpr, AlignBytes);
+  PTS->EmitFStart(SymStart, SizeExpr, Alignment);
 }
 
 bool PatmosAsmPrinter::isFStart(const MachineBasicBlock *MBB) const {

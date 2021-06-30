@@ -30,7 +30,6 @@ using namespace llvm;
 
 
 MCOperand PatmosMCInstLower::LowerSymbolOperand(const MachineOperand &MO, unsigned Offset) const {
-
   MCSymbolRefExpr::VariantKind Kind;
   const MCSymbol *Symbol;
 

@@ -187,8 +187,8 @@ bool PatmosSubtarget::canIssueInSlot(unsigned SchedClass, unsigned Slot) const {
   return llvm::canIssueInSlotForUnits(Slot, FuncUnits);
 }
 
-unsigned PatmosSubtarget::getMinSubfunctionAlignment() const {
-  return ceil(log2((unsigned)MinSubfunctionAlign));
+Align PatmosSubtarget::getMinSubfunctionAlignment() const {
+  return Align(MinSubfunctionAlign);
 }
 
 unsigned PatmosSubtarget::getStackCacheSize() const {

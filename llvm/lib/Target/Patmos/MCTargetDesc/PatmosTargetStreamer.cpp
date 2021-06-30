@@ -28,18 +28,18 @@ PatmosTargetAsmStreamer::PatmosTargetAsmStreamer(MCStreamer &S,
     : PatmosTargetStreamer(S), OS(OS) {}
 
 void PatmosTargetAsmStreamer::EmitFStart(const MCSymbol *Start, 
-                               const MCExpr* Size, unsigned Alignment)
+                               const MCExpr* Size, Align Alignment)
 {
-  OS << "\t.fstart\t" << *Start << ", " << *Size << ", " << Alignment << "\n";
+  OS << "\t.fstart\t" << *Start << ", " << *Size << ", " << Alignment.value() << "\n";
 }
 
 PatmosTargetELFStreamer::PatmosTargetELFStreamer(MCStreamer &S)
     : PatmosTargetStreamer(S) {}
 
 void PatmosTargetELFStreamer::EmitFStart(const MCSymbol *Start, 
-	      const MCExpr* Size, unsigned Alignment) 
+	      const MCExpr* Size, Align Alignment)
 {
-  getStreamer().emitCodeAlignment(Alignment);
+  getStreamer().emitCodeAlignment(Alignment.value());
   getStreamer().emitValue(Size, 4);
 
 }

@@ -1,4 +1,4 @@
-; RUN: llc < %s -mpatmos-max-subfunction-size=32 %XFAIL-filecheck %s
+; RUN: llc < %s -mpatmos-max-subfunction-size=64 %XFAIL-filecheck %s
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -9,9 +9,17 @@
 
 define i32 @main() {
 entry:
-  ; We make a block of 64 bytes, which can in no way fit in a 32 byte subfunction
+  ; We make a block of 128 bytes, which can in no way fit in a 64 byte subfunction
   %0 = call i32 asm "
 		li		$0	= 4096	# Long arithmetic, 8 bytes each
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
+		li		$0	= 4096	
 		li		$0	= 4096	
 		li		$0	= 4096	
 		li		$0	= 4096	
