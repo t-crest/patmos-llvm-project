@@ -198,25 +198,20 @@ bool PatmosAsmPrinter::isFStart(const MachineBasicBlock *MBB) const {
 
 
 void PatmosAsmPrinter::emitInstruction(const MachineInstr *MI) {
-
   SmallVector<const MachineInstr*, 2> BundleMIs;
   unsigned Size = 1;
 
   // Unpack BUNDLE instructions
   if (MI->isBundle()) {
-
     const MachineBasicBlock *MBB = MI->getParent();
-    auto MII = MI;
+    auto MII = MI->getIterator();
+
+    // First, skip the bundle header instruction,
+    // since it is not an real instruction, but is only there to designate the start of a bundle
     ++MII;
     while (MII != MBB->end() && MII->isInsideBundle()) {
-      const MachineInstr *MInst = MII;
-      if (MInst->isPseudo()) {
-        // DBG_VALUE and IMPLICIT_DEFs outside of bundles are handled in
-        // AsmPrinter::EmitFunctionBody()
-        MInst->dump();
-        report_fatal_error("Pseudo instructions must not be bundled!");
-      }
-
+      const MachineInstr *MInst = &(*MII);
+      assert(!MInst->isPseudo() && "Pseudo instructions must not be bundled!");
       BundleMIs.push_back(MInst);
       ++MII;
     }

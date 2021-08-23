@@ -166,9 +166,9 @@ const Function *PatmosSPMark::getCallTarget(const MachineInstr *MI) const {
 
 
 MachineFunction *PatmosSPMark::getCallTargetMF(const MachineInstr *MI) const {
-  const Function *F = getCallTarget(MI);
+  auto F = getCallTarget(MI);
   MachineFunction *MF;
-  if (F && (MF = MMI->getMachineFunction(*F))) {
+  if (F && (MF = &MMI->getOrCreateMachineFunction((Function&)*F))) {
     return MF;
   }
   return NULL;

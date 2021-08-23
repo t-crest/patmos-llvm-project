@@ -242,7 +242,6 @@ Function *PatmosSPClone::cloneAndMark(Function *F, bool onlyMaybe) {
   if (SPF->hasFnAttribute("sp-root")) {
     SPF->removeFnAttr("sp-root");
   }
-  F->getParent()->getFunctionList().push_back(SPF);
 
   ClonedFunctions.insert(std::make_pair(F, SPF));
 
