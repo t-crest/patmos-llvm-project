@@ -256,26 +256,24 @@ SDValue PatmosTargetLowering::LowerMUL_LOHI(SDValue Op,
   MultOpc = (Op.getOpcode()==ISD::UMUL_LOHI)? PatmosISD::MULU
                                             : PatmosISD::MUL;
 
-
   SDValue Mul = DAG.getNode(MultOpc, dl, MVT::Glue,
                             Op.getOperand(0), Op.getOperand(1));
+
   SDValue InChain = DAG.getEntryNode();
   SDValue InGlue = Mul;
 
-  if (!Op.getValue(0).use_empty()) {
-    SDValue CopyFromLo = DAG.getCopyFromReg(InChain, dl,
-        Patmos::SL, Ty, InGlue);
-    DAG.ReplaceAllUsesOfValueWith(Op.getValue(0), CopyFromLo);
-    InChain = CopyFromLo.getValue(1);
-    InGlue = CopyFromLo.getValue(2);
-  }
-  if (!Op.getValue(1).use_empty()) {
-    SDValue CopyFromHi = DAG.getCopyFromReg(InChain, dl,
-        Patmos::SH, Ty, InGlue);
-    DAG.ReplaceAllUsesOfValueWith(Op.getValue(1), CopyFromHi);
-  }
+  SDValue CopyFromLo = DAG.getCopyFromReg(InChain, dl,
+      Patmos::SL, Ty, InGlue);
+  DAG.ReplaceAllUsesOfValueWith(Op.getValue(0), CopyFromLo);
+  InChain = CopyFromLo.getValue(1);
+  InGlue = CopyFromLo.getValue(2);
 
-  return Mul;
+  SDValue CopyFromHi = DAG.getCopyFromReg(InChain, dl,
+      Patmos::SH, Ty, InGlue);
+  DAG.ReplaceAllUsesOfValueWith(Op.getValue(1), CopyFromHi);
+
+  SDValue Vals[] = { CopyFromLo, CopyFromHi };
+  return DAG.getMergeValues(Vals, dl);
 }
 
 

@@ -3,18 +3,15 @@
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 ; 
-; Tests a simple expression which includes a multiply.
-; The following is the equivalent C code:
+; Tests unsigned multiply where only the low-order output is used.
 ;
-; int main(int x){
-; 	return (x * x) + 1;
-; }
-; 
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 
 define i32 @main(i32 %x) {
 entry:
-  %mul = mul nsw i32 %x, %x
-  %add = add nsw i32 %mul, 1
+  ; Test using just the low-order output
+  %mul = mul nuw i32 %x, %x 
+  %add = add nuw i32 %mul, 1
+  
   ret i32 %add
 }
