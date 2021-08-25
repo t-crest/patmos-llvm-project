@@ -81,7 +81,9 @@ class PatmosInst<dag outs, dag ins,
 {
   bits<4> g; // Instruction guard
   let Inst{30-27} = g;
-  let AsmString   = op # "\t\t" # "$g" # "\t" # asmstr;
+  
+  // "op" must be exactly 8 characters long. If the mnemonic is shorter, then it must be padded with spaces
+  let AsmString   = op # "\t" # "$g" # "\t" # asmstr;
 
   let isPredicable = 1; // we have a fully predicated instruction set
 }
@@ -93,6 +95,7 @@ class PatmosInstNoP<dag outs, dag ins,
 {
   let Inst{30-27} = 0;
 
+  // "op" must be exactly 8 characters long. If the mnemonic is shorter, then it must be padded with spaces
   let AsmString   = op # "\t" # asmstr;
   let isPredicable = 0;
 }

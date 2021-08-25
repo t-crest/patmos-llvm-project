@@ -37,15 +37,6 @@ void PatmosInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                   StringRef Annot, const MCSubtargetInfo &STI,
                                   raw_ostream &O)
 {
-  auto instr_size = MII.get(MI->getOpcode()).getSize();
-  if (instr_size == 4) {
-    // We add 16 spaces to match the extra characters printed
-    // for long instructions' hex values
-    O << "                " ;
-  } else  {
-    assert(instr_size == 8 && "Invalid instruction size");
-  }
-
   // Prints bundle marker '{'.
   // This is a workaround. It cannot be printed before the mnemonic by
   // tablegen, otherwise we would not be able to generate matcher tables.
@@ -133,7 +124,6 @@ void PatmosInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   // Note: this code is not used to generate inline-assembly. See
   // PatmosAsmPrinter for that.
   // This is used when outputting assembly instead of machine code.
-
   const MCOperand &Op = MI->getOperand(OpNo);
   auto opcode = MI->getOpcode();
   if (Op.isReg()) {

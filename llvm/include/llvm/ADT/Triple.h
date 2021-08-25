@@ -723,6 +723,11 @@ public:
   }
 
   /// Tests whether the target is 64-bit PowerPC (little and big endian).
+  bool isPatmos() const {
+    return getArch() == Triple::patmos;
+  }
+
+  /// Tests whether the target is 64-bit PowerPC (little and big endian).
   bool isPPC64() const {
     return getArch() == Triple::ppc64 || getArch() == Triple::ppc64le;
   }
