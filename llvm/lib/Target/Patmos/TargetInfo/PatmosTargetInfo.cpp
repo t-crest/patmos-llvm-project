@@ -37,7 +37,6 @@ std::pair<int,int> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
       // in "llvm.loop".
       for(int i = 1, end = loop_bound_meta->getNumOperands(); i < end; i++) {
         auto meta_op_node = dyn_cast<llvm::MDNode>(loop_bound_meta->getOperand(i).get());
-        meta_op_node->dump();
         if( meta_op_node->getNumOperands() >= 1 ){
           auto name = cast_or_null<MDString>(meta_op_node->getOperand(0));
           auto min_node = cast_or_null<ValueAsMetadata>(meta_op_node->getOperand(1))->getValue();

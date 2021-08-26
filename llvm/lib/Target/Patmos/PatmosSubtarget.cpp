@@ -145,10 +145,10 @@ PatmosSubtarget::CFLType PatmosSubtarget::getCFLType() const {
 unsigned PatmosSubtarget::getDelaySlotCycles(const MachineInstr &MI) const {
   if (MI.isBundle()) {
     const MachineBasicBlock *MBB = MI.getParent();
-    auto I = &MI;
+    auto I = MI.getIterator();
     auto E = MBB->instr_end();
     unsigned delay = 0;
-    while ((++I != &*E) && I->isInsideBundle()) {
+    while ((++I != E) && I->isInsideBundle()) {
       delay = std::max(delay, getDelaySlotCycles(*I));
     }
     return delay;
