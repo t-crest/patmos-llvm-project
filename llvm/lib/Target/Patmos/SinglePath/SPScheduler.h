@@ -55,7 +55,7 @@ private:
   /// least 1 cycle between the two instructions.
   /// If the instructions are part of bundles, the whole bundle is taken into
   /// account.
-  unsigned calculateLatency(MachineBasicBlock::iterator);
+  unsigned calculateLatency(MachineBasicBlock::iterator) const;
 
 };
 

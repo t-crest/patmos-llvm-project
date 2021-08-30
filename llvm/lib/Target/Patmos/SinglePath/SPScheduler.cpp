@@ -37,17 +37,20 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   auto reduceAnalysis = &getAnalysis<PatmosSPReduce>();
   auto rootScope = reduceAnalysis->RootScope;
 
-  for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; mbbIter++){
-    auto mbb = &(*mbbIter);
-    LLVM_DEBUG(dbgs() << "MBB: [" << mbb << "]: #" << mbb->getNumber() << "\n");
+  for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; ++mbbIter){
+    auto mbb = mbbIter;
+    LLVM_DEBUG( errs() << "MBB: [" << *mbb << "]: #" << mbb->getNumber() << "\n");
+
     for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
-        instrIter != instrEnd; instrIter++)
+        instrIter != instrEnd; )
     {
       SPInstructions++;
-	  calculateLatency(instrIter);
+	  auto latency = calculateLatency(instrIter);
+	  for(auto i = 0; i<latency; i++){
+	    TM.getInstrInfo()->insertNoop(*mbb, std::next(instrIter));
+	  }
+	  instrIter = std::next(instrIter, 1+latency); // Make sure to skip the newly added noops
     }
-
-
   }
 
   LLVM_DEBUG( dbgs() << "AFTER Single-Path Schedule\n"; mf.dump() );
@@ -58,28 +61,18 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   return true;
 }
 
-unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr){
-  auto instrInfo = TM.getInstrInfo();
-
-  auto mbb = instr->getParent();
+unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr) const{
   if(instr->isBranch() || instr->isCall() || instr->isReturn()){
-    LLVM_DEBUG(dbgs() << "Inserting 3xNOP after instruction: "; instr->print(dbgs(), NULL, false));
-
     // We simply add 3 nops after any branch, call or return, as its
     // the highest possible delay.
     // The delay slot filler pass will remove most of these afterwards
-    instr++;
-    instrInfo->insertNoop(*mbb, instr);
-    instrInfo->insertNoop(*mbb, instr);
-    instrInfo->insertNoop(*mbb, instr);
+    return 3;
   } else if (instr->mayLoad() || (instr->getOpcode() == Patmos::MUL) || (instr->getOpcode() == Patmos::MULU)){
-    LLVM_DEBUG(dbgs() << "Inserting NOP after instruction: "; instr->print(dbgs(), NULL, false));
-    instr++;
-    auto sizebefore = mbb->size();
-    instrInfo->insertNoop(*mbb, instr);
-    assert(mbb->size() == (sizebefore+1));
+    return 1;
     // TODO: make it cleverer, e.g. no reason for a nop
     // if the next instruction does not use the loaded value.
+  } else {
+    return 0;
   }
 }
 
