@@ -44,29 +44,8 @@ public:
 
 
 Patmos::Patmos() {
-
-  copyRel = R_RISCV_COPY;
-  noneRel = R_RISCV_NONE;
-  pltRel = R_RISCV_JUMP_SLOT;
-  relativeRel = R_RISCV_RELATIVE;
-  iRelativeRel = R_RISCV_IRELATIVE;
-  symbolicRel = R_RISCV_32;
-  tlsModuleIndexRel = R_RISCV_TLS_DTPMOD32;
-  tlsOffsetRel = R_RISCV_TLS_DTPREL32;
-  tlsGotRel = R_RISCV_TLS_TPREL32;
-  gotRel = symbolicRel;
-
-  // .got[0] = _DYNAMIC
-  gotBaseSymInGotPlt = false;
-  gotHeaderEntriesNum = 1;
-
-  // .got.plt[0] = _dl_runtime_resolve, .got.plt[1] = link_map
-  gotPltHeaderEntriesNum = 2;
-
-  pltHeaderSize = 32;
-  pltEntrySize = 16;
-  ipltEntrySize = 16;
-
+  noneRel = R_PATMOS_NONE;
+  
   defaultCommonPageSize = 0x1000;
   defaultMaxPageSize = 0x1000;
 }
@@ -92,12 +71,16 @@ uint32_t Patmos::calcEFlags() const {
 
 void Patmos::writeGotHeader(uint8_t *buf) const {
   // TODO: Find out, why this Method exists in other Targets ?
-  write32be(buf, mainPart->dynamic->getVA());
+  // GOT - Global Operations Table
+
+  write32be(buf, mainPart->dynamic->getVA());  
 }
 
 void Patmos::writeGotPlt(uint8_t *buf, const Symbol &s) const {
   // TODO: Find out, why this Method exists in other Targets ?
-  write32be(buf, in.plt->getVA());    
+  // PLT - Procedure Logik Table
+
+  write32be(buf, mainPart->dynamic->getVA());    
 }
 
 void Patmos::writePltHeader(uint8_t *buf) const {
@@ -110,26 +93,32 @@ void Patmos::writePlt(uint8_t *buf, const Symbol &sym,
 }
 
 RelType Patmos::getDynRel(RelType type) const {
-  return type == target->symbolicRel ? type : static_cast<RelType>(R_RISCV_NONE);
+  return type == target->symbolicRel ? type : static_cast<RelType>(R_PATMOS_NONE);
 }
 
 RelExpr Patmos::getRelExpr(const RelType type, const Symbol &s,
                           const uint8_t *loc) const {
-  // TODO: Find out, why this Method exists in other Targets ?
-
-  // different Instruction Types to later calculate the Values in relocate
+  // get which Relocation Value is returned
 
   switch (type) {
   case R_PATMOS_NONE:
-  case R_PATMOS_CFLI_ABS:
-  case R_PATMOS_ALUI_ABS:
-  case R_PATMOS_ALUL_ABS:
-  case R_PATMOS_MEMB_ABS:
-  case R_PATMOS_MEMH_ABS:
-  case R_PATMOS_MEMW_ABS:
-  case R_PATMOS_ABS_32:
-  case R_PATMOS_CFLI_PCREL:
     return R_NONE;
+  case R_PATMOS_CFLI_ABS:
+    return R_ABS;  
+  case R_PATMOS_ALUI_ABS:
+    return R_ABS;  
+  case R_PATMOS_ALUL_ABS:
+    return R_ABS; 
+  case R_PATMOS_MEMB_ABS:
+    return R_ABS; 
+  case R_PATMOS_MEMH_ABS:
+    return R_ABS; 
+  case R_PATMOS_MEMW_ABS:
+    return R_ABS; 
+  case R_PATMOS_ABS_32:
+    return R_ABS;  
+  case R_PATMOS_CFLI_PCREL:
+    return R_PC;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));
@@ -143,25 +132,36 @@ static uint32_t extractBits(uint64_t v, uint32_t begin, uint32_t end) {
 }
 
 void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
-  // Temporarly left at Example implementation in RISCV.cpp - except change from Little Endian to Big Endian
   // Relocate Types defined in /llvm/include/llvm/BinaryFormat/ELF.h
   
-  
-
-  const unsigned bits = config->wordsize * 8;
 
   switch (rel.type) {
-  case R_PATMOS_NONE:
-  case R_PATMOS_CFLI_ABS:
+  case R_PATMOS_CFLI_ABS: {
+    checkInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
+
+    uint32_t insn = read32be(loc);
+    uint32_t imm =  extractBits(val, 23, 2);
+    insn |= imm;
+    write32be(loc,insn);
+    return;
+  }
   case R_PATMOS_ALUI_ABS:
+    //error("Loc:" + getErrorLocation(loc) + " val: " + toString(val));
   case R_PATMOS_ALUL_ABS:
   case R_PATMOS_MEMB_ABS:
   case R_PATMOS_MEMH_ABS:
   case R_PATMOS_MEMW_ABS:
   case R_PATMOS_ABS_32:
-  case R_PATMOS_CFLI_PCREL:
-    write32le(loc,val);
     return;
+  case R_PATMOS_CFLI_PCREL: {
+    checkInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
+
+    uint32_t insn = read32be(loc);
+    uint32_t imm =  extractBits(val, 23, 2);
+    insn |= imm;
+    write32be(loc,insn);
+    return;
+  }
   default:
     llvm_unreachable("unknown relocation");
   }
