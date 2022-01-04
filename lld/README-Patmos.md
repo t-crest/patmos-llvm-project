@@ -8,9 +8,9 @@ This fork is in its current State NOT WORKING AS INTENDED.
 Points i need to fix:
 
 1. I need to test my implementation in lld/ELF/Arch/Patmos.cpp
-2. The order of Segments in Outputfiles for Patmos differ from Object-Files created with the currently used Gold-Linker.
+2. The order of Sections in Outputfiles for Patmos differ from Object-Files created with the currently used Gold-Linker.
 [tested with command readelf -e <FILE>]
-3. The start of the .text segment is in a different place.
+3. The start of the .text section is in a different place.
 (This issue is related to point 2)
 4. To test my implementation i need to add Patmos specific test in lld/test/ELF/Patmos.
 (Currently the test are just duplicates of SUPPORTED tests.)

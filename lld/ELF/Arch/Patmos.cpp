@@ -35,14 +35,16 @@ public:
 
 
 Patmos::Patmos() {
-  //defaultImageBase = 0x00020000;
-  defaultImageBase = 0x00001EA00; 
+  defaultImageBase = 0x00020000;
+  //defaultImageBase = 0x00001EA00; 
+  //defaultImageBase = 0x00001FA5C; // with option -nmagic - this means no page alignment
+  
   defaultMaxPageSize = 0x1000;
   defaultCommonPageSize = 0x1000;
 
-  needsThunks = true;
+  //needsThunks = true;
 
-  noneRel = R_PATMOS_NONE;
+  //noneRel = R_PATMOS_NONE;
 
 }
 
