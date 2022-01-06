@@ -3,18 +3,17 @@ LLVM Linker (lld) - PATMOS Infos
 
 ### INFO
 
-This fork is in its current State NOT WORKING AS INTENDED.
+This fork is in its current State links SIMPLE programms,
+further testing is still required to ensure lld doesn't create strange bugs.
 
-Points i need to fix:
+My Points that are still unclear/ need checking:
 
 1. I need to test my implementation in lld/ELF/Arch/Patmos.cpp
-2. The order of Sections in Outputfiles for Patmos differ from Object-Files created with the currently used Gold-Linker.
+2. The order of Sections in Outputfiles for Patmos differs from Object-Files created with the currently used Gold-Linker.
 [tested with command readelf -e <FILE>]
-3. The start of the .text section is in a different place.
-(This issue is related to point 2)
-4. To test my implementation i need to add Patmos specific test in lld/test/ELF/Patmos.
-(Currently the test are just duplicates of SUPPORTED tests.)
-5. The Hello_Patmos Programm gives no output linked with lld-link and called with pasim.
+3. Test if two or more files can be linked with lld
+4. Test all different relocation types 
+5. In the Testsuite for lld, the REQUIRES keyword is not working with patmos.
 
 ### Build
 

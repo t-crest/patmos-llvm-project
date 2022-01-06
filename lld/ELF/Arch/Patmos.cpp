@@ -144,9 +144,14 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_ABS_32: {
     
     checkInt(loc, static_cast<int64_t>(val), 32, rel);
-
+    
+    uint64_t out =  read32be(loc);
     uint32_t temp =  extractBits(val, 31, 0);
-    write32be(loc,temp);
+    out += temp;
+
+    checkIntUInt(loc, out, 32, rel);
+
+    write32be(loc,out);
     
     return;
   }
