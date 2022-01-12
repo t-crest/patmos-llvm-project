@@ -3,17 +3,15 @@ LLVM Linker (lld) - PATMOS Infos
 
 ### INFO
 
-This fork is in its current State links SIMPLE programms,
-further testing is still required to ensure lld doesn't create strange bugs.
+This fork is in its current State links SIMPLE programms as well as the LLVM testcases.
 
 My Points that are still unclear/ need checking:
 
-1. I need to test my implementation in lld/ELF/Arch/Patmos.cpp
-2. The order of Sections in Outputfiles for Patmos differs from Object-Files created with the currently used Gold-Linker.
+1. The order of Sections in Outputfiles for Patmos differs from Object-Files created with the currently used Gold-Linker.
 [tested with command readelf -e <FILE>]
-3. Test if two or more files can be linked with lld
-4. Test all different relocation types 
-5. In the Testsuite for lld, the REQUIRES keyword is not working with patmos.
+2. In the Testsuite for lld, the REQUIRES keyword is not working with patmos.
+3. Are Thunks needed by the Linker for Patmos ?
+4. Testing of Edge Cases (Value too large or too little) for relocation.
 
 ### Build
 
@@ -46,3 +44,5 @@ To test LLD
 ```
 make -j lld && ./bin/llvm-lit ../lld/test -v --filter=Patmos
 ```
+
+For Testin with LLVM testcases llvm/test/CodeGen/Patmos/lit.local.cfg changed from patmos-ld to ld.lld
