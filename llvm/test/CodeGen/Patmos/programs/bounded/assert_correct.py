@@ -104,7 +104,7 @@ def execute_and_stat(program, args):
     exec_name = program + input
     
     # Final generation of ELF with added input
-    if subprocess.run(["patmos-ld", "-nostdlib", "-static", "-o", exec_name, program, 
+    if subprocess.run(["ld.lld", "-nostdlib", "-static", "-o", exec_name, program, 
         "--defsym", "input=" + input]).returncode != 0:
         return True, args + "\nFailed to generate executable from '" + program + "' for argument '" + input + "'"
         
