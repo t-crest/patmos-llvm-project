@@ -478,12 +478,12 @@ static std::string get_patmos_gold(const ToolChain &TC, DiagnosticsEngine &Diag)
     }
   }
 
-  auto tmp = TC.GetProgramPath("patmos-ld");
-  if (tmp != "patmos-ld") {
+  auto tmp = TC.GetProgramPath("ld.lld");
+  if (tmp != "ld.lld") {
     return tmp;
   }else{
     auto DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
-                         "gold linker 'patmos-ld' not found");
+                         "lld linker 'ld.lld' not found");
     Diag.Report(DiagID);
     return "";
   }
