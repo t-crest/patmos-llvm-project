@@ -168,7 +168,7 @@ runs:
         NEWLIB_COMMIT: 1304d2463ae91470d898c92216729175325afde1
       shell: bash
       run: |
-        git clone https://github.com/emoun/patmos-newlib ${{env.NEWLIB_PATH}}
+        git clone https://github.com/t-crest/patmos-newlib ${{env.NEWLIB_PATH}}
         cd ${{env.NEWLIB_PATH}}
         git checkout $NEWLIB_COMMIT
     # Builds newlib to Patmos assembly (instead of bitcode)
@@ -208,7 +208,7 @@ runs:
         BENCH_COMMIT: 197791f2583906b76f2cd6b2abe66fed3ddc318b
       shell: bash
       run: |
-        git clone https://github.com/emoun/patmos-benchmarks ${{env.BENCH_PATH}}
+        git clone https://github.com/t-crest/patmos-benchmarks ${{env.BENCH_PATH}}
         cd ${{env.BENCH_PATH}}
         git checkout $BENCH_COMMIT
     # Build & Tests Benchmarks
