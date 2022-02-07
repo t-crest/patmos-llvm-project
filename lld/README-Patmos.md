@@ -38,11 +38,17 @@ bin/ld.lld --nostdlib --static --defsym=__heap_start=end --defsym=__heap_end=0x1
 
 ### Test
 
-...
 
 To test LLD
+
+```
+make -j lld && ./bin/llvm-lit ../lld/test -v
+```
+
+To test LLD (only patmos testcases)
+
 ```
 make -j lld && ./bin/llvm-lit ../lld/test -v --filter=Patmos
 ```
 
-For Testin with LLVM testcases llvm/test/CodeGen/Patmos/lit.local.cfg changed from patmos-ld to ld.lld
+For testing with LLVM testcases llvm/test/CodeGen/Patmos/lit.local.cfg changed from patmos-ld to ld.lld
