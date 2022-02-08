@@ -79,7 +79,7 @@ runs:
       if: inputs.enable-tests == 'true'
       uses: ./.github/actions/build-test
       with:
-        targets: UnitTests FileCheck count not lli llvm-strip llvm-install-name-tool dsymutil lli-child-target llvm-as llvm-bcanalyzer llvm-config llvm-cov llvm-cxxdump llvm-cvtres llvm-diff llvm-dis llvm-dwarfdump llvm-exegesis llvm-extract llvm-isel-fuzzer llvm-ifs llvm-jitlink llvm-opt-fuzzer llvm-lib llvm-link llvm-lto llvm-lto2 llvm-mc llvm-mca llvm-modextract llvm-nm llvm-objdump llvm-pdbutil llvm-profdata llvm-ranlib llvm-rc llvm-readelf llvm-rtdyld llvm-size llvm-split llvm-strings llvm-undname llvm-c-test llvm-cxxfilt llvm-xray yaml2obj obj2yaml yaml-bench verify-uselistorder bugpoint llc llvm-symbolizer opt sancov sanstats llvm-addr2line
+        targets: UnitTests FileCheck count not lli llvm-strip llvm-install-name-tool dsymutil lli-child-target llvm-as llvm-bcanalyzer llvm-config llvm-cov llvm-cxxdump llvm-cvtres llvm-diff llvm-dis llvm-dwarfdump llvm-exegesis llvm-extract llvm-isel-fuzzer llvm-ifs llvm-jitlink llvm-opt-fuzzer llvm-lib llvm-link llvm-lto llvm-lto2 llvm-mc llvm-mca llvm-modextract llvm-nm llvm-objdump llvm-pdbutil llvm-profdata llvm-ranlib llvm-rc llvm-readelf llvm-rtdyld llvm-size llvm-split llvm-strings llvm-undname llvm-c-test llvm-cxxfilt llvm-xray yaml2obj obj2yaml yaml-bench verify-uselistorder bugpoint llc llvm-symbolizer opt sancov sanstats llvm-addr2line lld
         path: ${{env.LLVM_PATH}}/test
         working-dir: ${{env.BUILD_PATH}}
         include: LLVM-Unit.*(${{inputs.include-only}})

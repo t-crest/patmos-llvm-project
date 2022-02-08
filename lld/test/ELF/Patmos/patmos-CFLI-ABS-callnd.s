@@ -1,3 +1,5 @@
+# REQUIRES: patmos
+
 # RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf -mattr=-relax %s -o %t.patmos.o
 
 # RUN: ld.lld %t.patmos.o --defsym foo=0 --defsym bar=8 -o %t.patmos

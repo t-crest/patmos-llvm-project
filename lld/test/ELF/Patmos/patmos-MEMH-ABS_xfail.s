@@ -1,3 +1,5 @@
+# REQUIRES: patmos
+
 # XFAIL: *
 
 # RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf -mattr=-relax %s -o %t.patmos.o

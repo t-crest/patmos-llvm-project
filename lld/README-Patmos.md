@@ -9,9 +9,7 @@ My Points that are still unclear/ need checking:
 
 1. The order of Sections in Outputfiles for Patmos differs from Object-Files created with the currently used Gold-Linker.
 [tested with command readelf -e <FILE>]
-2. In the Testsuite for lld, the REQUIRES keyword is not working with patmos.
-3. Are Thunks needed by the Linker for Patmos ?
-4. Testing of Edge Cases (Value too large or too little) for relocation.
+2. Are Thunks needed by the Linker for Patmos ?
 
 ### Build
 
