@@ -112,6 +112,14 @@ runs:
         working-dir: ${{env.BUILD_PATH}}
         include: ${{inputs.include-only}}
         exclude: Clang-Unit
+    - name: LLD Tests
+      if: inputs.enable-tests == 'true'
+      uses: ./.github/actions/build-test
+      with:
+        targets: lld
+        path: ${{env.LLD_PATH}}/test 
+        working-dir: ${{env.BUILD_PATH}}
+        include: ${{inputs.include-only}}
     - name: Build LLVM/Clang
       #If tests aren't enabled, no LLVM/Clang targets have been built, so build the ones we need
       if: inputs.enable-tests == 'false'
