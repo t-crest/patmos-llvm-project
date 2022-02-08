@@ -16,3 +16,6 @@ _start:
     lbl  $r1 = [$r2 + foo]
     lbc  $r1 = [$r2 + bar]
     lbm  $r1 = [$r2 + bar]
+
+# Tests the minimal and the maximum value
+# RUN: ld.lld %t.patmos.o --defsym foo=63 --defsym bar=-64 -o %t2.o

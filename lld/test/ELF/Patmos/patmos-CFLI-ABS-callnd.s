@@ -12,3 +12,6 @@
 _start:
     call    foo
     call    bar
+
+# Tests the maximum value (because values are unsigned)
+# RUN: ld.lld %t.patmos.o --defsym foo=16777215 --defsym bar=8 -o %t2

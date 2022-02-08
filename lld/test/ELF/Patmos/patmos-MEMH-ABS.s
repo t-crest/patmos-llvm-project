@@ -7,12 +7,12 @@
 # CHECK:      02 82 23 10     lhc  $r1 = [$r2 + 16]
 # CHECK:      02 82 23 90     lhm  $r1 = [$r2 + 16]
 
-
-
-
 .global _start
 _start:
     lhs  $r1 = [$r2 + foo]
     lhl  $r1 = [$r2 + foo]
     lhc  $r1 = [$r2 + bar]
     lhm  $r1 = [$r2 + bar]
+
+# Tests the minimal and the maximum value
+# RUN: ld.lld %t.patmos.o --defsym foo=127 --defsym bar=-128 -o %t2.o

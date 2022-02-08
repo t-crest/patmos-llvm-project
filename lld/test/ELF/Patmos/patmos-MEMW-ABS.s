@@ -8,11 +8,12 @@
 # CHECK:      02 82 21 88     lwm  $r1 = [$r2 + 8]
 
 
-
-
 .global _start
 _start:
     lws  $r1 = [$r2 + foo]
     lwl  $r1 = [$r2 + foo]
     lwc  $r1 = [$r2 + bar]
     lwm  $r1 = [$r2 + bar]
+
+# Tests the minimal and the maximum value
+# RUN: ld.lld %t.patmos.o --defsym foo=255 --defsym bar=-256 -o %t.patmos

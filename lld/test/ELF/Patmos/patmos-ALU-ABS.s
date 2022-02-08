@@ -32,3 +32,6 @@ _start:
 
 .global bar
 bar = 255
+
+# Tests the maximum value (because values are unsigned)
+# RUN: ld.lld %t.patmos.o --defsym foo=4095 -o %t2.o
