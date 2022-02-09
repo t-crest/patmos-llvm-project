@@ -3,17 +3,17 @@ LLVM Linker (lld) - PATMOS Infos
 
 ### INFO
 
-This fork is in its current State links SIMPLE programms as well as the LLVM testcases.
+This fork is in its current State links SIMPLE programms as well as the LLVM testcases and the Testcases in Github Actions.
 
 My Points that are still unclear/ need checking:
 
 1. The order of Sections in Outputfiles for Patmos differs from Object-Files created with the currently used Gold-Linker.
 [tested with command readelf -e <FILE>]
-2. Are Thunks needed by the Linker for Patmos ?
+2. How to call LLD from Clang
 
 ### Build
 
-To build the lld linker clang and llvm needed to be built in the same directory
+To build the lld linker, clang and llvm needed to be built in the same directory
 
 ```
 mkdir -p build
@@ -49,4 +49,8 @@ To test LLD (only patmos testcases)
 make -j lld && ./bin/llvm-lit ../lld/test -v --filter=Patmos
 ```
 
-For testing with LLVM testcases llvm/test/CodeGen/Patmos/lit.local.cfg changed from patmos-ld to ld.lld
+### Changes outside of the lld folder
+
+1. For testing with LLVM testcases llvm/test/CodeGen/Patmos/* changed from patmos-ld to ld.lld
+2. Change Github Actions to include LLD
+3. Adapt README-Patmos.MD in parentfolder
