@@ -78,6 +78,11 @@ namespace llvm {
       static bool isMaybe(const Function &F);
       static bool isMaybe(const MachineFunction &MF);
 
+      /// isConstant - Return true if should produce constant execution-time,
+      /// single-path code. Throws error if 'mpatmos-enable-constant-execution-time'
+      /// is enabled but 'mpatmos-singlepath' is not.
+      static bool isConstant();
+
       /// getRootNames - Fill a set with the names of
       /// single-path root functions
       static void getRootNames(std::set<StringRef> &S);

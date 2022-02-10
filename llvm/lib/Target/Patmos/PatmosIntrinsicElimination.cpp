@@ -1,4 +1,4 @@
-//===-- PatmosSPBundling.cpp - Remove unused function declarations ------------===//
+//===-- PatmosIntrinsicElimination.cpp - Remove unused function declarations ------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

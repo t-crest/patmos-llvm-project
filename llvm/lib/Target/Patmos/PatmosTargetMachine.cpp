@@ -73,6 +73,11 @@ namespace {
     PatmosPassConfig(PatmosTargetMachine &TM, PassManagerBase &PM)
      : TargetPassConfig(TM, PM), DefaultRoot("main")
     {
+      if( PatmosSinglePathInfo::isConstant() && !PatmosSinglePathInfo::isEnabled() ) {
+          report_fatal_error("The 'mpatmos-enable-constant-execution-time' flag "
+              "requires the 'mpatmos-singlepath' flag to also be set.");
+      }
+
       // Enable preRA MI scheduler.
       if (TM.getSubtargetImpl()->usePreRAMIScheduler(getOptLevel())) {
         enablePass(&MachineSchedulerID);
@@ -135,6 +140,10 @@ namespace {
       if (getOptLevel() == CodeGenOpt::None) {
         addPass(&DeadMachineInstructionElimID);
       }
+
+      if (PatmosSinglePathInfo::isConstant()) {
+        addPass(createDataCacheAccessEliminationPass(getPatmosTargetMachine()));
+      }
     }
 
     /// addPostRegAlloc - This method may be implemented by targets that want to
@@ -158,6 +167,9 @@ namespace {
 
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
+        if (PatmosSinglePathInfo::isConstant()) {
+          addPass(createInstructionLevelCETPass(getPatmosTargetMachine()));
+        }
         addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));
         addPass(createPatmosSPReducePass(getPatmosTargetMachine()));
         addPass(createSPSchedulerPass(getPatmosTargetMachine()));

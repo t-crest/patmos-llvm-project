@@ -588,7 +588,7 @@ void PatmosPostRASchedStrategy::removeImplicitCFLDeps(SUnit &SU)
         MachineInstr *PredMI = it->getSUnit()->getInstr();
 
         if (PredMI->mayStore() || PredMI->mayLoad()) {
-          PatmosII::MemType MT = PII.getMemType(*PredMI);
+          PatmosII::MemType MT = PatmosInstrInfo::getMemType(*PredMI);
 
           // If we have a load or store from SPM or stack cache, it does not
           // interfere with the call and we may move it into the delay slot

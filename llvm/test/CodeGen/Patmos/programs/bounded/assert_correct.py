@@ -90,7 +90,7 @@ def pasim_stat_clean(stats):
 # Argument 3 is the execution arguments (see top of file for description).
 # Tests that the output of the program match the expected output. If not, reports an error.
 # Returns the cleaned statistics.
-def execute_and_stat(program, args):
+def execute_and_stat(program, args, pasim_args):
 	# Split the execution argument into input and expected output.
     split = args.split("=", 1)
     input = split[0]
@@ -104,7 +104,7 @@ def execute_and_stat(program, args):
         "--defsym", "input=" + input]).returncode != 0:
         return True, args + "\nFailed to generate executable from '" + program + "' for argument '" + input + "'"
         
-    pasim_result = subprocess.run(["pasim", exec_name, "-V", "-D", "ideal"], 
+    pasim_result = subprocess.run(["pasim", exec_name, "-V"] + pasim_args.split(), 
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     program_output=pasim_result.stdout
     pasim_stats=pasim_result.stderr
@@ -134,11 +134,12 @@ def execute_and_stat(program, args):
         return True, ""
        
 # Compile and test using the given LLC arguments.
-def compile_and_test(llc_args):
+def compile_and_test(llc_args, pasim_args):
     def throw_error(*msgs):
         for msg in msgs:
             print(msg, end = '')
         print("\nLLC args: ", llc_args)
+        print("Pasim args: ", pasim_args)
         sys.exit(1)
         
     using_singlepath = "-mpatmos-singlepath=" in llc_args
@@ -159,7 +160,7 @@ def compile_and_test(llc_args):
     # Run the first execution argument on its own,
     # such that its stats result can be compared to
     # all other executions
-    first_stats_failed, first_stats=execute_and_stat(compiled, exec_arg)
+    first_stats_failed, first_stats=execute_and_stat(compiled, exec_arg, pasim_args)
     if first_stats_failed:
         throw_error(first_stats)
 
@@ -170,7 +171,7 @@ def compile_and_test(llc_args):
     # so we don't need to compare them to each other.
     for i in sys.argv[first_exec_arg_index:]:
             
-        rest_failed, rest_stats=execute_and_stat(compiled, i)
+        rest_failed, rest_stats=execute_and_stat(compiled, i, pasim_args)
         if rest_failed:
             throw_error()
         
@@ -181,22 +182,29 @@ def compile_and_test(llc_args):
                 throw_error("The execution of '", compiled, "' for execution arguments '", exec_arg, "' and '", i, "' weren't equivalent")
 
 # Compile and test all compinations in the given matrix
-# Each list in the matrix is a group of flags that each
-# should be compled/test with every element in the other groups.
+# Each list in the matrix is a group of llc and pasim flags that each
+# should be compiled/tested with every element in the other groups.
 #
-# The matrix argument are added to the given arguments
-def compile_and_test_matrix(llc_args, matrix):
+# The matrix arguments are added to the given arguments
+def compile_and_test_matrix(llc_args, pasim_args, matrix):
     if len(matrix) == 0:
-        compile_and_test(llc_args)
+        compile_and_test(llc_args, pasim_args)
     else:
         for arg in matrix[0]:
-            compile_and_test_matrix(llc_args + " " + arg, matrix[1:])
+            if type(arg) is tuple:
+                arg_llc = arg[0]
+                arg_pasim = arg[1]
+            else:
+                arg_llc = arg
+                arg_pasim = ""
+            compile_and_test_matrix(llc_args + " " + arg_llc, pasim_args + " " + arg_pasim, matrix[1:])
 
-compile_and_test_matrix("", [
+compile_and_test_matrix("", "", [
     [
-        "", # Traditional code
-        "-mpatmos-singlepath=main", # Single-path code without dual-issue
-        "-mpatmos-singlepath=main -mpatmos-disable-vliw=false" # Single-path with dual-issue
+        ("", ""), # Traditional code
+        ("-mpatmos-singlepath=main", "-D ideal"), # Single-path code without dual-issue
+        ("-mpatmos-singlepath=main -mpatmos-disable-vliw=false", "-D ideal"), # Single-path with dual-issue
+        ("-mpatmos-singlepath=main -mpatmos-enable-constant-execution-time=true", "-D lru2") # Single-path code without dual-issue, with constant execution time
     ],
     # Optimization levels
     ["", "-O1", "-O2"]

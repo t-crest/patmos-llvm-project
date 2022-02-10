@@ -516,7 +516,7 @@ bool PatmosInstrInfo::isSideEffectFreeSRegAccess(const MachineInstr *MI)
   return false;
 }
 
-PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) const {
+PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) {
   assert(MI.mayLoad() || MI.mayStore());
 
   if (MI.isBundle()) {

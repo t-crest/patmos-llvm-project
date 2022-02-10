@@ -4,11 +4,13 @@ add_llvm_component_library(LLVMPatmosSinglePath
   PatmosSPMark.cpp
   PatmosSPPrepare.cpp
   PatmosSPBundling.cpp
+  DataCacheAccessElimination.cpp
   PatmosSPReduce.cpp
   RAInfo.cpp
   SPScope.cpp
   SPScheduler.cpp
   PredicateDefinition.cpp
+  InstructionLevelCET.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

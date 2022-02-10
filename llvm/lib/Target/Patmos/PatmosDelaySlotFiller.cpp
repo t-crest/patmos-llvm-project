@@ -523,7 +523,7 @@ bool DelayHazardInfo::hasHazard(MachineBasicBlock &MBB,
     sawSTC = true;
     return true;
   }
-  if ( (I->mayLoad()||I->mayStore()) && TII->getMemType(*I)==PatmosII::MEM_S
+  if ( (I->mayLoad()||I->mayStore()) && PatmosInstrInfo::getMemType(*I)==PatmosII::MEM_S
        && sawSTC )
     return true;
 

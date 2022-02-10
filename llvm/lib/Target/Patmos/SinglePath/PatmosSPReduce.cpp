@@ -983,13 +983,13 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           continue;
       }
 
-      if (MI->isPredicable(MachineInstr::QueryType::IgnoreBundle) && predReg != Patmos::P0) {
+      if (MI->isPredicable(MachineInstr::QueryType::IgnoreBundle) && (predReg != Patmos::P0 || instrPredNeg) ) {
         auto isPredicated = [&](auto instr){
           int i = instr->findFirstPredOperandIdx();
           if (i != -1) {
             unsigned preg = instr->getOperand(i).getReg();
             int      flag = instr->getOperand(++i).getImm();
-            return (preg!=Patmos::NoRegister && preg!=Patmos::P0) || flag;
+            return (preg!=Patmos::NoRegister && (preg!=Patmos::P0 || instrPredNeg)) || flag;
           }
           // no predicates at all
           return false;

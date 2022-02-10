@@ -47,6 +47,11 @@ static cl::list<std::string> SPRootList(
     cl::desc("Entry functions for which single-path code is generated"),
     cl::CommaSeparated);
 
+/// EnableConstantExecutionTime - Command line option to enable the generation of
+/// constant-execution-time single-path code (disabled by default).
+static cl::opt<bool> EnableConstantExecutionTime
+          ("mpatmos-enable-constant-execution-time", cl::init(false),
+           cl::desc("Enable the generation of constant execution-time, single-path code. Requires the 'mpatmos-singlepath' flag."));
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -64,6 +69,10 @@ llvm::createPatmosSinglePathInfoPass(const PatmosTargetMachine &tm) {
 
 bool PatmosSinglePathInfo::isEnabled() {
   return !SPRootList.empty();
+}
+
+bool PatmosSinglePathInfo::isConstant() {
+  return EnableConstantExecutionTime;
 }
 
 bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {

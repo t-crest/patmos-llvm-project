@@ -108,6 +108,11 @@ namespace llvm {
       return result;
     }
 
+    void setPredicateFor(const MachineInstr* instr, unsigned pred, bool negate)
+    {
+      InstrPred[instr] = std::make_pair(pred, negate);
+    }
+
     void dump(raw_ostream& os, unsigned indent) const
     {
       printID(os.indent(indent)) << ":\n";
@@ -278,6 +283,15 @@ namespace llvm {
     {
       Remnants.insert(MBB);
       MBB = newMbb;
+    }
+
+    /// Replaces any data regarding an existing instruction to
+    /// instead refer to another.
+    /// Assumes the existing instruction exists.
+    void replaceInstr(MachineInstr* existing, MachineInstr* new_instr)
+    {
+      InstrPred.insert(std::make_pair(new_instr, InstrPred.at(existing)));
+      InstrPred.erase(existing);
     }
 
     /// Whether this block is a result of bundling at least 2 blocks.
