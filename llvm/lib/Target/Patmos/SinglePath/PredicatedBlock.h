@@ -78,7 +78,7 @@ namespace llvm {
       std::set<unsigned> result;
       for(auto const &pair: InstrPred)
       {
-        result.insert(pair.second);
+        result.insert(pair.second.first);
       }
       return result;
     }
@@ -91,7 +91,7 @@ namespace llvm {
       for( auto instr_iter = MBB->instr_begin(), end = MBB->instr_end(); instr_iter != end; instr_iter++){
         MachineInstr* instr = &(*instr_iter);
         assert(InstrPred.find(instr) == InstrPred.end());
-        InstrPred.insert(std::make_pair(instr, pred));
+        InstrPred.insert(std::make_pair(instr, std::make_pair(pred, false)));
       }
 
       // Reassign successor predicates
@@ -100,8 +100,10 @@ namespace llvm {
       }
     }
 
-    std::map<const MachineInstr*, unsigned> getInstructionPredicates() const {
-      std::map<const MachineInstr*, unsigned> result;
+    /// Gets a map of what predicate each instruction is predicated by and whether
+    /// The predicate is negated
+    std::map<const MachineInstr*, std::pair<unsigned, bool>> getInstructionPredicates() const {
+      std::map<const MachineInstr*, std::pair<unsigned, bool>> result;
       result.insert(InstrPred.begin(), InstrPred.end());
       return result;
     }
@@ -148,7 +150,7 @@ namespace llvm {
         auto instructionPredicates = getInstructionPredicates();
         os.indent(indent + 2) << "[" << &(*MI) << "](";
         if(instructionPredicates.count(&*MI)){
-          os << getInstructionPredicates().at(&*MI);
+          os << (getInstructionPredicates().at(&*MI).second? "!" : " ") << getInstructionPredicates().at(&*MI).first;
         }else{
           os << "-";
         }
@@ -162,7 +164,7 @@ namespace llvm {
         auto instructionPredicates = getInstructionPredicates();
         os.indent(indent + 2) << "[" << &(*MI) << "](";
         if(instructionPredicates.count(&*MI)){
-          os << getInstructionPredicates().at(&*MI);
+          os << (getInstructionPredicates().at(&*MI).second? "!" : " ") << getInstructionPredicates().at(&*MI).first;
         }else{
           os << "-";
         }
@@ -292,7 +294,7 @@ namespace llvm {
     std::set<MachineBasicBlock*> Remnants;
 
     /// A mapping of which predicate each instruction is predicated by.
-    std::map<const MachineInstr*, unsigned> InstrPred;
+    std::map<const MachineInstr*, std::pair<unsigned, bool>> InstrPred;
 
     /// A list of predicates that are defined by this block, I.e. at runtime
     /// the predicate's true/false value is calculated in this block.

@@ -955,7 +955,8 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
       }
 
       assert(instrPreds.count(&(*MI)));
-      auto instrPred = instrPreds[&(*MI)];
+      auto instrPred = instrPreds[&(*MI)].first;
+      auto instrPredNeg = instrPreds[&(*MI)].second ? 1 : 0;
       auto predReg = predRegs.count(instrPred) ? predRegs[instrPred] : Patmos::P0;
       DEBUG_TRACE( dbgs() << "Predicate (" << instrPred << ") set to register: (" << predReg << ")\n");
       if (MI->isCall()) {
@@ -965,7 +966,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           // copy actual preg to temporary preg
           AddDefaultPred(BuildMI(*MBB, MI, DL,
                 TII->get(Patmos::PMOV), PRTmp))
-            .addReg(predReg).addImm(0);
+            .addReg(predReg).addImm(instrPredNeg);
 
           // store/restore caller saved R9 (gets dirty during frame setup)
           int fi = PMFI->getSinglePathCallSpillFI();
@@ -1002,7 +1003,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           assert(PO1.isReg() && PO2.isImm() &&
                  "Unexpected Patmos predicate operand");
           PO1.setReg(predReg);
-          PO2.setImm(0);
+          PO2.setImm(instrPredNeg);
         } else {
           DEBUG_TRACE( dbgs() << "    in MBB#" << MBB->getNumber()
                         << ": instruction already predicated: " << *MI );
@@ -1015,7 +1016,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
             // build a new predicate := use_preg & old pred
             AddDefaultPred(BuildMI(*MBB, MI, MI->getDebugLoc(),
                                 TII->get(Patmos::PAND), PRTmp))
-                  .addReg(predReg).addImm(0)
+                  .addReg(predReg).addImm(instrPredNeg)
                   .add(PO1).add(PO2);
             PO1.setReg(PRTmp);
             PO2.setImm(0);

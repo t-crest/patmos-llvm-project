@@ -294,13 +294,13 @@ TEST(PredicatedBlockTest, MergeTest){
   auto instr2Iter = mockMBB2.instr_begin();
 
   EXPECT_THAT(b1.getInstructionPredicates(), UnorderedElementsAreArray({
-    std::make_pair(&(*instr1Iter), 1),
-    std::make_pair(&(*(instr1Iter+1)), 1),
-    std::make_pair(&(*(instr1Iter+2)), 1),
-    std::make_pair(&(*instr2Iter), 2),
-    std::make_pair(&(*(instr2Iter+1)), 2),
-    std::make_pair(&(*(instr2Iter+2)), 2),
-    std::make_pair(&(*(instr2Iter+3)), 2)
+    std::make_pair(&(*instr1Iter), std::make_pair(1, false)),
+    std::make_pair(&(*(instr1Iter+1)), std::make_pair(1, false)),
+    std::make_pair(&(*(instr1Iter+2)), std::make_pair(1, false)),
+    std::make_pair(&(*instr2Iter), std::make_pair(2, false)),
+    std::make_pair(&(*(instr2Iter+1)), std::make_pair(2, false)),
+    std::make_pair(&(*(instr2Iter+2)), std::make_pair(2, false)),
+    std::make_pair(&(*(instr2Iter+3)), std::make_pair(2, false))
   }));
 
 
