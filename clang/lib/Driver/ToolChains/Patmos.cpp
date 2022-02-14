@@ -429,14 +429,18 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     LLCArgs.push_back("-O0");
   }
 
-  // floating point arguments are different for LLC
   for (ArgList::const_iterator
          it = Args.begin(), ie = Args.end(); it != ie; ++it) {
     Arg *A = *it;
 
     if (A->getOption().matches(options::OPT_mllvm)) {
-      A->claim();
-      A->renderAsInput(Args, LLCArgs);
+      for(auto v : A->getValues()){
+        // Take only those that start with "--mpatmos"
+        if( std::string(v).rfind("--mpatmos",0) == 0 ){
+          A->claim();
+          LLCArgs.push_back(v);
+        }
+      }
     }
   }
 
