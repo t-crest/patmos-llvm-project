@@ -34,6 +34,7 @@ def SDT_PatmosMul          : SDTypeProfile<0, 2, [SDTCisInt<0>,
 
 def SDTBrjt                : SDTypeProfile<0, 2, [SDTCisPtrTy<0>,
                                                   SDTCisSameAs<0, 1> ]>;
+def SDT_PatmosLoopBound   : SDTypeProfile<0, 2, [SDTCisI32<0>, SDTCisI32<1>]>;
 
 //===----------------------------------------------------------------------===//
 // Patmos Specific Predicates
@@ -65,6 +66,10 @@ def PatmosMulU    : SDNode<"PatmosISD::MULU", SDT_PatmosMul,
                            [SDNPCommutative, SDNPAssociative, SDNPOutGlue]>;
 
 def brjt          : SDNode<"ISD::BR_JT", SDTBrjt,  [SDNPHasChain]>;
+
+def PatmosLoopBound
+                  : SDNode<"PatmosISD::LOOP_BOUND",   SDT_PatmosLoopBound,
+                           [SDNPHasChain, SDNPOutGlue]>;
 
 //===----------------------------------------------------------------------===//
 // Patmos Operand Definitions.
@@ -303,7 +308,10 @@ let mayLoad=1 in
 def PSEUDO_PREG_RELOAD : PseudoInst<(outs PRegs:$pd),
                                     (ins RRegs:$ra, i32imm:$imm),
                                     "#PSEUDO_PREG_RELOAD", "", []>;
-
+let hasSideEffects = 1 in // To ensure it is not optimized away
+def PSEUDO_LOOPBOUND : PseudoInst<(outs), (ins i32imm:$minv, i32imm:$maxv),
+                          "#PSEUDO_LOOPBOUND", "[$minv,$maxv]",
+                          [(PatmosLoopBound timm:$minv, timm:$maxv)]>;
 //===----------------------------------------------------------------------===//
 //  Control Flow Instructions...
 //===----------------------------------------------------------------------===//

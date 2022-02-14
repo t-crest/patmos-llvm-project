@@ -82,21 +82,17 @@ static void eliminate(
 
   auto *i_cmp = builder.CreateICmpEQ(i_phi, ConstantInt::get(builder.getInt32Ty(), 0), label_prefix + ".loop.finished");
 
+  // Set loop bound for generated loop
+  auto *loop_bound_fn = F.getParent()->getFunction("llvm.loop.bound");
+  if(!loop_bound_fn) {
+    // Loop bound function not declared yet. Declare it.
+    std::vector<Type*> BoundTypes(2, Type::getInt32Ty(F.getContext()));
+    FunctionType *FT = FunctionType::get(Type::getVoidTy(F.getContext()), BoundTypes, false);
+    loop_bound_fn = Function::Create(FT, Function::ExternalLinkage, "llvm.loop.bound", F.getParent());
+  }
+  builder.CreateCall(loop_bound_fn, {builder.getInt32(loop_bound), builder.getInt32(loop_bound)});
+
   auto *cond_br = BranchInst::Create(memset_loop_end, memset_loop_body, i_cmp, memset_loop_cond);
-
-  const char *MetadataName = "llvm.loop.bound";
-  llvm::MDString *Name = llvm::MDString::get(F.getContext(), MetadataName);
-  SmallVector<llvm::Metadata *, 3> OpValues;
-  OpValues.push_back(Name);
-  OpValues.push_back(llvm::ValueAsMetadata::get(builder.getInt32(loop_bound)));
-  OpValues.push_back(llvm::ValueAsMetadata::get(builder.getInt32(loop_bound)));
-
-  SmallVector<llvm::Metadata *, 2> Metadata(1);
-  Metadata.push_back(llvm::MDNode::get(F.getContext(), OpValues));
-  llvm::MDNode *LoopID = llvm::MDNode::get(F.getContext(), Metadata);
-  LoopID->replaceOperandWith(0, LoopID); // First op points to itself.
-
-  cond_br->setMetadata("llvm.loop", LoopID);
 
   builder.SetInsertPoint(memset_loop_body);
 
@@ -123,21 +119,20 @@ static void eliminate(
   // Point the first half of the original block to the memset blocks
   cast<BranchInst>(BB.back()).setSuccessor(0, memset_entry);
 
-  if(successor->back().hasMetadata("llvm.loop")) {
-    // If the original branch has loop metadata, this might be a loop header block with a bound.
-    // Therefore, move this medata to the previous half
-    auto *meta = successor->back().getMetadata("llvm.loop");
-
-    BB.back().setMetadata("llvm.loop", meta);
-    memset_entry->back().setMetadata("llvm.loop", meta);
-    // Note: It is unclear why we need to set both BB and memset_entry.
-    // We set them both because MachineLoopInfo will recognise
-    // both BB and memset_entry as loop headers to (almost) the same loop
-    // meaning SPScope will ask for their bounds.
-    // Setting both to the original loop bound works and should be correct
-    // since BB and memset_entry will eventually be merged into the same block
-
-    successor->back().setMetadata("llvm.loop", NULL);
+  // If the original block has a loop bound instruction, ensure it is put in the previous half
+  for(auto instr_iter = successor->begin(); instr_iter != successor->end(); instr_iter++){
+    if(instr_iter->getOpcode() == Instruction::Call || instr_iter->getOpcode() == Instruction::CallBr){
+      if (CallInst *II = dyn_cast<CallInst>(&*instr_iter)) {
+        auto *called = II->getCalledFunction();
+        if(called && called->getName() == "llvm.loop.bound"){
+          builder.SetInsertPoint(&*std::prev(BB.end()));
+          builder.CreateCall(called, {II->getArgOperand(0), II->getArgOperand(1)});
+          builder.SetInsertPoint((BasicBlock*)NULL);
+          successor->getInstList().erase(instr_iter);
+          break;
+        }
+      }
+    }
   }
 
   assert(isa<IntrinsicInst>(successor->begin())); // This should be the call to intrinsic

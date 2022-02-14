@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Patmos.h"
 #include "PatmosTargetInfo.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -32,37 +33,17 @@ void llvm::getMBBIRName(const MachineBasicBlock *MBB,
 
 std::pair<int,int> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
   if(MBB && MBB->getBasicBlock()) {
-    if (auto loop_meta = MBB->getBasicBlock()->getTerminator()->getMetadata("llvm.loop")) {
-      // We ignore the first metadata operand, as it is always a self-reference
-      // in "llvm.loop".
-      for(int i = 1, end = loop_meta->getNumOperands(); i < end; i++) {
-        auto meta_op_node = dyn_cast<llvm::MDNode>(loop_meta->getOperand(i).get());
-        if( meta_op_node->getNumOperands() >= 1 ){
-          auto name = cast_or_null<MDString>(meta_op_node->getOperand(0));
-          if( name && name->getString() == "llvm.loop.bound") {
-            auto min_node = cast_or_null<ValueAsMetadata>(meta_op_node->getOperand(1))->getValue();
-            auto max_node = cast_or_null<ValueAsMetadata>(meta_op_node->getOperand(2))->getValue();
-            if(min_node && max_node &&
-               min_node->getType()->isIntegerTy() &&
-               max_node->getType()->isIntegerTy()
-             ) {
-              auto min = ((llvm::ConstantInt*) min_node)->getZExtValue();
-              auto max = ((llvm::ConstantInt*) max_node)->getZExtValue();
-
-              return std::make_pair(min, max);
-            } else {
-              report_fatal_error(
-                        "Invalid loop bounds in MBB: '" +
-                        MBB->getName() + "'!");
-            }
-          }
-        }
-      }
+    auto bound_instr = std::find_if(MBB->begin(), MBB->end(), [&](auto &instr){
+      return instr.getOpcode() == Patmos::PSEUDO_LOOPBOUND;
+    });
+    if(bound_instr != MBB->end()) {
+      assert(bound_instr->getOperand(0).isImm());
+      assert(bound_instr->getOperand(1).isImm());
+      return std::make_pair(bound_instr->getOperand(0).getImm(), bound_instr->getOperand(1).getImm());
     }
   }
   return std::make_pair(-1, -1);
 }
-
 
 Target &llvm::getThePatmosTarget() {
   static Target ThePatmosTarget;

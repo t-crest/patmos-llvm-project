@@ -18,11 +18,11 @@ for.body:
   %2 = select i1 %0, i32 %1, i32 1 
   %above10 = icmp ugt i32 %2, 10
   %add.x = add i32 %2, %x
-  br i1 %above10, label %end, label %for.body, !llvm.loop !0
+  call void @llvm.loop.bound(i32 1, i32 10)
+  br i1 %above10, label %end, label %for.body
 
 end:                         
   ret i32 %2
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 1, i32 10}
+declare void @llvm.loop.bound(i32, i32)

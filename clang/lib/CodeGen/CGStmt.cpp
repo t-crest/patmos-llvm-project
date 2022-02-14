@@ -759,40 +759,44 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
 }
 
 // Emits loop bounds on the given conditional branch (assuming its
-// the branch that controls the condition of the loop.
+// the branch of the loop header).
 //
 // Current implementation overwrites any "llvm.loop" attribute on the
 // instruction, meaning it doesn't play well with other loop hints,
 // e.g. "unroll".
-void CodeGenFunction::EmitCondBrBounds(llvm::LLVMContext &Context,
-                                       llvm::BranchInst *CondBr,
+void CodeGenFunction::EmitLoopBounds(llvm::BasicBlock *BB,
                                        const ArrayRef<const Attr *> &Attrs) {
+  auto *F = BB->getParent();
+  auto &Context = BB->getContext();
   auto is_bound = [](auto attr){ return dyn_cast<LoopBoundAttr>(attr); };
 
   assert(std::count_if(Attrs.begin(), Attrs.end(), is_bound) <= 1 &&
       "We don't support multiple bounds on the same loop");
 
   // Look for any loopbound attribute
-  auto foundLB = std::find_if(Attrs.begin(), Attrs.end(),is_bound);
+  auto foundLB = std::find_if(Attrs.begin(), Attrs.end(), is_bound);
   if( foundLB != Attrs.end() ) {
-    auto LB = dyn_cast<LoopBoundAttr>(*foundLB); // Guaranteed to work
+    auto *LB = dyn_cast<LoopBoundAttr>(*foundLB); // Guaranteed to work
 
-    const char *MetadataName = "llvm.loop.bound";
-    llvm::MDString *Name = llvm::MDString::get(Context, MetadataName);
     llvm::Value *MinVal = llvm::ConstantInt::get(Int32Ty, LB->getMin());
     llvm::Value *MaxVal = llvm::ConstantInt::get(Int32Ty, LB->getMax());
 
-    SmallVector<llvm::Metadata *, 3> OpValues;
-    OpValues.push_back(Name);
-    OpValues.push_back(llvm::ValueAsMetadata::get(MinVal));
-    OpValues.push_back(llvm::ValueAsMetadata::get(MaxVal));
-
-    SmallVector<llvm::Metadata *, 2> Metadata(1);
-    Metadata.push_back(llvm::MDNode::get(Context, OpValues));
-    llvm::MDNode *LoopID = llvm::MDNode::get(Context, Metadata);
-    LoopID->replaceOperandWith(0, LoopID); // First op points to itself.
-
-    CondBr->setMetadata("llvm.loop", LoopID);
+    auto *loop_bound_fn = F->getParent()->getFunction("llvm.loop.bound");
+    std::vector<llvm::Type*> BoundTypes(2, llvm::Type::getInt32Ty(Context));
+    auto *FT = llvm::FunctionType::get(llvm::Type::getVoidTy(Context), BoundTypes, false);
+    if(!loop_bound_fn){
+      loop_bound_fn = llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
+           "llvm.loop.bound", F->getParent());
+      // We add attributes that ensure optimizations don't mess with the bounds
+      loop_bound_fn->addFnAttr(llvm::Attribute::Convergent);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoDuplicate);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoInline);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoRecurse);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoMerge);
+      loop_bound_fn->addFnAttr(llvm::Attribute::OptimizeNone);
+    }
+    auto *call_inst = llvm::CallInst::Create(FT, loop_bound_fn, {MinVal, MaxVal});
+    BB->getInstList().insertAfter(std::prev(BB->end(),2), call_inst);
   }
 }
 
@@ -852,16 +856,12 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
       ExitBlock = createBasicBlock("while.exit");
     llvm::MDNode *Weights = createProfileOrBranchWeightsForLoop(
         S.getCond(), getProfileCount(S.getBody()), S.getBody());
-    llvm::BranchInst *CondBr =
-        Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
+    Builder.CreateCondBr(BoolCondVal, LoopBody, ExitBlock, Weights);
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);
       EmitBranchThroughCleanup(LoopExit);
     }
-
-    // Attach metadata to loop body conditional branch.
-    EmitCondBrBounds(LoopBody->getContext(), CondBr, WhileAttrs);
   } else if (const Attr *A = Stmt::getLikelihoodAttr(S.getBody())) {
     CGM.getDiags().Report(A->getLocation(),
                           diag::warn_attribute_has_no_effect_on_infinite_loop)
@@ -895,6 +895,9 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   // Emit the exit block.
   EmitBlock(LoopExit.getBlock(), true);
 
+  // Attach metadata to loop header
+  EmitLoopBounds(LoopHeader.getBlock(), WhileAttrs);
+
   // The LoopHeader typically is just a branch if we skipped emitting
   // a branch, try to erase it.
   if (!EmitBoolCondBranch)
@@ -919,6 +922,8 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     RunCleanupsScope BodyScope(*this);
     EmitStmt(S.getBody());
   }
+
+  EmitLoopBounds(LoopBody, DoAttrs);
 
   EmitBlock(LoopCond.getBlock());
 
@@ -952,12 +957,9 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   // As long as the condition is true, iterate the loop.
   if (EmitBoolCondBranch) {
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
-    llvm::BranchInst *CondBr =
       Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
-    // Attach metadata to loop body conditional branch.
-    EmitCondBrBounds(LoopBody->getContext(), CondBr, DoAttrs);
   }
 
   LoopStack.pop();
@@ -1044,8 +1046,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
     llvm::BranchInst *CondBr =
       Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
 
-    // Attach metadata to loop body conditional branch.
-    EmitCondBrBounds(ForBody->getContext(), CondBr, ForAttrs);
+    EmitLoopBounds(CondBlock, ForAttrs);
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);

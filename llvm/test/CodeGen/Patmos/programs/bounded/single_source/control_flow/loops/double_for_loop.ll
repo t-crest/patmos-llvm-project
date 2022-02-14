@@ -51,7 +51,8 @@ for.cond:                                         ; preds = %for.inc, %if.then
   %4 = load i32, i32* %i
   %5 = load i32, i32* %0
   %6 = icmp slt i32 %4, %5
-  br i1 %6, label %for.body, label %for.end, !llvm.loop !1
+  call void @llvm.loop.bound(i32 0, i32 9)
+  br i1 %6, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
   %7 = load i32, i32* %i
@@ -80,7 +81,8 @@ for.cond2:                                        ; preds = %for.inc4, %if.else
   %15 = load i32, i32* %0
   %16 = mul nsw i32 2, %15
   %17 = icmp slt i32 %14, %16
-  br i1 %17, label %for.body3, label %for.end5, !llvm.loop !3
+  call void @llvm.loop.bound(i32 0, i32 19)
+  br i1 %17, label %for.body3, label %for.end5
 
 for.body3:                                        ; preds = %for.cond2
   %18 = load i32, i32* %i1
@@ -105,7 +107,4 @@ if.end:                                           ; preds = %for.end5, %for.end
   ret i32 %25
 }
 
-!1 = !{!1, !2}
-!2 = !{!"llvm.loop.bound", i32 0, i32 9}
-!3 = !{!3, !4}
-!4 = !{!"llvm.loop.bound", i32 0, i32 19}
+declare void @llvm.loop.bound(i32, i32)

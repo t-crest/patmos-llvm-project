@@ -32,6 +32,8 @@ namespace llvm {
       /// multiplication
       MUL, MULU,
 
+      LOOP_BOUND,
+
       /// CALL - These operations represent an abstract call
       /// instruction, which includes a bunch of information.
       CALL = ISD::FIRST_TARGET_MEMORY_OPCODE

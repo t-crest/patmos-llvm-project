@@ -1,4 +1,7 @@
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -o - | FileCheck %s
+// RUN: %clang --target=patmos %s -S -emit-llvm -o - | FileCheck %s
+// RUN: %clang --target=patmos %s -S -emit-llvm -o - -O0 | FileCheck %s
+// RUN: %clang --target=patmos %s -S -emit-llvm -o - -O1 | FileCheck %s
+// RUN: %clang --target=patmos %s -S -emit-llvm -o - -O2 | FileCheck %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //

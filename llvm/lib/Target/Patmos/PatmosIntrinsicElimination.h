@@ -16,6 +16,11 @@ public:
 
   }
 
+  /// getPassName - Return the pass' name.
+  StringRef getPassName() const override {
+    return "Patmos Instrinsic Elimination Pass";
+  }
+
   bool runOnFunction(Function &F) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {

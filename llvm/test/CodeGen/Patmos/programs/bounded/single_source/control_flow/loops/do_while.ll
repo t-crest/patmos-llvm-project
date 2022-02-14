@@ -28,7 +28,8 @@ do.body:                                          ; preds = %do.cond, %entry
   %y.0 = phi i32 [ 0, %entry ], [ %add, %do.cond ]
   %0 = load volatile i32, i32* @_1
   %add = add nsw i32 %y.0, %0
-  br label %do.cond, !llvm.loop !0
+  call void @llvm.loop.bound(i32 1, i32 9)
+  br label %do.cond
 
 do.cond:                                          ; preds = %do.body
   %cmp = icmp slt i32 %add, %x
@@ -38,5 +39,4 @@ do.end:                                           ; preds = %do.cond
   ret i32 %add
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 1, i32 9}
+declare void @llvm.loop.bound(i32, i32)

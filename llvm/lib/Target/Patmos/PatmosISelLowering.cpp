@@ -14,7 +14,6 @@
 #define DEBUG_TYPE "patmos-lower"
 
 #include "PatmosISelLowering.h"
-#include "Patmos.h"
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosTargetMachine.h"
 #include "PatmosSubtarget.h"
@@ -336,9 +335,29 @@ PatmosTargetLowering::LowerFormalArguments(SDValue Chain,
 SDValue
 PatmosTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                 SmallVectorImpl<SDValue> &InVals) const {
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(CLI.Callee)){
+    if (G->getGlobal()->getName() == "llvm.loop.bound") {
+      // Convert llvm.loop.bound calls into patmos' loopbound pseudo-instruction
+      SelectionDAG &DAG = CLI.DAG;
+      const SDLoc dl = CLI.DL;
+      SmallVector<SDValue, 32> &OutVals = CLI.OutVals;
+
+      if(!dyn_cast<ConstantSDNode>(OutVals[0].getNode()) ||
+          !dyn_cast<ConstantSDNode>(OutVals[1].getNode())
+      ){
+        report_fatal_error("Loop bounds must be constant");
+      }
+
+      SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+      SDValue Ops[] = { CLI.Chain,
+                        DAG.getTargetConstant(cast<ConstantSDNode>(OutVals[0].getNode())->getZExtValue(),dl, MVT::i32),
+                        DAG.getTargetConstant(cast<ConstantSDNode>(OutVals[1].getNode())->getZExtValue(),dl, MVT::i32)};
+      return DAG.getNode(PatmosISD::LOOP_BOUND, dl, VTs, Ops);
+    }
+  }
+
   // Patmos target does not yet support tail call optimization.
   CLI.IsTailCall = false;
-
   switch (CLI.CallConv) {
   default:
     llvm_unreachable("Unsupported calling convention");
@@ -734,5 +753,6 @@ const char *PatmosTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case PatmosISD::CALL:               return "PatmosISD::CALL";
   case PatmosISD::MUL:                return "PatmosISD::MUL";
   case PatmosISD::MULU:               return "PatmosISD::MULU";
+  case PatmosISD::LOOP_BOUND:         return "PatmosISD::LOOP_BOUND";
   }
 }

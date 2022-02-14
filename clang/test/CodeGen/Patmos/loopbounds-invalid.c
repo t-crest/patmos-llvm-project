@@ -1,16 +1,16 @@
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF1 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF1 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK1" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF2 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF2 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK2" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF3 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF3 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK3" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF4 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF4 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK4" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF5 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF5 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK5" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF6 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF6 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK6" %s
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -D DEF7 2>&1 | \
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF7 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK7" %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////

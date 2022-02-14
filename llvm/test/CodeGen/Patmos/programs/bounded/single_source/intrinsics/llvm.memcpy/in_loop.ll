@@ -26,7 +26,8 @@ loop:
   %i.inc = add i8 %i, 1
   %val.inc = add i8 %val.loop, 1
   %repeat = icmp ult i8 %i.inc, %val.i8
-  br i1 %repeat, label %loop, label %end, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 15)
+  br i1 %repeat, label %loop, label %end
 
 end:
   %ptr.end = getelementptr i8, i8* %ptr.dst, i8 %val.i8
@@ -34,8 +35,6 @@ end:
   %result.i32 = zext i8 %result to i32
   ret i32 %result.i32
 }
+declare void @llvm.loop.bound(i32, i32)
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i1)
 declare void @llvm.memset.p0i8.p0i8.i32(i8*, i8, i32, i1)
-
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 0, i32 15}

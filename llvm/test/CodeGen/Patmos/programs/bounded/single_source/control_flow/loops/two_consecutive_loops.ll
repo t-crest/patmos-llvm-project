@@ -54,7 +54,8 @@ for.cond:                                         ; preds = %for.inc, %entry
   %5 = load i32, i32* %i
   %6 = load i32, i32* %x
   %7 = icmp slt i32 %5, %6
-  br i1 %7, label %for.body, label %for.end, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 9)
+  br i1 %7, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
   %8 = load volatile i32, i32* @_1
@@ -77,7 +78,8 @@ for.cond2:                                        ; preds = %for.inc4, %for.end
   %13 = load i32, i32* %i1
   %14 = load i32, i32* %y
   %15 = icmp slt i32 %13, %14
-  br i1 %15, label %for.body3, label %for.end5, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 9)
+  br i1 %15, label %for.body3, label %for.end5
 
 for.body3:                                        ; preds = %for.cond2
   %16 = load volatile i32, i32* @_2
@@ -97,5 +99,4 @@ for.end5:                                         ; preds = %for.cond2
   ret i32 %21
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 0, i32 9}
+declare void @llvm.loop.bound(i32, i32)

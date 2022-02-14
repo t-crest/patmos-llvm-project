@@ -29,7 +29,8 @@ for.cond:                                         ; preds = %for.inc, %entry
   %x.0 = phi i32 [ 0, %entry ], [ %add1, %for.inc ]
   %i.0 = phi i32 [ 0, %entry ], [ %inc, %for.inc ]
   %cmp = icmp slt i32 %i.0, %iteration_count
-  br i1 %cmp, label %for.body, label %for.end, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 4)
+  br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
   %0 = load volatile i32, i32* @_1
@@ -45,5 +46,4 @@ for.end:                                          ; preds = %for.cond
   ret i32 %x.0
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 0, i32 4}
+declare void @llvm.loop.bound(i32, i32)

@@ -219,4 +219,4 @@ runs:
       run: |
         cmake $GITHUB_WORKSPACE/$BENCH_PATH -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/$BENCH_PATH/cmake/patmos-clang-toolchain.cmake -DENABLE_TESTING=true
         make $J
-        ctest $J
+        ctest $J -V

@@ -58,7 +58,8 @@ for.cond:                                         ; preds = %for.inc, %entry
   %result.0 = phi i32 [ 0, %entry ], [ %result.6, %for.inc ]
   %i.0 = phi i32 [ 0, %entry ], [ %inc, %for.inc ]
   %cmp = icmp slt i32 %i.0, %x
-  br i1 %cmp, label %for.body, label %for.end, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 19)
+  br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
   %cmp1 = icmp slt i32 %i.0, 6
@@ -149,5 +150,4 @@ for.end:                                          ; preds = %for.cond
   ret i32 %result.0
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 0, i32 19}
+declare void @llvm.loop.bound(i32, i32)

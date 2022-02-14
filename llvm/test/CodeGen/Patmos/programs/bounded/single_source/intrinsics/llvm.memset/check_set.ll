@@ -39,7 +39,8 @@ for.cond:
   %dest = phi i8* [%ptr, %entry], [%dest.incd, %for.body]
   %sum = phi i8 [0, %entry], [%sum.next, %for.body]
   %stop = icmp eq i32 %i, 0
-  br i1 %stop, label %for.end, label %for.body, !llvm.loop !0
+  call void @llvm.loop.bound(i32 <count>, i32 <count>)
+  br i1 %stop, label %for.end, label %for.body
 
 for.body:
   %read = load volatile i8, i8* %dest
@@ -53,7 +54,5 @@ for.end:
   ret i32 %result
 }
 
+declare void @llvm.loop.bound(i32, i32)
 declare void @llvm.memset.p0i8.<type>(i8*, i8, <type>, i1)
-
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 <count>, i32 <count>}

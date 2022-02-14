@@ -30,7 +30,8 @@ entry:
 while.cond:                                       ; preds = %if.end, %entry
   %x.addr.0 = phi i32 [ %x, %entry ], [ %dec, %if.end ]
   %cmp = icmp sgt i32 %x.addr.0, 0
-  br i1 %cmp, label %while.body, label %while.end, !llvm.loop !0
+  call void @llvm.loop.bound(i32 0, i32 5)
+  br i1 %cmp, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
   %0 = load volatile i32, i32* @_7
@@ -46,5 +47,4 @@ while.end:                                        ; preds = %while.body, %while.
   ret i32 %add
 }
 
-!0 = !{!0, !1}
-!1 = !{!"llvm.loop.bound", i32 0, i32 5}
+declare void @llvm.loop.bound(i32, i32)
