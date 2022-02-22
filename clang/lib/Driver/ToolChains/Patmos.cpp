@@ -219,9 +219,6 @@ void patmos::PatmosBaseTool::PrepareLink2Inputs(
   // clashing with stdlib
   LinkInputs.push_back("--internalize");
 
-  // Don't hide symbols that are expected to be public
-  LinkInputs.push_back(Args.MakeArgString("--internalize-public-api-file=" + getLibPath("lib/libsyms.lst")));
-
   if(Args.hasArg(options::OPT_v)) {
     LinkInputs.push_back("-v");
   }
@@ -240,7 +237,11 @@ void patmos::PatmosBaseTool::PrepareLink3Inputs(
   LinkInputs.push_back(Args.MakeArgString("--override=" + getLibPath("lib/libm.a")));
   LinkInputs.push_back(Args.MakeArgString(getLibPath("lib/libpatmos.a")));
 
-  LinkInputs.push_back(Args.MakeArgString("--internalize-public-api-file=" + getLibPath("lib/libsyms.lst")));
+  // We load symbols that must be define as used.
+  // This prevents them from being optimized away and
+  // allows single-path code to produce single-path versions of them
+  // even if they are not directly called (e.g. for soft-float operations)
+  LinkInputs.push_back(Args.MakeArgString(getLibPath("lib/libsyms.o")));
 
   if(Args.hasArg(options::OPT_v)) {
     LinkInputs.push_back("-v");
@@ -364,8 +365,6 @@ bool patmos::PatmosBaseTool::ConstructOptJob(const Tool &Creator,
   // for some reason, we need to add this manually
   OptArgs.push_back("--internalize");
   OptArgs.push_back("--globaldce");
-  OptArgs.push_back(Args.MakeArgString("--internalize-public-api-file=" + getLibPath("lib/libsyms.lst")));
-
 
   if (OptLevel == 3) {
     OptArgs.push_back("--std-link-opts");

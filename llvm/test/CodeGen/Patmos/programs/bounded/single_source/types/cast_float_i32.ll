@@ -18,11 +18,10 @@ define i32 @__fixunssfsi(float %d) {
   %1 = load volatile i32, i32* @i
   ret i32 %1
 }
-; This is the Single-Path version, which must also be present
-define i32 @__fixunssfsi_sp_(float %d) {
-  %1 = load volatile i32, i32* @i
-  ret i32 %1
-}
+
+; This ensures the single-path code generator knows to also convert this function
+; to single-path
+@llvm.used = appending global [1 x i8*] [i8* bitcast (i32 (float)* @__fixunssfsi to i8*)], section "llvm.metadata"
 
 define i32 @main(i32 %x) {
 entry:

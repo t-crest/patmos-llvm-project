@@ -45,13 +45,13 @@ foreach(p ${MS_LIBS})
 	list(APPEND MS_LIBS_A ${PATMOS_LIB_DIR}/${p}.a)
 endforeach()
 
-# Copy the std public API list file
-set( SYMS_FILE ${PATMOS_LIB_DIR}/libsyms.lst)
+# Compile the public API list file
+set( SYMS_FILE ${PATMOS_LIB_DIR}/libsyms.o)
 add_custom_command( 
 	OUTPUT ${SYMS_FILE}
-	COMMAND cp libsyms.lst ${SYMS_FILE}
+	COMMAND ${COMPILE} libsyms.ll -o ${SYMS_FILE} -Wno-override-module
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-	DEPENDS ClangPatmosMockStdLibsDirs ${CMAKE_CURRENT_SOURCE_DIR}/libsyms.lst
+	DEPENDS ClangPatmosMockStdLibsDirs ${CMAKE_CURRENT_SOURCE_DIR}/libsyms.ll
 	)
 
 add_custom_target(ClangPatmosMockStdLibs DEPENDS ${SS_LIBS_O} ${MS_LIBS_A} ${SYMS_FILE})

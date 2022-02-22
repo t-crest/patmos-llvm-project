@@ -13,14 +13,12 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 // CHECK-DAG: <main>:
 void main() { 
 	asm volatile (
-		// CHECK: li $r1 = 
 		"li $r1 = patmos_mock_libc_function;"
-		// CHECK-NEXT: li $r1 = 
 		"li $r1 = patmos_mock_libm_function;"
-		// CHECK-NEXT: li $r1 = 
 		"li $r1 = patmos_mock_crt0_function;"
 		:
 		:

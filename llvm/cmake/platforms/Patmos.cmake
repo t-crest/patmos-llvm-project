@@ -16,7 +16,7 @@ set( PACKAGE_ITEMS_LIBS
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libm.a"
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libpatmos.a"
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/librt.a"
-	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libsyms.lst"
+	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libsyms.o"
 )
 set( NEWLIB_INCLUDES # List of dirs from which to get only the files
 	"newlib/libc/include"
@@ -60,8 +60,17 @@ add_custom_command(
 	COMMAND cp "../build-newlib/${PATMOS_TRIPLE}/newlib/libc/libc.a" "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/"
 	COMMAND cp "../build-newlib/${PATMOS_TRIPLE}/newlib/libm/libm.a" "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/"
 	COMMAND cp "../build-compiler-rt/lib/generic/libclang_rt.builtins-patmos.a" "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/librt.a"
-	COMMAND cp ${CMAKE_CURRENT_LIST_DIR}/patmos-libsyms.lst "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libsyms.lst"
-	DEPENDS PatmosPackageTempDirs
+	COMMAND bin/clang -c -emit-llvm "${CMAKE_CURRENT_LIST_DIR}/patmos-libsyms.ll" -o "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/libsyms.o" -Wno-override-module
+	DEPENDS 
+		PatmosPackageTempDirs 
+		"${CMAKE_CURRENT_LIST_DIR}/patmos-libsyms.ll"
+		"../build-newlib/${PATMOS_TRIPLE}/libgloss/patmos/crt0.o" 
+		"../build-newlib/${PATMOS_TRIPLE}/libgloss/patmos/crtbegin.o"
+		"../build-newlib/${PATMOS_TRIPLE}/libgloss/patmos/crtend.o"
+		"../build-newlib/${PATMOS_TRIPLE}/libgloss/patmos/libpatmos.a"
+		"../build-newlib/${PATMOS_TRIPLE}/newlib/libc/libc.a"
+		"../build-newlib/${PATMOS_TRIPLE}/newlib/libm/libm.a"
+		"../build-compiler-rt/lib/generic/libclang_rt.builtins-patmos.a"
 )
 add_custom_command(
 	OUTPUT "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/newlib.h" # We need a target, but don't want to define all the files
