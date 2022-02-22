@@ -250,15 +250,22 @@ Function *PatmosSPClone::cloneAndMark(Function *F, bool onlyMaybe) {
 
 
 void PatmosSPClone::explore(Function *F, bool fromUsed) {
+  auto * mod = F->getParent();
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       CallInst *Call = dyn_cast<CallInst>(&*I);
       if (Call && !Call->isInlineAsm()) {
         Function *Callee = Call->getCalledFunction();
 
         if (!Callee) {
-          // null if it is an indirect function invocation
-          report_fatal_error("Single-path code generation failed due to "
-              "indirect function call in '" + F->getName() + "'!");
+          auto callee_name = Call->getCalledOperand()->getName();
+          if (auto *alias = mod->getNamedAlias(callee_name)) {
+            llvm::StringRef aliasee_name = alias->getAliasee()->getName();
+            Callee = mod->getFunction(aliasee_name);
+            assert(Callee && "Alias doesn't point to function");
+          } else {
+            report_fatal_error("Single-path code generation failed due to "
+                            "indirect function call in '" + F->getName() + "'!");
+          }
         }
 
         // skip LLVM intrinsics

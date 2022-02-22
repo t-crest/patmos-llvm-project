@@ -160,6 +160,11 @@ const Function *PatmosSPMark::getCallTarget(const MachineInstr *MI) const {
     const char *TargetName = MO.getSymbolName();
     const Module *M = MI->getParent()->getParent()->getFunction().getParent();
     Target = M->getFunction(TargetName);
+    if(!Target) {
+      if(auto *alias = M->getNamedAlias(TargetName)) {
+        Target = M->getFunction(alias->getAliasee()->getName());
+      }
+    }
   }
   return Target;
 }
