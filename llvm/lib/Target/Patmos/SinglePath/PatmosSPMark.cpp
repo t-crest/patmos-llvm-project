@@ -290,6 +290,8 @@ void PatmosSPMark::removeUncalledSPFunctions(MachineFunction &MF) {
       MachineBasicBlock *EmptyMBB = MF.CreateMachineBasicBlock();
       MF.push_back(EmptyMBB);
 
+      MF.RenumberBlocks(&*MF.begin());
+
       DebugLoc DL;
       AddDefaultPred(BuildMI(*EmptyMBB, EmptyMBB->end(), DL,
           TM.getInstrInfo()->get(Patmos::RET)));
