@@ -16,7 +16,6 @@ tar -xvf <tarfile>
 This will correctly install all artifacts into the right paths. You are now ready to use the compiler.
 Remember to set your `PATH` to point to `t-crest/local/bin`.
 
-Also remember that you need [the Patmos Gold Linker](https://github.com/t-crest/patmos-gold) to be installed alongside the compiler.
 
 # Development
 
