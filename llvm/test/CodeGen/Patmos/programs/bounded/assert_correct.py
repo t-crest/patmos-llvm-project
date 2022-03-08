@@ -3,10 +3,6 @@ import subprocess
 import sys
 from shutil import which
 
-#if which("patmos-ld") is None:
-#    print("Patmos port of the Gold linker 'patmos-ld' could not be found.")
-#    sys.exit(1)
-  
 if which("pasim") is None:
     print("Patmos simulator 'pasim' could not be found.")
     sys.exit(1)

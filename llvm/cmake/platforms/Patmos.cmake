@@ -7,7 +7,7 @@ set( PACKAGE_TEMP_DIR "${PATMOS_TRIPLE}/package-temp")
 set( PACKAGE_TAR "${PACKAGE_TEMP_DIR}/${PROJECT_NAME}-${TARGET_TRIPLE}.tar")
 set( PACKAGE_TAR_GZ "${PACKAGE_TAR}.gz")
 set( PACKAGE_INFO_FILE "${PACKAGE_TEMP_DIR}/${PROJECT_NAME}-info.yml")
-set( PACKAGE_TARGETS "llc" "llvm-link" "clang" "llvm-config" "llvm-objdump" "opt")
+set( PACKAGE_TARGETS "llc" "llvm-link" "clang" "llvm-config" "llvm-objdump" "opt" "lld")
 set( PACKAGE_ITEMS_LIBS
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/crt0.o"
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib/crtbegin.o"
