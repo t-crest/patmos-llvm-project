@@ -83,7 +83,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_CFLI_ABS: {
     checkUInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
 
-    uint32_t insn = read32be(loc);
+    const uint32_t mask = 0x3FFFFF;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 23, 2);
     insn |= imm;
     write32be(loc,insn);
@@ -92,7 +93,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_ALUI_ABS: {
     checkUInt(loc, static_cast<int64_t>(val), 12, rel);
 
-    uint32_t insn = read32be(loc);
+    const uint32_t mask = 0xFFF;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 11, 0);
     insn |= imm;
     write32be(loc,insn);
@@ -101,7 +103,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_ALUL_ABS: {
     checkUInt(loc, static_cast<int64_t>(val), 32, rel);
 
-    uint64_t insn = read64be(loc);
+    const uint64_t mask = 0xFFFFFFFF;
+    uint64_t insn = read64be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 31, 0);
     insn |= imm;
     write64be(loc,insn);
@@ -110,7 +113,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_MEMB_ABS:{
     checkInt(loc, static_cast<int64_t>(val), 7, rel);
 
-    uint64_t insn = read32be(loc);
+    const uint64_t mask = 0x7F;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 6, 0);
     insn |= imm;
     write32be(loc,insn);
@@ -119,7 +123,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_MEMH_ABS:{
     checkInt(loc, static_cast<int64_t>(val) >> 1, 7, rel);
 
-    uint64_t insn = read32be(loc);
+    const uint64_t mask = 0x7F;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 7, 1);
     insn |= imm;
     write32be(loc,insn);
@@ -128,7 +133,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_MEMW_ABS:{
     checkInt(loc, static_cast<int64_t>(val) >> 2, 7, rel);
 
-    uint64_t insn = read32be(loc);
+    const uint64_t mask = 0x7F;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 8, 2);
     insn |= imm;
     write32be(loc,insn);
@@ -151,7 +157,8 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_PATMOS_CFLI_PCREL: {
     checkInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
 
-    uint32_t insn = read32be(loc);
+    const uint32_t mask = 0x3FFFFF;
+    uint32_t insn = read32be(loc) & ~(mask);
     uint32_t imm =  extractBits(val, 23, 2);
     insn |= imm;
     write32be(loc,insn);

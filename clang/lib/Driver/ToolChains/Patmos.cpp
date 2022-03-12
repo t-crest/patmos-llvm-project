@@ -497,6 +497,8 @@ void patmos::PatmosBaseTool::ConstructLLDJob(const Tool &Creator,
 
   LDArgs.push_back("-nostdlib");
   LDArgs.push_back("-static");
+  // Set LLD Option: Optimize output file to 0, to prevent LLD from unwanted changes in the Outputfile.
+  LDArgs.push_back("-O0");
 
   LDArgs.push_back("--defsym");
   LDArgs.push_back("__heap_start=end");

@@ -4,18 +4,21 @@
 
 # RUN: ld.lld %t.patmos.o -o %t.patmos
 # RUN: llvm-objdump -d %t.patmos | FileCheck %s
-# CHECK:      04 c0 00 04     br   4
-# CHECK:      04 c0 00 02     br   2
+# CHECK:      04 c0 00 05     br   5
+# CHECK:      04 c0 00 03     br   3
+# CHECK:      04 bf ff fd     brnd -3
 
 .global _start
 _start:
     br    bar
     br    foo
     nop
-    
+    nop
 
 .global foo, bar
 foo:  
     nop
 bar:
     nop
+    nop
+    brnd foo
