@@ -37,19 +37,21 @@ Patmos::Patmos() {
   
   defaultMaxPageSize = 0x1000;
   defaultCommonPageSize = 0x1000;
-
-  //needsThunks = true;
 }
 
+// getRelExpr - decide what value is needed depending on the relocation type (absolute or relative)
+//// @param loc   Location Pointer to data/instruction the patching is needed
+//// @param s     Symbol
+//// @param type  What Relocation Type needed to be applied
 RelExpr Patmos::getRelExpr(const RelType type, const Symbol &s,
                           const uint8_t *loc) const {
-  // get which Relocation Value is returned
 
+  // get which Relocation Value is returned
   switch (type) {
   case R_PATMOS_NONE:
     return R_NONE;
   case R_PATMOS_CFLI_ABS:
-    return R_ABS;  
+    return R_ABS; // Absolute Address 
   case R_PATMOS_ALUI_ABS:
     return R_ABS;  
   case R_PATMOS_ALUL_ABS:
@@ -63,7 +65,7 @@ RelExpr Patmos::getRelExpr(const RelType type, const Symbol &s,
   case R_PATMOS_ABS_32:
     return R_ABS;  
   case R_PATMOS_CFLI_PCREL:
-    return R_PC;
+    return R_PC; // Relative Address
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));
@@ -76,11 +78,17 @@ static uint32_t extractBits(uint64_t v, uint32_t begin, uint32_t end) {
   return (v & ((1ULL << (begin + 1)) - 1)) >> end;
 }
 
+
+// relocate - patch data/instruction depending on the relocation type
+//// @param loc   Location Pointer to data/instruction where patching is needed
+//// @param rel   Relocation Type to be applied
+//// @param val   Value to be patched to the data/instruction 
 void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   // Relocate Types defined in /llvm/include/llvm/BinaryFormat/ELF.h
   
   switch (rel.type) {
   case R_PATMOS_CFLI_ABS: {
+    // Relocate CFLi format (22 bit immediate), absolute (unsigned), in words
     checkUInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
 
     const uint32_t mask = 0x3FFFFF;
@@ -91,6 +99,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_ALUI_ABS: {
+    // Relocate ALIi format (12 bit immediate), absolute (unsigned), in bytes
     checkUInt(loc, static_cast<int64_t>(val), 12, rel);
 
     const uint32_t mask = 0xFFF;
@@ -101,6 +110,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_ALUL_ABS: {
+    // Relocate ALUl format (32 bti immediate), absolute (unsigned), in bytes
     checkUInt(loc, static_cast<int64_t>(val), 32, rel);
 
     const uint64_t mask = 0xFFFFFFFF;
@@ -111,6 +121,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_MEMB_ABS:{
+    // Relocate LDT or STT format (7 bit immediate), absolute, signed, in bytes
     checkInt(loc, static_cast<int64_t>(val), 7, rel);
 
     const uint64_t mask = 0x7F;
@@ -121,6 +132,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_MEMH_ABS:{
+    // Relocate LDT or STT format (7 bit immediate), absolute, signed, in half-words
     checkInt(loc, static_cast<int64_t>(val) >> 1, 7, rel);
 
     const uint64_t mask = 0x7F;
@@ -131,6 +143,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_MEMW_ABS:{
+    // Relocate LDT or STT format (7 bit immediate), absolute, signed, in words
     checkInt(loc, static_cast<int64_t>(val) >> 2, 7, rel);
 
     const uint64_t mask = 0x7F;
@@ -141,7 +154,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_ABS_32: {
-    
+    // Relocate 32 bit word, absolute (unsigned), in bytes
     checkUInt(loc, static_cast<int64_t>(val), 32, rel);
     
     uint64_t out =  read32be(loc);
@@ -155,6 +168,7 @@ void Patmos::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
   case R_PATMOS_CFLI_PCREL: {
+    // Relocate CFLi format (22 bit immediate), PC relative (signed), in words
     checkInt(loc, static_cast<int64_t>(val) >> 2, 22, rel);
 
     const uint32_t mask = 0x3FFFFF;
