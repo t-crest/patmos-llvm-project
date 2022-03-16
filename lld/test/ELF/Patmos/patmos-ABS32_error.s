@@ -2,13 +2,12 @@
 // RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf %S/../Inputs/abs255.s -o %t255.o
 // RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf %S/../Inputs/abs256.s -o %t256.o
 // RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf %S/../Inputs/abs257.s -o %t257.o
-
-// RUN: ld.lld %t.o %t256.o -o %t2
-// RUN: llvm-objdump -s --section=.data %t2 | FileCheck %s
+// RUN: ld.lld %t.o %t255.o -o /dev/null
+// RUN: not ld.lld %t.o %t257.o -o /dev/null 2>&1 | FileCheck %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Tests the Relocation Type R_PATMOS_ABS_32
+// Tests the Error for Out of Bound Values of Relocation Type R_PATMOS_ABS_32
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,10 +17,5 @@ _start:
   .word foo + 0xfffffeff
   .word foo - 0x80000100
 
-// <ADDR>:    S = 0x100, A = 0xfffffeff
-//            S + A = 0xffffffff
-// <ADDR>+4:  S = 0x100, A = -0x80000100
-//            S + A = 0x80000000
-
-// CHECK: Contents of section .data:
-// CHECK-NEXT: ffffffff 80000000
+// CHECK: error
+// CHECK: relocation Unknown (10) out of range: 4294967296 is not in [-2147483648, 4294967295]

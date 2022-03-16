@@ -463,7 +463,7 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
       LLCExec, LLCArgs, Inputs, Output));
 }
 
-static std::string get_patmos_gold_or_lld(const ToolChain &TC, DiagnosticsEngine &Diag)
+static std::string get_patmos_lld(const ToolChain &TC, DiagnosticsEngine &Diag)
 {
   char *gold_envvar = getenv("PATMOS_GOLD");
   if (gold_envvar && strcmp(gold_envvar,"")!=0 ) {
@@ -497,7 +497,7 @@ void patmos::PatmosBaseTool::ConstructLLDJob(const Tool &Creator,
 
   LDArgs.push_back("-nostdlib");
   LDArgs.push_back("-static");
-  // Set LLD Option: Optimize output file to 0, to prevent LLD from unwanted changes in the Outputfile.
+  // String merging seems to also change data saved as floats or doubles. Disable it to avoid the unwanted changes.
   LDArgs.push_back("-O0");
 
   LDArgs.push_back("--defsym");
@@ -537,7 +537,7 @@ void patmos::PatmosBaseTool::ConstructLLDJob(const Tool &Creator,
 
   LDArgs.append(LLDInputs.begin(), LLDInputs.end());
 
-  const char *LDExec = Args.MakeArgString(get_patmos_gold_or_lld(TC, C.getDriver().getDiags()));
+  const char *LDExec = Args.MakeArgString(get_patmos_lld(TC, C.getDriver().getDiags()));
   C.addCommand(std::make_unique<Command>(
       JA, Creator, ResponseFileSupport::AtFileCurCP(),
       LDExec, LDArgs, Inputs, Output));

@@ -1,11 +1,10 @@
 // RUN: llvm-mc -filetype=obj -triple=patmos-unknown-unknown-elf -mattr=-relax %s -o %t.patmos.o
 
-// RUN: ld.lld %t.patmos.o -o %t.patmos
-// RUN: llvm-objdump -d %t.patmos | FileCheck %s
+// RUN: not ld.lld %t.patmos.o -o %t.patmos --defsym bar=16777216 2>&1 | FileCheck %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Tests the Relocation Type R_PATMOS_CFLI_PCREL
+// Tests the Error for Out of Bound Values of Relocation Type R_PATMOS_CFLI_PCREL
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,16 +13,13 @@ _start:
     br    bar
     br    foo
     nop
-    nop
+    nop    
 
 .global foo, bar
 foo:  
     nop
 bar:
     nop
-    nop
-    brnd foo
 
-// CHECK:      04 c0 00 05     br   5
-// CHECK:      04 c0 00 03     br   3
-// CHECK:      04 bf ff fd     brnd -3
+// CHECK: error
+// CHECK: relocation Unknown (12) out of range: 4160467 is not in [-2097152, 2097151]
