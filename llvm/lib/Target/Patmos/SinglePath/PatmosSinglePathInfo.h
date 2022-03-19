@@ -31,7 +31,14 @@ namespace llvm {
 
   class MachineLoop;
 
-
+  /// Constant-execution-time compensation algorithm
+  /// 'disabled' is for when no constant-excution-time was requested.
+  enum CompensationAlgo {
+    // No constant execution time is desired
+    disabled,
+    // Algorithms
+    hybrid, instruction, counter
+  };
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -79,9 +86,12 @@ namespace llvm {
       static bool isMaybe(const MachineFunction &MF);
 
       /// isConstant - Return true if should produce constant execution-time,
-      /// single-path code. Throws error if 'mpatmos-enable-constant-execution-time'
-      /// is enabled but 'mpatmos-singlepath' is not.
+      /// single-path code.
       static bool isConstant();
+
+      /// getCETCompAlgo - Return which constant-execution-time algorithm
+      /// was chosen.
+      static CompensationAlgo getCETCompAlgo();
 
       /// getRootNames - Fill a set with the names of
       /// single-path root functions

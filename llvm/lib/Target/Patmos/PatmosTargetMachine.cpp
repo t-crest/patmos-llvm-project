@@ -74,8 +74,8 @@ namespace {
      : TargetPassConfig(TM, PM), DefaultRoot("main")
     {
       if( PatmosSinglePathInfo::isConstant() && !PatmosSinglePathInfo::isEnabled() ) {
-          report_fatal_error("The 'mpatmos-enable-constant-execution-time' flag "
-              "requires the 'mpatmos-singlepath' flag to also be set.");
+          report_fatal_error("The 'mpatmos-enable-cet' option "
+              "requires the 'mpatmos-singlepath' option to also be set.");
       }
 
       // Enable preRA MI scheduler.
@@ -144,6 +144,14 @@ namespace {
       if (PatmosSinglePathInfo::isConstant()) {
         addPass(createDataCacheAccessEliminationPass(getPatmosTargetMachine()));
       }
+      if (PatmosSinglePathInfo::isEnabled()) {
+        addPass(createPatmosSPMarkPass(getPatmosTargetMachine()));
+        addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
+        addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
+        if (PatmosSinglePathInfo::isConstant() && PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::counter) {
+          addPass(createMemoryAccessAnalysisPass(getPatmosTargetMachine()));
+        }
+      }
     }
 
     /// addPostRegAlloc - This method may be implemented by targets that want to
@@ -151,11 +159,7 @@ namespace {
     /// prolog-epilog insertion.  This should return true if -print-machineinstrs
     /// should print after these passes.
     void addPostRegAlloc() override {
-      if (PatmosSinglePathInfo::isEnabled()) {
-        addPass(createPatmosSPMarkPass(getPatmosTargetMachine()));
-        addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
-        addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
-      }
+
     }
 
 
@@ -167,7 +171,7 @@ namespace {
 
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
-        if (PatmosSinglePathInfo::isConstant()) {
+        if (PatmosSinglePathInfo::isConstant() && PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::instruction) {
           addPass(createInstructionLevelCETPass(getPatmosTargetMachine()));
         }
         addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));
@@ -190,7 +194,6 @@ namespace {
         addPass(createPatmosStackCacheAnalysis(getPatmosTargetMachine()));
       }
     }
-
 
     void addBlockPlacement() override {
       // We leave this function empty to avoid LLVM's default

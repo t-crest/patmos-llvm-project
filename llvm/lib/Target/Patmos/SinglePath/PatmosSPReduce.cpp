@@ -959,7 +959,9 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
       auto instrPredNeg = instrPreds[&(*MI)].second ? 1 : 0;
       auto predReg = predRegs.count(instrPred) ? predRegs[instrPred] : Patmos::P0;
       DEBUG_TRACE( dbgs() << "Predicate (" << instrPred << ") set to register: (" << predReg << ")\n");
-      if (MI->isCall()) {
+      if (MI->isCall() && std::any_of(MI->operands_begin(), MI->operands_end(), [](auto op){
+        return op.isReg() && (op.getReg() == Patmos::R9);
+      })) {
           DEBUG_TRACE( dbgs() << "    call: " << *MI );
           assert(!TII->isPredicated(*MI) && "call predicated");
           DebugLoc DL = MI->getDebugLoc();

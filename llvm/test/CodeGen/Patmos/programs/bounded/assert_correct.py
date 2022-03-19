@@ -158,11 +158,17 @@ def compile_and_test(llc_args, pasim_args):
         sys.exit(1)
         
     using_singlepath = "-mpatmos-singlepath=" in llc_args
+    using_counter_cet = "-mpatmos-enable-cet=counter" in llc_args
         
     # Link start function with program
     if subprocess.run([bin_dir+"/llvm-link", start_function, source_to_test, "-o", compiled]).returncode != 0:
         throw_error("Failed to link '", source_to_test, "' and '", start_function, "'")
-        
+    
+    # Link memory access compensation if needed
+    if using_counter_cet:
+        if subprocess.run([bin_dir+"/llvm-link", compensation_function, compiled, "-o", compiled]).returncode != 0:
+            throw_error("Failed to link '", compiled, "' and '", compensation_function, "'")
+    
     # Compile into object file (not ELF yet)
     llc_compile_arg_list =[bin_dir+"/llc", compiled] + llc_args.split() + ["-filetype=obj", "-o", compiled]
     if with_debug:
@@ -221,7 +227,8 @@ compile_and_test_matrix("", "", [
         ("", ""), # Traditional code
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), # Single-path code without dual-issue
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"), # Single-path with dual-issue
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-constant-execution-time", "-D lru2") # Single-path code without dual-issue, with constant execution time
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=instruction", "-D lru2"), # Single-path code without dual-issue, with constant execution time
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=counter", "-D lru2") # Single-path code without dual-issue, with constant execution time
     ],
     # Optimization levels
     ["", "-O1", "-O2"]

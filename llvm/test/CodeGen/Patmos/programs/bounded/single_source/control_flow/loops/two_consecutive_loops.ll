@@ -1,4 +1,4 @@
-; RUN: EXEC_ARGS="0=0 1=0 4=2 10=7 18=11 20=14"; \
+; RUN: EXEC_ARGS="0=0 1=0 4=2 10=7 18=11 19=11 20=14"; \
 ; RUN: %test_execution
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,12 +15,12 @@
 ; 	int result = 0;
 ; 	int x = input/2, y = input/10;
 ; 	
-; 	#pragma loopbound min 0 max 9
+; 	#pragma loopbound min 0 max 10
 ; 	for(int i = 0; i<x; i++){
 ; 		result += _1;
 ; 	}
 ; 	
-; 	#pragma loopbound min 0 max 9
+; 	#pragma loopbound min 0 max 2
 ; 	for(int i = 0; i<y; i++){
 ; 		result += _2;
 ; 	}
@@ -54,7 +54,7 @@ for.cond:                                         ; preds = %for.inc, %entry
   %5 = load i32, i32* %i
   %6 = load i32, i32* %x
   %7 = icmp slt i32 %5, %6
-  call void @llvm.loop.bound(i32 0, i32 9)
+  call void @llvm.loop.bound(i32 0, i32 10)
   br i1 %7, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
@@ -78,7 +78,7 @@ for.cond2:                                        ; preds = %for.inc4, %for.end
   %13 = load i32, i32* %i1
   %14 = load i32, i32* %y
   %15 = icmp slt i32 %13, %14
-  call void @llvm.loop.bound(i32 0, i32 9)
+  call void @llvm.loop.bound(i32 0, i32 2)
   br i1 %15, label %for.body3, label %for.end5
 
 for.body3:                                        ; preds = %for.cond2

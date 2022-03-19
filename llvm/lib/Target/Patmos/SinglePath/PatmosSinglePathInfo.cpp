@@ -47,11 +47,24 @@ static cl::list<std::string> SPRootList(
     cl::desc("Entry functions for which single-path code is generated"),
     cl::CommaSeparated);
 
-/// EnableConstantExecutionTime - Command line option to enable the generation of
-/// constant-execution-time single-path code (disabled by default).
-static cl::opt<bool> EnableConstantExecutionTime
-          ("mpatmos-enable-constant-execution-time", cl::init(false),
-           cl::desc("Enable the generation of constant execution-time, single-path code. Requires the 'mpatmos-singlepath' flag."));
+/// EnableCET - Command line option to enable the generation of
+/// constant-execution-time code (disabled by default).
+static cl::opt<CompensationAlgo> EnableCET(
+    "mpatmos-enable-cet",
+    cl::desc("Enable the generation of constant execution-time code. Requires '-mpatmos-singlepath'."),
+    cl::ValueOptional,
+    // The flag was not given
+    cl::init(CompensationAlgo::disabled),
+    cl::values(
+        clEnumValN(CompensationAlgo::hybrid,
+            "hybrid","(default) Heuristically chooses the best algorithm for each situation"),
+        clEnumValN(CompensationAlgo::instruction,
+            "instruction", "For each instruction, adds compensation instruction with opposite predicate"),
+        clEnumValN(CompensationAlgo::counter,
+            "counter", "A counter is maintained in the function and used in the end to compensate all at once"),
+        // When nothing specific is given after the flag, this is the default
+        clEnumValN(CompensationAlgo::hybrid, "", "")
+    ));
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -72,7 +85,11 @@ bool PatmosSinglePathInfo::isEnabled() {
 }
 
 bool PatmosSinglePathInfo::isConstant() {
-  return EnableConstantExecutionTime;
+  return EnableCET != CompensationAlgo::disabled;
+}
+
+CompensationAlgo PatmosSinglePathInfo::getCETCompAlgo() {
+  return EnableCET;
 }
 
 bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {

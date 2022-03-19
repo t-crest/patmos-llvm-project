@@ -641,6 +641,7 @@ set(patmos_SOURCES
   patmos/ctzsi2.c
   patmos/udivmodsi4.c
   patmos/udivsi3.c
+  patmos/patmos_main_mem_access_compensation.c
   adddf3.c
   addsf3.c
   ashldi3.c

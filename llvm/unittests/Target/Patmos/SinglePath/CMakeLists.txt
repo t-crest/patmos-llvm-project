@@ -4,6 +4,7 @@ set(LLVM_LINK_COMPONENTS
 
 set(PatmosSource
   PredicatedBlockTest.cpp
+  MemoryAccessAnalysisTest.cpp
   )
 
 add_llvm_unittest(SinglePathTests

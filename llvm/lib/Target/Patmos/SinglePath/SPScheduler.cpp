@@ -62,10 +62,9 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
 }
 
 unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr) const{
-  if(instr->isBranch() || instr->isCall() || instr->isReturn()){
+  if((instr->isBranch() || instr->isCall() || instr->isReturn()) && instr->hasDelaySlot()){
     // We simply add 3 nops after any branch, call or return, as its
     // the highest possible delay.
-    // The delay slot filler pass will remove most of these afterwards
     return 3;
   } else if (instr->mayLoad() || (instr->getOpcode() == Patmos::MUL) || (instr->getOpcode() == Patmos::MULU)){
     return 1;

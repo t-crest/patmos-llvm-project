@@ -11,6 +11,7 @@ add_llvm_component_library(LLVMPatmosSinglePath
   SPScheduler.cpp
   PredicateDefinition.cpp
   InstructionLevelCET.cpp
+  MemoryAccessAnalysis.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

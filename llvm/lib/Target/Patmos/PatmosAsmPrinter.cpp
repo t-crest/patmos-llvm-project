@@ -62,7 +62,6 @@ void PatmosAsmPrinter::emitFunctionEntryLabel() {
 }
 
 void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
-
   // First align the block if needed (don't align the first block).
   // We must align first to ensure that any added nops are put
   // before the .fstart, such that when object code is emitted

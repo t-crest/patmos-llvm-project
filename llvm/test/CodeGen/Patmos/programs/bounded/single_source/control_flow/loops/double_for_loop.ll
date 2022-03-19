@@ -13,12 +13,12 @@
 ; int main(int cond){
 ; 	int x = 0;
 ; 	if(cond%2){
-; 		#pragma loopbound min 0 max 9
+; 		#pragma loopbound min 0 max 10
 ; 		for(int i = 0; i<cond; i++){
 ; 			x += i + _1;
 ; 		}
 ; 	}else{
-; 		#pragma loopbound min 0 max 19
+; 		#pragma loopbound min 0 max 20
 ; 		for(int i = 0; i<(2*cond); i++){
 ; 			x += i + _2;
 ; 		}
@@ -51,7 +51,7 @@ for.cond:                                         ; preds = %for.inc, %if.then
   %4 = load i32, i32* %i
   %5 = load i32, i32* %0
   %6 = icmp slt i32 %4, %5
-  call void @llvm.loop.bound(i32 0, i32 9)
+  call void @llvm.loop.bound(i32 0, i32 10)
   br i1 %6, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
@@ -81,7 +81,7 @@ for.cond2:                                        ; preds = %for.inc4, %if.else
   %15 = load i32, i32* %0
   %16 = mul nsw i32 2, %15
   %17 = icmp slt i32 %14, %16
-  call void @llvm.loop.bound(i32 0, i32 19)
+  call void @llvm.loop.bound(i32 0, i32 20)
   br i1 %17, label %for.body3, label %for.end5
 
 for.body3:                                        ; preds = %for.cond2
