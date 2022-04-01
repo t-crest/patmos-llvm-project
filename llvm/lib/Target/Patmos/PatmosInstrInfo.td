@@ -308,6 +308,25 @@ let mayLoad=1 in
 def PSEUDO_PREG_RELOAD : PseudoInst<(outs PRegs:$pd),
                                     (ins RRegs:$ra, i32imm:$imm),
                                     "#PSEUDO_PREG_RELOAD", "", []>;
+									
+// Denotes loop bounds, i.e., how many times a loop will iterate at runtime. 
+// Only used during Code-Gen.
+// 
+// This instruction can and must only be present in the header-block of a loop.
+//
+// Given a runtime execution path, whenever the loop is encountered
+// this instruction denotes the number of times the header is entered,
+// After which, execution is guaranteed to not return to the header
+// unless all the code surrounding the loop is also executed again,
+// e.g. if its in a function, or is nested inside an outer loop.
+// The header can be entered from blocks preceding the loop or from
+// latch blocks within the loop itself. All such enterences count.
+//
+// ('minv' + 1) is the minimum number of times the header will be entered.
+// 'minv' cannot be less than 0.
+// ('minv' + 1 + 'maxv') is the maximum number of times the header will be entered.
+// 'maxv' cannot be less than 0.
+// We use this encoding to ensure there is no invalid values for the operands.
 let hasSideEffects = 1 in // To ensure it is not optimized away
 def PSEUDO_LOOPBOUND : PseudoInst<(outs), (ins i32imm:$minv, i32imm:$maxv),
                           "#PSEUDO_LOOPBOUND", "[$minv,$maxv]",

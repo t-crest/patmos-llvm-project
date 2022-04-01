@@ -12,6 +12,8 @@
 // RUN: FileCheck --check-prefixes="CHECK-MAL,CHECK6" %s
 // RUN: %clang --target=patmos %s -S -emit-llvm -D DEF7 2>&1 | \
 // RUN: FileCheck --check-prefixes="CHECK7" %s
+// RUN: %clang --target=patmos %s -S -emit-llvm -D DEF8 2>&1 | \
+// RUN: FileCheck --check-prefixes="CHECK8" %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -52,9 +54,24 @@ int main(int x) {
 	#endif
 	// CHECK7: invalid values; expected min >= 0 && max >= 0 && min <= max
 	// CHECK7: _Pragma( "loopbound min 5 max 4" )
+	#ifndef DEF8
 	while(x >0){
 		x = x/2;
 		count++;
 	}
+	#endif
+	
+	#ifdef DEF8
+	_Pragma( "loopbound min 0 max 40" )
+	#endif
+	// CHECK8: invalid minimum loop bound; do-while loops must have mininum bound >= 1
+	// CHECK8: _Pragma( "loopbound min 0 max 40" )
+	#ifdef DEF8
+	do {
+		x = x/2;
+		count++;
+	} while(x >0);
+	#endif
+	
 	return count;	
 }

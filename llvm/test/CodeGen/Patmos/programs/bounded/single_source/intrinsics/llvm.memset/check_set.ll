@@ -39,7 +39,8 @@ for.cond:
   %dest = phi i8* [%ptr, %entry], [%dest.incd, %for.body]
   %sum = phi i8 [0, %entry], [%sum.next, %for.body]
   %stop = icmp eq i32 %i, 0
-  call void @llvm.loop.bound(i32 <count>, i32 <count>)
+  ; Bounds could be more precise, but this is simplest
+  call void @llvm.loop.bound(i32 0, i32 <count>)
   br i1 %stop, label %for.end, label %for.body
 
 for.body:

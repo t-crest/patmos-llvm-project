@@ -95,7 +95,7 @@ Then it is simple enough. From the build folder we have 2 commands.
 To test LLVM:
 
 ```
-make -j llc && ./bin/llvm-lit ../llvm/test -v --filter=Patmos
+make -j llc UnitTests && ./bin/llvm-lit ../llvm/test -v --filter=Patmos
 ```
 
 To test Clang:

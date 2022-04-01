@@ -758,14 +758,11 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
   EmitBlock(ContBlock, true);
 }
 
-// Emits loop bounds on the given conditional branch (assuming its
-// the branch of the loop header).
-//
-// Current implementation overwrites any "llvm.loop" attribute on the
-// instruction, meaning it doesn't play well with other loop hints,
-// e.g. "unroll".
-void CodeGenFunction::EmitLoopBounds(llvm::BasicBlock *BB,
-                                       const ArrayRef<const Attr *> &Attrs) {
+void CodeGenFunction::EmitLoopBounds(
+   llvm::BasicBlock *BB,
+   const ArrayRef<const Attr *> &Attrs,
+   bool one_higher
+) {
   auto *F = BB->getParent();
   auto &Context = BB->getContext();
   auto is_bound = [](auto attr){ return dyn_cast<LoopBoundAttr>(attr); };
@@ -778,8 +775,11 @@ void CodeGenFunction::EmitLoopBounds(llvm::BasicBlock *BB,
   if( foundLB != Attrs.end() ) {
     auto *LB = dyn_cast<LoopBoundAttr>(*foundLB); // Guaranteed to work
 
-    llvm::Value *MinVal = llvm::ConstantInt::get(Int32Ty, LB->getMin());
-    llvm::Value *MaxVal = llvm::ConstantInt::get(Int32Ty, LB->getMax());
+    auto min = one_higher ? LB->getMin() : LB->getMin()-1;
+    auto max = LB->getMax() - LB->getMin();
+
+    llvm::Value *MinVal = llvm::ConstantInt::get(Int32Ty, min);
+    llvm::Value *MaxVal = llvm::ConstantInt::get(Int32Ty, max);
 
     auto *loop_bound_fn = F->getParent()->getFunction("llvm.loop.bound");
     std::vector<llvm::Type*> BoundTypes(2, llvm::Type::getInt32Ty(Context));
@@ -796,6 +796,8 @@ void CodeGenFunction::EmitLoopBounds(llvm::BasicBlock *BB,
       loop_bound_fn->addFnAttr(llvm::Attribute::OptimizeNone);
     }
     auto *call_inst = llvm::CallInst::Create(FT, loop_bound_fn, {MinVal, MaxVal});
+
+    // Emit before terminator
     BB->getInstList().insertAfter(std::prev(BB->end(),2), call_inst);
   }
 }
@@ -896,7 +898,7 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   EmitBlock(LoopExit.getBlock(), true);
 
   // Attach metadata to loop header
-  EmitLoopBounds(LoopHeader.getBlock(), WhileAttrs);
+  EmitLoopBounds(LoopHeader.getBlock(), WhileAttrs, true);
 
   // The LoopHeader typically is just a branch if we skipped emitting
   // a branch, try to erase it.
@@ -923,7 +925,7 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     EmitStmt(S.getBody());
   }
 
-  EmitLoopBounds(LoopBody, DoAttrs);
+  EmitLoopBounds(LoopBody, DoAttrs, false);
 
   EmitBlock(LoopCond.getBlock());
 
@@ -1046,7 +1048,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
     llvm::BranchInst *CondBr =
       Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
 
-    EmitLoopBounds(CondBlock, ForAttrs);
+    EmitLoopBounds(CondBlock, ForAttrs, true);
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);

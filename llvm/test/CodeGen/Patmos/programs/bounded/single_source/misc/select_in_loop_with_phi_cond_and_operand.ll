@@ -18,7 +18,7 @@ for.body:
   %2 = select i1 %0, i32 %1, i32 1 
   %above10 = icmp ugt i32 %2, 10
   %add.x = add i32 %2, %x
-  call void @llvm.loop.bound(i32 1, i32 10)
+  call void @llvm.loop.bound(i32 0, i32 10)
   br i1 %above10, label %end, label %for.body
 
 end:                         

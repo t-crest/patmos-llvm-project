@@ -12,10 +12,7 @@
 //
 // Also tests that no optimizations result in the loop bound call being duplicated somewhere.
 // 
-//
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 // CHECK-LABEL: func1
 int func1(int x) { 
@@ -23,8 +20,8 @@ int func1(int x) {
 	
 	_Pragma( "loopbound min 3 max 7" )
 	while(x >0){
-	// CHECK: call void @llvm.loop.bound(i32 3, i32 7)
-	// CHECK-NOT: call void @llvm.loop.bound(i32 3, i32 7)
+	// CHECK: call void @llvm.loop.bound(i32 3, i32 4)
+	// CHECK-NOT: call void @llvm.loop.bound(i32 3, i32 4)
 		x = x/2;
 		count++;
 	}
@@ -38,8 +35,8 @@ int func2(int x) {
 	
 	_Pragma( "loopbound min 24 max 92658" )
 	for(int i = 0; i < x; i++){
-	// CHECK: call void @llvm.loop.bound(i32 24, i32 92658)
-	// CHECK-NOT: call void @llvm.loop.bound(i32 24, i32 92658)
+	// CHECK: call void @llvm.loop.bound(i32 24, i32 92634)
+	// CHECK-NOT: call void @llvm.loop.bound(i32 24, i32 92634)
 		x = x/2;
 		count++;
 	}
@@ -50,10 +47,10 @@ int func2(int x) {
 int func3(int x) { 
 	int count = x;
 	
-	#pragma loopbound min 0 max 124
+	#pragma loopbound min 1 max 124
 	do { 
-	// CHECK: call void @llvm.loop.bound(i32 0, i32 124)
-	// CHECK-NOT: call void @llvm.loop.bound(i32 0, i32 124)
+	// CHECK: call void @llvm.loop.bound(i32 0, i32 123)
+	// CHECK-NOT: call void @llvm.loop.bound(i32 0, i32 123)
 		x = x/2;
 		count++;
 	} while(x >0);
@@ -71,15 +68,14 @@ int func4( int x )
 
   _Pragma( "loopbound min 1 max 4" )
   while ( low <= up ) {
-	// CHECK: call void @llvm.loop.bound(i32 1, i32 4)
-	// CHECK-NOT: call void @llvm.loop.bound(i32 1, i32 4)
+	// CHECK: call void @llvm.loop.bound(i32 1, i32 3)
+	// CHECK-NOT: call void @llvm.loop.bound(i32 1, i32 3)
 	mid = ( low + up ) >> 1;
 
     if ( 0 == x ) {
       up = low - 1;
       fvalue = 4;
     } else
-
       if ( 157 > x )
         up = mid - 1;
       else

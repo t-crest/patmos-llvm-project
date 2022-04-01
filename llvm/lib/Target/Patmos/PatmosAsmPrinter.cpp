@@ -123,24 +123,14 @@ void PatmosAsmPrinter::emitBasicBlockBegin(const MachineBasicBlock &MBB) {
   }
 
   // Print loop bound information if needed
-  auto loop_bounds = getLoopBounds(&MBB);
-  if (loop_bounds.first > -1 || loop_bounds.second > -1){
+  if (auto loop_bounds = getLoopBounds(&MBB)){
     OutStreamer->GetCommentOS() << "Loop bound: [";
-    if (loop_bounds.first > -1){
-      OutStreamer->GetCommentOS() << loop_bounds.first;
-    } else {
-      OutStreamer->GetCommentOS() << "-";
-    }
+    OutStreamer->GetCommentOS() << loop_bounds->first;
     OutStreamer->GetCommentOS() << ", ";
-    if (loop_bounds.second > -1){
-      OutStreamer->GetCommentOS() << loop_bounds.second;
-    } else {
-      OutStreamer->GetCommentOS() << "-";
-    }
+    OutStreamer->GetCommentOS() << loop_bounds->second;
     OutStreamer->GetCommentOS() << "]\n";
     OutStreamer->AddBlankLine();
   }
-
 }
 
 

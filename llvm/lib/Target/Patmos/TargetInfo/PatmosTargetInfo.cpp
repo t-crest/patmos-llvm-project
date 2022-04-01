@@ -16,6 +16,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/ADT/Optional.h"
 
 using namespace llvm;
 
@@ -31,7 +32,7 @@ void llvm::getMBBIRName(const MachineBasicBlock *MBB,
   bb_ir_label.toVector(result);
 }
 
-std::pair<int,int> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
+Optional<std::pair<uint64_t, uint64_t>> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
   if(MBB && MBB->getBasicBlock()) {
     auto bound_instr = std::find_if(MBB->begin(), MBB->end(), [&](auto &instr){
       return instr.getOpcode() == Patmos::PSEUDO_LOOPBOUND;
@@ -39,10 +40,21 @@ std::pair<int,int> llvm::getLoopBounds(const MachineBasicBlock * MBB) {
     if(bound_instr != MBB->end()) {
       assert(bound_instr->getOperand(0).isImm());
       assert(bound_instr->getOperand(1).isImm());
-      return std::make_pair(bound_instr->getOperand(0).getImm(), bound_instr->getOperand(1).getImm());
+      assert(bound_instr->getOperand(0).isImm() >= 0);
+      assert(bound_instr->getOperand(1).isImm() >= 0);
+
+      auto min = bound_instr->getOperand(0).getImm() + 1;
+      auto max = min + bound_instr->getOperand(1).getImm();
+
+      // Check for overflows
+      if(min < 0 || max < min) {
+        report_fatal_error("Invalid loop bounds");
+      }
+
+      return std::make_pair((uint64_t) min, (uint64_t) max);
     }
   }
-  return std::make_pair(-1, -1);
+  return None;
 }
 
 Target &llvm::getThePatmosTarget() {

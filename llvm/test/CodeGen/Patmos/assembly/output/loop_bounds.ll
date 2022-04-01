@@ -13,7 +13,7 @@ entry:
 
 ; CHECK: 		# %for.cond
 ; CHECK-NEXT: 	# =>This Inner Loop Header: Depth=1
-; CHECK-NEXT: 	# Loop bound: [0, 99]
+; CHECK-NEXT: 	# Loop bound: [1, 100]
 for.cond:                                         ; preds = %for.inc, %entry
   %x.0 = phi i32 [ 0, %entry ], [ %add, %for.body ]
   %i.0 = phi i32 [ 0, %entry ], [ %inc, %for.body ]

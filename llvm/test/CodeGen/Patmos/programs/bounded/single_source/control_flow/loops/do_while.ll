@@ -28,7 +28,7 @@ do.body:                                          ; preds = %do.cond, %entry
   %y.0 = phi i32 [ 0, %entry ], [ %add, %do.cond ]
   %0 = load volatile i32, i32* @_1
   %add = add nsw i32 %y.0, %0
-  call void @llvm.loop.bound(i32 1, i32 9)
+  call void @llvm.loop.bound(i32 0, i32 9)
   br label %do.cond
 
 do.cond:                                          ; preds = %do.body

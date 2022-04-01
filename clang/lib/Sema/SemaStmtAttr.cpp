@@ -206,6 +206,10 @@ static Attr *handleLoopboundAttr(Sema &S, Stmt *St, const ParsedAttr &A,
   auto MinInt = *MinAPS;
   auto MaxInt = *MaxAPS;
 
+  if ( dyn_cast<DoStmt>(St) && MinInt < 1 ) {
+    S.Diag(A.getLoc(), diag::err_pragma_loopbound_invalid_values_do_while);
+    return nullptr;
+  }
   if ( MinInt < 0 || MaxInt < 0 || MinInt > MaxInt ) {
     S.Diag(A.getLoc(), diag::err_pragma_loopbound_invalid_values);
     return nullptr;

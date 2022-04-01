@@ -26,13 +26,12 @@ Target &getThePatmosTarget();
 void getMBBIRName(const MachineBasicBlock *MBB,
                          SmallString<128> &result);
 
-/// Extracts loop bound information from the metadata of the block
-/// terminator, if available.
+/// Extracts loop bound information from the PSEUDO_LOOPBOUND instruction
+/// if available in the given block
 ///
 /// The first element is the minimum iteration count.
 /// The second element is the maximum iteration count.
-/// If a bound is not available, -1 is returned.
-std::pair<int,int> getLoopBounds(const MachineBasicBlock * MBB);
+Optional<std::pair<uint64_t, uint64_t>> getLoopBounds(const MachineBasicBlock * MBB);
 
 } // namespace llvm
 
