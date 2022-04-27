@@ -28,3 +28,6 @@ An execution argument is a number, followed by `=`, followed by another number.
 The first number is the input to the `main` function in the tested program.
 The second number must be between 0 and 256 and is the expected output of the test for that specific input.
 
+If LLC's `--debug` output is needed, the `WITH_DEBUG` variable can be set to `true`.
+This will make the tests produce debug output in a `.debug` file in the build folder (alongside where the compiled test programs are put).
+See the error output of a test (which has this variable set) to see exactly where the file is.

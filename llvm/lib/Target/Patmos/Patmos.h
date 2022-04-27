@@ -34,7 +34,7 @@ namespace llvm {
 
   FunctionPass *createPatmosISelDag(PatmosTargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
   ModulePass   *createPatmosSPClonePass();
-  MachineFunctionPass *createPatmosSPMarkPass(PatmosTargetMachine &tm);
+  ModulePass   *createPatmosSPMarkPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosSinglePathInfoPass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPPreparePass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPBundlingPass(const PatmosTargetMachine &tm);

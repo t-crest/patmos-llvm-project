@@ -7,7 +7,7 @@ if which("pasim") is None:
     print("Patmos simulator 'pasim' could not be found.")
     sys.exit(1)
 
-first_exec_arg_index = 6
+first_exec_arg_index = 9
 if len(sys.argv) <= (first_exec_arg_index + 1):
     print("Must have at least 2 execution arguments but was:", sys.argv[first_exec_arg_index:])
     sys.exit(1)
@@ -29,8 +29,20 @@ if substitute_source != "":
 # The object file of the program
 compiled = sys.argv[4]   
 
+# The (potential) debug file
+debug_file = compiled + ".debug"
+
 # The object file of the start function to be linked with the program
 start_function = sys.argv[5]
+
+# The object file of the memory access compensation function to be linked with the program
+compensation_function = sys.argv[6]
+
+# When using single-path, which function is the root single-path function
+sp_root = sys.argv[7]
+
+# Whether LLC should be run with debuggin enable
+with_debug = sys.argv[8] == "true"
 
 # The first execution argument
 exec_arg = sys.argv[first_exec_arg_index]
@@ -138,24 +150,29 @@ def compile_and_test(llc_args, pasim_args):
     def throw_error(*msgs):
         for msg in msgs:
             print(msg, end = '')
-        print("\nLLC args: ", llc_args)
+        print("\nStart file: ", os.path.basename(start_function))
+        print("LLC args: ", llc_args)
         print("Pasim args: ", pasim_args)
+        if with_debug:
+            print("Debug file: ", debug_file)
         sys.exit(1)
         
     using_singlepath = "-mpatmos-singlepath=" in llc_args
         
-    # Try to compile the program to rule out compile errors. Throw out the result.
-    if subprocess.run([bin_dir+"/llc", source_to_test] + llc_args.split() + ["-filetype=obj", "-o", compiled]).returncode != 0:
-        throw_error("Failed to compile ", source_to_test)
-
     # Link start function with program
     if subprocess.run([bin_dir+"/llvm-link", start_function, source_to_test, "-o", compiled]).returncode != 0:
         throw_error("Failed to link '", source_to_test, "' and '", start_function, "'")
         
     # Compile into object file (not ELF yet)
-    if subprocess.run([bin_dir+"/llc", compiled] + llc_args.split() + ["-filetype=obj", "-o", compiled]).returncode != 0:
-        throw_error("Failed to compile '", source_to_test, "'")
+    llc_compile_arg_list =[bin_dir+"/llc", compiled] + llc_args.split() + ["-filetype=obj", "-o", compiled]
+    if with_debug:
+        llc_compile_arg_list = llc_compile_arg_list + ["--debug"]
+        stderr_cfg = open(debug_file, "w", 1)
+    else:
+        stderr_cfg = None
 
+    if subprocess.run(llc_compile_arg_list, stderr=stderr_cfg).returncode != 0:
+        throw_error("Failed to compile '", source_to_test, "'")
      
     # Run the first execution argument on its own,
     # such that its stats result can be compared to
@@ -202,9 +219,9 @@ def compile_and_test_matrix(llc_args, pasim_args, matrix):
 compile_and_test_matrix("", "", [
     [
         ("", ""), # Traditional code
-        ("-mpatmos-singlepath=main", "-D ideal"), # Single-path code without dual-issue
-        ("-mpatmos-singlepath=main -mpatmos-disable-vliw=false", "-D ideal"), # Single-path with dual-issue
-        ("-mpatmos-singlepath=main -mpatmos-enable-constant-execution-time=true", "-D lru2") # Single-path code without dual-issue, with constant execution time
+        ("-mpatmos-singlepath=" + sp_root, "-D ideal"), # Single-path code without dual-issue
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"), # Single-path with dual-issue
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-constant-execution-time", "-D lru2") # Single-path code without dual-issue, with constant execution time
     ],
     # Optimization levels
     ["", "-O1", "-O2"]
