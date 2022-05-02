@@ -10,8 +10,8 @@ add_llvm_component_library(LLVMPatmosSinglePath
   SPScope.cpp
   SPScheduler.cpp
   PredicateDefinition.cpp
-  InstructionLevelCET.cpp
-  MemoryAccessAnalysis.cpp
+  OppositePredicateCompensation.cpp
+  MemoryAccessNormalization.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

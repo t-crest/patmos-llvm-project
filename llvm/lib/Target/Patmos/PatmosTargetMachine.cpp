@@ -148,8 +148,8 @@ namespace {
         addPass(createPatmosSPMarkPass(getPatmosTargetMachine()));
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
         addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
-        if (PatmosSinglePathInfo::isConstant() && PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::counter) {
-          addPass(createMemoryAccessAnalysisPass(getPatmosTargetMachine()));
+        if (PatmosSinglePathInfo::isConstant()) {
+          addPass(createMemoryAccessNormalizationPass(getPatmosTargetMachine()));
         }
       }
     }
@@ -171,8 +171,8 @@ namespace {
 
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
-        if (PatmosSinglePathInfo::isConstant() && PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::instruction) {
-          addPass(createInstructionLevelCETPass(getPatmosTargetMachine()));
+        if (PatmosSinglePathInfo::isConstant()) {
+          addPass(createOppositePredicateCompensationPass(getPatmosTargetMachine()));
         }
         addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));
         addPass(createPatmosSPReducePass(getPatmosTargetMachine()));

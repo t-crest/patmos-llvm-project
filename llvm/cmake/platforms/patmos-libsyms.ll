@@ -1,5 +1,5 @@
 
-@llvm.used = appending global [42 x i8*] [
+@llvm.used = appending global [44 x i8*] [
 	i8* bitcast (i8* (i8*, i8*, i32)* @memcpy to i8*), 
 	i8* bitcast (i8* (i8*, i32, i32)* @memset to i8*), 
 	; The following are all the floating point or division operations.
@@ -9,7 +9,9 @@
 	i8* bitcast (i32 (i32, i32)* @__divsi3 to i8*), 
 	i8* bitcast (i32 (i32, i32)* @__udivsi3 to i8*), 
 	i8* bitcast (i32 (i32, i32)* @__modsi3 to i8*), 
-	i8* bitcast (i32 (i32, i32)* @__umodsi3 to i8*), 
+	i8* bitcast (i32 (i32, i32)* @__umodsi3 to i8*),
+	i8* bitcast (i64 (i64, i32)* @__ashldi3 to i8*),
+	i8* bitcast (i64 (i64, i32)* @__lshrdi3 to i8*),
 	i8* bitcast (double (double, double)* @__adddf3 to i8*), 
 	i8* bitcast (float (float, float)* @__addsf3 to i8*), 
 	i8* bitcast (i32 (double, double)* @__ledf2 to i8*), 
@@ -53,6 +55,8 @@ declare i32 @__divsi3(i32, i32)
 declare i32 @__udivsi3(i32, i32)
 declare i32 @__modsi3(i32, i32)
 declare i32 @__umodsi3(i32, i32)
+declare i64 @__ashldi3(i64, i32)
+declare i64 @__lshrdi3(i64, i32)
 declare double @__adddf3(double, double)
 declare float @__addsf3(float, float)
 declare i32 @__ledf2(double, double)

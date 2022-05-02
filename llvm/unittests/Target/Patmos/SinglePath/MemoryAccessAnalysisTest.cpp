@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "SinglePath/MemoryAccessAnalysisImpl.h"
+#include "SinglePath/MemoryAccessAnalysis.h"
 
 using namespace llvm;
 

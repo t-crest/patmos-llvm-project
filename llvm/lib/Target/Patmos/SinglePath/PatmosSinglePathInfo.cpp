@@ -58,8 +58,8 @@ static cl::opt<CompensationAlgo> EnableCET(
     cl::values(
         clEnumValN(CompensationAlgo::hybrid,
             "hybrid","(default) Heuristically chooses the best algorithm for each situation"),
-        clEnumValN(CompensationAlgo::instruction,
-            "instruction", "For each instruction, adds compensation instruction with opposite predicate"),
+        clEnumValN(CompensationAlgo::opposite,
+            "opposite", "For each main memory instruction, adds compensation instruction with opposite predicate"),
         clEnumValN(CompensationAlgo::counter,
             "counter", "A counter is maintained in the function and used in the end to compensate all at once"),
         // When nothing specific is given after the flag, this is the default

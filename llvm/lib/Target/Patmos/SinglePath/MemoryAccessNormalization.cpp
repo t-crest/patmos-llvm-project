@@ -1,0 +1,515 @@
+//===-- MemoryAccessAnalysis.cpp - Remove unused function declarations ------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// Analyses single-path functions and decides which compensation algorithms
+// to use for each.
+//
+// If the Decrementing Counter Compensation algorithm is chosen for a function,
+// it is run immediately. If Opposite Predicate Compensation is chosen,
+// a function attribute is set, such that a later pass can perform the compensation.
+//
+//===----------------------------------------------------------------------===//
+
+#include "MemoryAccessNormalization.h"
+#include "MemoryAccessAnalysis.h"
+#include "OppositePredicateCompensation.h"
+#include "PatmosSinglePathInfo.h"
+#include "TargetInfo/PatmosTargetInfo.h"
+#include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+
+#include "deque"
+
+#define DEBUG_TYPE "patmos-const-exec"
+
+using namespace llvm;
+
+STATISTIC(CounterComp, "How many functions were converted to constant execution time using 'counter' algorithm");
+STATISTIC(OppositeComp, "How many functions were converted to constant execution time using 'opposite' algorithm");
+STATISTIC(NoComp, "How many functions did not get any constant execution time compensation");
+STATISTIC(CntCmpInstr, "Number of non-phi instructions added by the 'counter' constant execution time compensation algorithm");
+
+char MemoryAccessNormalization::ID = 0;
+
+FunctionPass *llvm::createMemoryAccessNormalizationPass(const PatmosTargetMachine &tm) {
+  return new MemoryAccessNormalization(tm);
+}
+
+/// returns the number of main-memory accessing instruction in the given block
+static unsigned countAccesses(const MachineBasicBlock *mbb){
+  auto count = 0;
+  for(auto instr_iter = mbb->instr_begin(); instr_iter != mbb->instr_end(); instr_iter++){
+    switch( instr_iter->getOpcode() ){
+      case Patmos::LWM:
+      case Patmos::LHM:
+      case Patmos::LBM:
+      case Patmos::LHUM:
+      case Patmos::LBUM:
+      case Patmos::SWM:
+      case Patmos::SHM:
+      case Patmos::SBM:
+        count++;
+        break;
+      default:
+        break;
+    }
+  }
+  return count;
+}
+
+/// Returns the maximum loop bound of the given block, assuming it is
+/// the header of a loop
+static uint64_t getLoopBoundMax(const MachineBasicBlock *mbb){
+  return getLoopBounds(mbb)->second;
+}
+
+/// Returns the maximum possible main memory accesses the function can do
+unsigned MemoryAccessNormalization::getAccessBounds(MachineFunction &MF, llvm::MachineLoopInfo &LI) {
+  auto accesses_counts = memoryAccessAnalysis(MF.getBlockNumbered(0), &LI,
+      countAccesses, getLoopBoundMax);
+
+  // Find the max number of accesses among all final blocks in the function
+  unsigned max_end_accesses = 0;
+  const MachineBasicBlock *max_end_block = nullptr;
+  for (auto bb_iter = MF.begin(); bb_iter != MF.end(); ++bb_iter) {
+    if (bb_iter->succ_size() == 0) {
+      auto block_count = accesses_counts.first[&*bb_iter];
+      if (block_count >= max_end_accesses) {
+        max_end_accesses = block_count;
+        max_end_block = &*bb_iter;
+      }
+    }
+  }
+  assert(max_end_block && "Didn't find a final block");
+  LLVM_DEBUG(
+    dbgs() << "\nMemory Access Analysis Results:\n";
+    dbgs() << "\tSingle Blocks:\n";
+    for(auto mbb_iter=MF.begin(); mbb_iter != MF.end(); mbb_iter++){
+      dbgs() << "\t\t" << mbb_iter->getName() << ": " << accesses_counts.first[&*mbb_iter] << "\n";
+    }
+    dbgs() << "\tLoops:\n";
+    for(auto entry: accesses_counts.second){
+      dbgs() << "\t\t" << entry.first->getName() << ": Predecessor Max: " << std::get<0>(entry.second)
+          << ", Body Max: " << std::get<1>(entry.second) << "\n";
+      dbgs() << "\t\t\tExits:\n";
+      for(auto exit_entry: std::get<2>(entry.second)){
+        dbgs() << "\t\t\t\t" << exit_entry.first->getName() << ": " << exit_entry.second << "\n";
+      }
+    }
+    dbgs() << "\tMax Access Count in block '" << max_end_block->getName() << "': " << max_end_accesses << "\n";
+  );
+  return max_end_accesses;
+}
+
+/// Sets the function attribute that flags that this function should use 'opposite' compensation algorithm
+static void delegateToOppositePredicate(MachineFunction &MF) {
+  OppositeComp++;
+  MF.getFunction().addFnAttr(OppositePredicateCompensation::ENABLE_OPC_ATTR);
+  LLVM_DEBUG(
+    dbgs() << "Set function Attribute '" << OppositePredicateCompensation::ENABLE_OPC_ATTR << "'\n";
+  );
+}
+
+bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
+  if (PatmosSinglePathInfo::isConverting(MF)){
+    LLVM_DEBUG(
+      dbgs() << "\n********** Patmos Memory Access Compensation **********\n";
+      dbgs() << "********** Function: " << MF.getFunction().getName() << "**********\n";
+      MF.dump();
+    );
+
+    if(PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::hybrid ||
+        PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::counter
+    ){
+      auto max_accesses = getAccessBounds(MF, getAnalysis<MachineLoopInfo>());
+
+      if(max_accesses > 0 ) {
+        auto counter_algo_instr_need = counter_compensate(MF,max_accesses, false);
+
+        // Get the number of instructions the opposite predicate compensation algorithm
+        // would add to the function
+        auto opposite_algo_instr_need = 0;
+        std::for_each(MF.begin(), MF.end(), [&](auto &BB){ opposite_algo_instr_need += countAccesses(&BB);});
+
+        LLVM_DEBUG(
+            dbgs() << "\nInstructions needed (at least) for the 'counter' compensation algorithm:"<< counter_algo_instr_need << "\n";
+            dbgs() << "Instructions needed (at least) for the 'opposite' compensation algorithm:"<< opposite_algo_instr_need << "\n";
+        );
+
+        if(counter_algo_instr_need < opposite_algo_instr_need ||
+            PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::counter
+        ) {
+          CounterComp++;
+          CntCmpInstr += counter_algo_instr_need;
+          auto added = counter_compensate(MF,max_accesses, true);
+          assert(counter_algo_instr_need == added);
+
+          LLVM_DEBUG(
+              dbgs() << "\********** Function: " << MF.getFunction().getName() << "**********\n";
+              MF.dump();
+          );
+        } else {
+          delegateToOppositePredicate(MF);
+        }
+      } else {
+        LLVM_DEBUG(dbgs() << "No compensation needed\n");
+        NoComp++;
+        return false;
+      }
+    } else {
+      assert(PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::opposite);
+
+      delegateToOppositePredicate(MF);
+    }
+    LLVM_DEBUG(dbgs() << "\n********** Patmos Memory Access Compensation Finished **********\n");
+    return true;
+  }
+  return false;
+}
+
+/// Creates a new General Purpose Virtual register in the function
+static Register new_vreg(MachineFunction &MF) {
+  return MF.getRegInfo().createVirtualRegister(&Patmos::RRegsRegClass);
+}
+
+/// Adds Memory Access compensation code to the given function
+/// such that is results in constant execution time for the function
+/// (If the function is singlepath).
+/// Returns a lower bound of how many instructions were added to the final
+/// binary. An exact number cannot be given, since some added instructions
+/// at this point, may not results in real instructions at the end.
+/// E.g. PHI instructions.
+///
+/// If 'should_insert' is false, no instructions are added and the function
+/// isn't changed. However, the count is still performed and returned as if
+/// instructions were added.
+unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_end_accesses, bool should_insert) {
+  assert(max_end_accesses != 0 && "No compensation needed if no accesses are done");
+
+  auto &LI = getAnalysis<MachineLoopInfo>();
+  auto &RI = MF.getRegInfo();
+  unsigned insert_count = 0;
+  DebugLoc DL;
+
+  auto compensation = memoryAccessCompensation(MF.getBlockNumbered(0), &LI, countAccesses);
+
+  LLVM_DEBUG(
+    dbgs() << "\nMemory Access Compensation Results:\n";
+    for(auto entry: compensation) {
+      dbgs() << "\t" << entry.first.first->getName() << " -> " << entry.first.second->getName()
+          << ": " << entry.second << "\n";
+    }
+  );
+
+  // Tracks the virtual registers used at the end of each block as the counter
+  std::map<MachineBasicBlock*, Register> block_regs;
+  // The blocks that have yet to be assigned a register
+  std::deque<MachineBasicBlock*> worklist;
+  worklist.push_back(MF.getBlockNumbered(0));
+
+  while(!worklist.empty()) {
+    auto *current = worklist.front();
+    worklist.pop_front();
+
+    LLVM_DEBUG(dbgs() << "\nCompensating in '" << current->getName() << "'\n");
+
+    // Put any missing successors on the queue
+    std::for_each(current->succ_begin(), current->succ_end(), [&](auto succ){
+      if(succ != current && !block_regs.count(succ) &&
+          std::find(worklist.begin(), worklist.end(), succ) == worklist.end()
+      ){
+        LLVM_DEBUG(dbgs() << "Enqueueing '" << current->getName() << "'\n");
+        worklist.push_back(succ);
+      }
+    });
+
+    if(current->pred_size() == 0) {
+      // Initialize counter at entry block
+      auto count_and_init_reg = compensateEntryBlock(MF, current, max_end_accesses, should_insert);
+      insert_count += count_and_init_reg.first;
+      block_regs[current] = count_and_init_reg.second;
+    } else if(current->pred_size() == 1) {
+      auto *pred = *current->pred_begin();
+      assert(block_regs.count(pred) && "Predecessor hasn't been assigned yet");
+
+      if(compensation.count({pred, current})) {
+        // Need to decrement counter.
+        auto decremented_reg = new_vreg(MF);
+        block_regs[current] = decremented_reg;
+
+        auto to_dec = compensation[{pred, current}];
+
+        if(to_dec > 4095) {
+          report_fatal_error("Not implemented compensation > 4095");
+        } else {
+          insert_count++;
+          if(should_insert){
+            BuildMI(*current, current->getFirstNonPHI(), DL, TII->get(Patmos::SUBi),
+              decremented_reg)
+              .addReg(Patmos::NoRegister).addImm(0)
+              .addReg(block_regs[pred]) // decrement source register
+              .addImm(to_dec);
+
+            LLVM_DEBUG(dbgs() << "Inserted counter decrement in '" << current->getName() << "' by: " << to_dec << "\n");
+          }
+        }
+      } else {
+        // Not updating counter, so just use predecessors register
+        block_regs[current] = block_regs[pred];
+        LLVM_DEBUG(dbgs() << "Not updating counter in '" << current->getName() << "'\n");
+      }
+    } else if(ensureBlockAndPredsAssigned(block_regs, current, worklist)){
+      insert_count += compensateMerge(current, block_regs, compensation, should_insert);
+    }
+  }
+
+  insert_count += compensateEnd(MF, block_regs, max_end_accesses, should_insert);
+  return insert_count;
+}
+
+/// Inserts counter initialization instruction, and if function only has
+/// 1 block, also decrements the counter.
+/// Returns how many instructions were added and what register the counter uses.
+std::pair<unsigned, Register> MemoryAccessNormalization::compensateEntryBlock(
+    MachineFunction &MF, MachineBasicBlock *entry, unsigned max_end_accesses, bool should_insert
+) {
+  DebugLoc DL;
+
+  // If function only has one block, just use r4 directly for the counter
+  auto init_reg = MF.size() == 1? Patmos::R4 : new_vreg(MF);
+
+  auto insert_count = 1;
+  if(should_insert){
+    auto count_opcode = max_end_accesses > 4095? Patmos::LIl : Patmos::LIi;
+    BuildMI(*entry, entry->getFirstTerminator(), DL, TII->get(count_opcode),
+      init_reg)
+      .addReg(Patmos::NoRegister).addImm(0) // Not predicated
+      .addImm(max_end_accesses)
+      .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
+
+    LLVM_DEBUG(
+      dbgs() << "Inserted counter initializer in '" << entry->getName() << "': "
+        << printReg(init_reg, TRI) << " = " << max_end_accesses << "\n";
+    );
+  }
+
+  if(MF.size() == 1) {
+    // Only one block, meaning no edges in 'compensation'
+    // Therefore, add decrement in the block
+    if(max_end_accesses <= 4095) {
+      insert_count++;
+      if(should_insert){
+        BuildMI(*entry, entry->getFirstTerminator(), DL, TII->get(Patmos::SUBi),
+          init_reg)
+          .addReg(Patmos::NoRegister).addImm(0)
+          .addReg(init_reg) // decrement init register
+          .addImm(max_end_accesses);
+
+        LLVM_DEBUG(
+          dbgs() << "Inserted counter decrement (single-block function) in '" << entry->getName() << "': "
+            << max_end_accesses << "\n";
+        );
+      }
+    } else {
+      report_fatal_error("Cannot handle memory access count > 4095 in single-block function");
+    }
+  }
+  return std::make_pair(insert_count, init_reg);
+}
+
+/// Ensures that the current block and all predecessors have been assigned
+/// a register.
+/// The current is assigned one if not already.
+/// If a predecessor is not assigned, the successors of the current block
+/// are put on the worklist followed by the current block.
+/// A predecessor is only ever not assigned before a block if
+/// they are part of a loop.
+///
+/// Returns whether all the predecessors are assigned.
+/// (the current block will always be assigned after calling this)
+bool MemoryAccessNormalization::ensureBlockAndPredsAssigned(
+  std::map<MachineBasicBlock*, Register> &block_regs,
+  llvm::MachineBasicBlock *current, std::deque<MachineBasicBlock*> &worklist
+) {
+  if(!block_regs.count(current)) {
+    // Reserve register for block
+    block_regs[current] = new_vreg(*current->getParent());
+  }
+
+  auto all_preds_assigned = std::all_of(current->pred_begin(), current->pred_end(), [&](auto pred){
+    return block_regs.count(pred);
+  });
+
+  if (!all_preds_assigned) {
+    // Return block to queue until predecessors have been assigned
+    worklist.push_back(current);
+    LLVM_DEBUG(dbgs() << "Skipped '" << current->getName() << "'\n");
+  }
+  return all_preds_assigned;
+}
+
+/// Inserts compensation for a block that has multiple predecessors.
+/// Code may be added to block itself and/or predecessors.
+/// Assumes all relevant blocks have been assigned a register.
+///
+/// Returns number of instructions added.
+unsigned MemoryAccessNormalization::compensateMerge(
+  MachineBasicBlock *current,
+  std::map<MachineBasicBlock*, Register> &block_regs,
+  std::map<
+    std::pair<const MachineBasicBlock*, const MachineBasicBlock*>,
+    unsigned
+  > compensation,
+  bool should_insert
+) {
+  DebugLoc DL;
+  auto *MF = current->getParent();
+  auto &RI = MF->getRegInfo();
+  auto insert_count = 0;
+
+  assert(block_regs.count(current) && "No register assigned block");
+
+  // Collect count decrements (source block, count, count register for source block)
+  std::vector<std::tuple<MachineBasicBlock*, unsigned, Register>> counts;
+  std::for_each(current->pred_begin(), current->pred_end(), [&](auto pred){
+    assert(block_regs.count(pred) && "No register assigned block");
+    counts.push_back(std::make_tuple(pred, compensation[{pred, current}], block_regs[pred]));
+  });
+
+  auto all_zero = std::all_of(counts.begin(), counts.end(), [&](auto c){
+    return std::get<1>(c) == 0;
+  });
+
+  if (all_zero) {
+    if (should_insert) {
+      // No need to do any decrementing, so just use the existing register as PHI result
+      auto phi_reg_inst_builder = BuildMI(*current, current->begin(), DL,
+          TII->get(Patmos::PHI), block_regs[current]);
+      for (auto count : counts) {
+        phi_reg_inst_builder.addReg(std::get<2>(count));
+        phi_reg_inst_builder.addMBB(std::get<0>(count));
+      }
+      LLVM_DEBUG(dbgs() << "Joined predecessor counts in '" << current->getName() << "': " << printReg(block_regs[current]) << "\n";);
+    }
+  } else {
+    // First, create 2 PHI instructions, one for the source register from each predecessor
+    // and the second for the amount that register should be decremented by
+    auto phi_reg = new_vreg(*MF);
+    auto phi_dec_count = new_vreg(*MF);
+
+    MachineInstrBuilder phi_reg_inst_builder, phi_dec_count_inst_builder;
+    if (should_insert) {
+      phi_dec_count_inst_builder = BuildMI(*current, current->begin(), DL,
+          TII->get(Patmos::PHI), phi_dec_count);
+      phi_reg_inst_builder = BuildMI(*current, current->begin(), DL,
+          TII->get(Patmos::PHI), phi_reg);
+    }
+
+    for (auto count : counts) {
+      auto pred = std::get<0>(count);
+      auto dec_count = std::get<1>(count);
+      auto count_reg = std::get<2>(count);
+      insert_count++;
+      if (should_insert) {
+        phi_reg_inst_builder.addReg(count_reg);
+        phi_reg_inst_builder.addMBB(pred);
+
+        // Load dec_count into register in source block
+        auto dec_reg = new_vreg(*MF);
+        auto dec_opcode = dec_count > 4095 ? Patmos::LIl : Patmos::LIi;
+        BuildMI(*pred, pred->getFirstTerminator(), DL, TII->get(dec_opcode),
+          dec_reg)
+          .addReg(Patmos::NoRegister).addImm(0).
+          addImm(dec_count);
+
+        phi_dec_count_inst_builder.addReg(dec_reg);
+        phi_dec_count_inst_builder.addMBB(pred);
+
+        LLVM_DEBUG(
+          dbgs() << "Inserted decrement count in predecessor '" << pred->getName() << "' as: ";
+          dbgs() << printReg(dec_reg, TRI) << "\n";
+        );
+      }
+    }
+
+    insert_count++;
+    if (should_insert) {
+      // Decrement counter
+      BuildMI(*current, current->getFirstNonPHI(), DL, TII->get(Patmos::SUBr),
+        block_regs[current])
+        .addReg(Patmos::NoRegister).addImm(0)
+        .addReg(phi_reg)
+        .addReg(phi_dec_count); // Decrement by
+
+      LLVM_DEBUG(
+        dbgs() << "Inserted counter decrement in '" << current->getName() << "': "
+          << printReg(block_regs[current], TRI) << " = " << printReg(phi_reg, TRI)
+          << " - " << printReg(phi_dec_count, TRI) << "\n";
+      );
+    }
+  }
+  return insert_count;
+}
+
+/// Adds the final call to the compensation function in the end block.
+/// If there are multiple blocks returning from the function, throws an error.
+///
+/// Returns the number of instructions added
+unsigned MemoryAccessNormalization::compensateEnd(
+  MachineFunction &MF, std::map<MachineBasicBlock*, Register> &block_regs,
+  unsigned max_end_accesses, bool should_insert
+) {
+  bool found_end = false;
+  DebugLoc DL;
+
+  for (auto BB_iter = MF.begin(); BB_iter != MF.end(); BB_iter++) {
+    auto *BB = &*BB_iter;
+    if (BB->succ_size() == 0 && !found_end) {
+      found_end = true;
+
+      if (should_insert) {
+        // Put the max possible into r3 as input
+        auto max_opcode = max_end_accesses > 4095 ? Patmos::LIl : Patmos::LIi;
+        auto max_inst = BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+          Patmos::R3)
+          .addReg(Patmos::NoRegister).addImm(0)
+          .addImm(max_end_accesses)
+          .setMIFlags(MachineInstr::FrameSetup)
+          .getInstr();
+
+        assert(block_regs.count(BB) && "End block doesn't have a counter register");
+
+        // Replace counter virtual register with r4, so that it becomes the second input
+        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(Patmos::COPY),
+          Patmos::R4)
+          .addReg(block_regs[BB]);
+
+        // Insert call. Since the compensation function doesn't follow usual calling convention,
+        // manually set use definitions
+        auto *call_instr = MF.CreateMachineInstr(TII->get(Patmos::CALLND), DL,true);
+        auto call_instr_builder = MachineInstrBuilder(MF, call_instr)
+          .addReg(Patmos::NoRegister).addImm(0)
+          .addExternalSymbol("__patmos_main_mem_access_compensation")
+          .addReg(Patmos::R3, RegState::ImplicitKill)
+          .addReg(Patmos::R4, RegState::ImplicitKill)
+          .addReg(Patmos::R5, RegState::ImplicitDefine)
+          .addReg(Patmos::SRB, RegState::ImplicitDefine)
+          .addReg(Patmos::SRO,  RegState::ImplicitDefine)
+          .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
+        BB->insert(BB->getFirstTerminator(), call_instr);
+        LLVM_DEBUG(
+          dbgs() << "\nInserted call to __patmos_main_mem_access_compensation in '" << BB->getName() << "'\n");
+      }
+    } else if (BB->succ_size() == 0) {
+      report_fatal_error("Can't handle functions with multiple return blocks");
+    }
+  }
+  return 2;
+}

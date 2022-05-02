@@ -435,7 +435,12 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     if (A->getOption().matches(options::OPT_mllvm)) {
       for(auto v : A->getValues()){
         // Take only those that start with "--mpatmos"
-        if( std::string(v).rfind("--mpatmos",0) == 0 ){
+        if(
+            std::string(v).rfind("--mpatmos",0) == 0 ||
+            std::string(v).rfind("--stats",0) == 0 ||
+            std::string(v).rfind("--info-output-file",0) == 0 ||
+            std::string(v).rfind("--debug",0) == 0
+        ){
           A->claim();
           LLCArgs.push_back(v);
         }

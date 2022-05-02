@@ -37,7 +37,7 @@ namespace llvm {
     // No constant execution time is desired
     disabled,
     // Algorithms
-    hybrid, instruction, counter
+    hybrid, opposite, counter
   };
 
 ///////////////////////////////////////////////////////////////////////////////

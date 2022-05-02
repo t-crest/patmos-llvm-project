@@ -1951,8 +1951,8 @@ namespace llvm {
 
 #ifndef NDEBUG
         const MachineInstr *FirstMI = PTM.getInstrInfo()->getFirstMI(&*i);
-        assert(!isPatmosCFL(FirstMI->getOpcode(), FirstMI->getDesc().TSFlags)
-               || (delay_slot_margin > 0));
+//        assert(!isPatmosCFL(FirstMI->getOpcode(), FirstMI->getDesc().TSFlags)
+//               || (delay_slot_margin > 0));
 #endif
         // check block + instruction size + max delay slot size of this instr.
         if (curr_size + i_size + tmp_live_margin + delay_slot_margin < MaxSize)
