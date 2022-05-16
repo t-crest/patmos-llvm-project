@@ -85,6 +85,11 @@ namespace llvm {
       static bool isMaybe(const Function &F);
       static bool isMaybe(const MachineFunction &MF);
 
+      static bool isPseudoRoot(const Function &F);
+      static bool isPseudoRoot(const MachineFunction &MF);
+
+      static const char* getCompensationFunction();
+
       /// isConstant - Return true if should produce constant execution-time,
       /// single-path code.
       static bool isConstant();
@@ -96,6 +101,11 @@ namespace llvm {
       /// getRootNames - Fill a set with the names of
       /// single-path root functions
       static void getRootNames(std::set<StringRef> &S);
+
+      /// Whether should use pseudo-roots single-path functions.
+      /// A pseudo root function is one that is guaranteed to be called
+      /// from an enabled path of a root or another pseudo-root.
+      static bool usePseudoRoots();
 
       /// PatmosSinglePathInfo - Constructor
       PatmosSinglePathInfo(const PatmosTargetMachine &tm);

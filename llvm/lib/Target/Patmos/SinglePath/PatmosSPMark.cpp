@@ -30,7 +30,7 @@
 
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosSinglePathInfo.h"
-#include "BoundedDominatorAnalysis.h"
+#include "BoundedDominators.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallSet.h"
@@ -53,9 +53,11 @@ using namespace llvm;
 
 #define DEBUG_TYPE "patmos-singlepath"
 
-STATISTIC(NumSPTotal,   "Total number of functions marked as single-path");
-STATISTIC(NumSPMaybe,   "Number of 'used' functions marked as single-path");
-STATISTIC(NumSPCleared, "Number of functions cleared again");
+STATISTIC(NumSPTotal,   "Number of functions used in single-path");
+STATISTIC(NumSPPseudo,  "Number of functions marked as pseudo-root");
+STATISTIC(NumSPCall,  "Number of call instructions from & to single-path functions");
+STATISTIC(NumSPPseudoCall,  "Number of call instructions from & to pseudo-root functions");
+STATISTIC(NumSPCleared, "Number of sp-maybe functions deleted");
 
 namespace {
 
@@ -69,12 +71,12 @@ private:
   /**
    * Get the bitcode function called by a given MachineInstr.
    */
-  const Function *getCallTarget(const MachineInstr *MI) const;
-
-  /**
-   * Get the machine function called by a given MachineInstr.
-   */
-  MachineFunction *getCallTargetMF(const MachineInstr *MI) const;
+//  const Function *getCallTarget(const MachineInstr *MI) const;
+//
+//  /**
+//   * Get the machine function called by a given MachineInstr.
+//   */
+//  MachineFunction *getCallTargetMF(const MachineInstr *MI) const;
 
   /**
    * Get the machine function called by a given MachineInstr, but if
@@ -88,7 +90,7 @@ private:
    * _sp variant of the callee.
    * @pre MI is a call instruction and not already the _sp variant
    */
-  void rewriteCall(MachineInstr *MI);
+  void rewriteCall(MachineInstr *MI, bool pseudo_root_target);
 
   /**
    * Go through all instructions of the given machine function and find
@@ -120,8 +122,6 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineModuleInfoWrapperPass>();
-//    AU.addRequired<MachineLoopInfo>();
-//    AU.addPreserved<MachineModuleInfoWrapperPass>();
     AU.setPreservesCFG();
   }
 
@@ -142,7 +142,6 @@ ModulePass *llvm::createPatmosSPMarkPass(PatmosTargetMachine &tm) {
 bool PatmosSPMark::runOnModule(Module &M) {
   LLVM_DEBUG( dbgs() <<
          "[Single-Path] Mark functions reachable from single-path roots\n");
-  M.dump();
 
   MMI = &getAnalysis<MachineModuleInfoWrapperPass>().getMMI();
   assert(MMI);
@@ -153,14 +152,16 @@ bool PatmosSPMark::runOnModule(Module &M) {
   for(auto fn_iter = M.begin(); fn_iter != M.end(); fn_iter++) {
     Function &F = *fn_iter;
     if (F.hasFnAttribute("sp-root")) {
+      NumSPPseudo++;
       // get the machine-level function
       MachineFunction *MF = MMI->getMachineFunction(F);
       assert( MF );
       PatmosMachineFunctionInfo *PMFI =
         MF->getInfo<PatmosMachineFunctionInfo>();
       PMFI->setSinglePath();
-      NumSPTotal++; // bump STATISTIC
+      if(PatmosSinglePathInfo::usePseudoRoots()) PMFI->setSinglePathPseudoRoot();
       W.push_back(MF);
+      NumSPTotal++;
     }
   }
 
@@ -172,46 +173,11 @@ bool PatmosSPMark::runOnModule(Module &M) {
   }
 
   removeUncalledSPFunctions(M);
-  M.dump();
+
   LLVM_DEBUG( dbgs() <<
          "[Single-Path] End of single-path mark\n");
   // We either have rewritten calls or removed superfluous functions.
   return true;
-}
-
-
-const Function *PatmosSPMark::getCallTarget(const MachineInstr *MI) const {
-  const Module *M = MI->getParent()->getParent()->getFunction().getParent();
-  const MachineOperand &MO = MI->getOperand(2);
-  const Function *Target = NULL;
-  llvm::StringRef TargetName = "";
-  if (MO.isGlobal()) {
-    Target = dyn_cast<Function>(MO.getGlobal());
-    if(!Target) {
-      TargetName = MO.getGlobal()->getName();
-    }
-  } else if (MO.isSymbol()) {
-    TargetName = MO.getSymbolName();
-    Target = M->getFunction(TargetName);
-  }
-
-  if(!Target) {
-    if(auto *alias = M->getNamedAlias(TargetName)) {
-      Target = M->getFunction(alias->getAliasee()->getName());
-    }
-  }
-
-  return Target;
-}
-
-
-MachineFunction *PatmosSPMark::getCallTargetMF(const MachineInstr *MI) const {
-  auto F = getCallTarget(MI);
-  MachineFunction *MF;
-  if (F && (MF = &MMI->getOrCreateMachineFunction((Function&)*F))) {
-    return MF;
-  }
-  return NULL;
 }
 
 MachineFunction *
@@ -242,20 +208,14 @@ PatmosSPMark::getCallTargetMFOrAbort(MachineBasicBlock::iterator MI, MachineFunc
   return MF;
 }
 
-static bool constantBounds(const MachineBasicBlock *mbb) {
-  if(auto bounds = getLoopBounds(mbb)) {
-    return bounds->first == bounds->second;
-  }
-  return false;
-}
-
 void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
   LLVM_DEBUG(dbgs() << "In function '" << MF->getName() << "':\n");
 
   MachineDominatorTree MDT(*MF);
   MachineLoopInfo LI(MDT);
+  BoundedDominators BD(*MF, LI);
 
-  auto bounded_doms = boundedDominatorsAnalysis(MF->getBlockNumbered(0), &LI, constantBounds);
+  auto &bounded_doms = BD.dominators;
 
   for (MachineFunction::iterator MBB = MF->begin(), MBBE = MF->end();
                                  MBB != MBBE; ++MBB) {
@@ -267,7 +227,13 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
 
         auto *original_PMFI = original_target_MF->getInfo<PatmosMachineFunctionInfo>();
 
-        rewriteCall(&*MI);
+        auto pseudo_target = PatmosSinglePathInfo::usePseudoRoots() &&
+                              bounded_doms.begin()->second.count(&*MBB) &&
+                              MF->getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot();
+        if(pseudo_target) {
+          LLVM_DEBUG(dbgs() << "Call to pseudo-root: "; MI->dump());
+        }
+        rewriteCall(&*MI, pseudo_target);
 
         auto *new_target_MF = getCallTargetMF(&*MI);
         auto *new_PMFI =
@@ -278,23 +244,28 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
           new_PMFI->setSinglePath();
           // add the new single-path function to the worklist
           W.push_back(new_target_MF);
+          NumSPTotal++;
 
-          NumSPTotal++; // bump STATISTIC
-          NumSPMaybe++; // bump STATISTIC
+          if(pseudo_target) {
+            assert(!new_PMFI->isSinglePathPseudoRoot() && "Pseudo-Root already marked");
+            new_PMFI->setSinglePathPseudoRoot();
+            NumSPPseudo++;
+          }
         }
+
       }
     }
   }
 }
 
-void PatmosSPMark::rewriteCall(MachineInstr *MI) {
+void PatmosSPMark::rewriteCall(MachineInstr *MI, bool pseudo_root_target) {
   // get current MBB and call target
   MachineBasicBlock *MBB = MI->getParent();
   const Function *Target = getCallTarget(MI);
   // get the same function with _sp_ suffix
   SmallVector<char, 64> buf;
   const StringRef SPFuncName = Twine(
-      Twine(Target->getName()) + Twine("_sp_")
+      Twine(Target->getName()) + Twine(pseudo_root_target? "_pseudo_sp_" : "_sp_")
       ).toNullTerminatedStringRef(buf);
 
   const Function *SPTarget = Target->getParent()->getFunction(SPFuncName);
@@ -311,12 +282,13 @@ void PatmosSPMark::rewriteCall(MachineInstr *MI) {
   MIB.addGlobalAddress(SPTarget);
   LLVM_DEBUG( dbgs() << "  Rewrite call: " << Target->getName()
                 << " -> " << SPFuncName << "\n" );
+  NumSPCall++;
+  if(pseudo_root_target) NumSPPseudoCall++;
 }
-
 
 void PatmosSPMark::removeUncalledSPFunctions(Module &M) {
   for(auto F = M.begin(); F != M.end(); ++F) {
-    if (F->hasFnAttribute("sp-maybe")) {
+    if (F->hasFnAttribute("sp-maybe") || F->hasFnAttribute("sp-pseudo")) {
       // get the machine-level function
       MachineFunction *MF = MMI->getMachineFunction(*F);
       assert( MF );
@@ -325,8 +297,9 @@ void PatmosSPMark::removeUncalledSPFunctions(Module &M) {
 
       if (!PMFI->isSinglePath()) {
         LLVM_DEBUG(dbgs() << "  Remove function: " << F->getName() << "\n");
-        F->removeFromParent();
+        F->eraseFromParent();
         F = M.begin();
+        NumSPCleared++;
       };
     }
   }

@@ -33,6 +33,11 @@ void getMBBIRName(const MachineBasicBlock *MBB,
 /// The second element is the maximum iteration count.
 Optional<std::pair<uint64_t, uint64_t>> getLoopBounds(const MachineBasicBlock * MBB);
 
+const Function *getCallTarget(const MachineInstr *MI);
+
+
+MachineFunction *getCallTargetMF(const MachineInstr *MI);
+
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_PATMOS_TARGETINFO_PATMOSTARGETINFO_H

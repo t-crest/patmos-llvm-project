@@ -884,7 +884,7 @@ void createSPScopeSubtree(MachineLoop *loop, SPScope *parent, MachineFunction &M
 
 SPScope * SPScope::createSPScopeTree(MachineFunction &MF, MachineLoopInfo &LI, const PatmosInstrInfo* instrInfo) {
 
-  SPScope *Root = new SPScope(PatmosSinglePathInfo::isRoot(MF), MF, LI);
+  SPScope *Root = new SPScope(PatmosSinglePathInfo::isRoot(MF) || PatmosSinglePathInfo::isPseudoRoot(MF), MF, LI);
 
   // iterate over top-level loops
   for (MachineLoopInfo::iterator I=LI.begin(), E=LI.end(); I!=E; ++I) {

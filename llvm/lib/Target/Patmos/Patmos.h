@@ -49,6 +49,7 @@ namespace llvm {
   FunctionPass *createPatmosDelaySlotKillerPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosEnsureAlignmentPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosIntrinsicEliminationPass();
+  FunctionPass *createPatmosBoundedDominatorsPass();
   ModulePass *createPatmosCallGraphBuilder();
   ModulePass *createPatmosStackCacheAnalysis(const PatmosTargetMachine &tm);
   ModulePass *createPatmosStackCacheAnalysisInfo(const PatmosTargetMachine &tm);

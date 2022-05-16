@@ -66,6 +66,18 @@ static cl::opt<CompensationAlgo> EnableCET(
         clEnumValN(CompensationAlgo::hybrid, "", "")
     ));
 
+static cl::opt<bool> DisablePseudoRoots(
+    "mpatmos-disable-pseudo-roots",
+    cl::init(false),
+    cl::desc("All non-root functions' code generations assumes they might be called from a disabled path."),
+    cl::Hidden);
+
+static cl::opt<std::string> CetCompFun(
+    "mpatmos-cet-compensation-function",
+    cl::init("__patmos_main_mem_access_compensation"),
+    cl::desc("Which compensation function to use with 'counter' constant execution time compensation"),
+    cl::Hidden);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 char PatmosSinglePathInfo::ID = 0;
@@ -84,12 +96,20 @@ bool PatmosSinglePathInfo::isEnabled() {
   return !SPRootList.empty();
 }
 
+bool PatmosSinglePathInfo::usePseudoRoots() {
+  return !DisablePseudoRoots;
+}
+
 bool PatmosSinglePathInfo::isConstant() {
   return EnableCET != CompensationAlgo::disabled;
 }
 
 CompensationAlgo PatmosSinglePathInfo::getCETCompAlgo() {
   return EnableCET;
+}
+
+const char* PatmosSinglePathInfo::getCompensationFunction() {
+  return CetCompFun.c_str();
 }
 
 bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {
@@ -99,7 +119,7 @@ bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {
 }
 
 bool PatmosSinglePathInfo::isEnabled(const Function &F) {
-  return isRoot(F) || isMaybe(F);
+  return isRoot(F) || isMaybe(F) || isPseudoRoot(F);
 }
 bool PatmosSinglePathInfo::isEnabled(const MachineFunction &MF) {
   return PatmosSinglePathInfo::isEnabled(MF.getFunction());
@@ -117,6 +137,13 @@ bool PatmosSinglePathInfo::isMaybe(const Function &F) {
 }
 bool PatmosSinglePathInfo::isMaybe(const MachineFunction &MF) {
   return PatmosSinglePathInfo::isMaybe(MF.getFunction());
+}
+
+bool PatmosSinglePathInfo::isPseudoRoot(const Function &F) {
+  return F.hasFnAttribute("sp-pseudo");
+}
+bool PatmosSinglePathInfo::isPseudoRoot(const MachineFunction &MF) {
+  return PatmosSinglePathInfo::isPseudoRoot(MF.getFunction());
 }
 
 void PatmosSinglePathInfo::getRootNames(std::set<StringRef> &S) {

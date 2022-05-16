@@ -9,7 +9,7 @@
 #define DEBUG_TYPE "patmos-const-exec"
 
 // Uncomment to always print debug info
-//#define LLVM_DEBUG(...) __VA_ARGS__
+// #define LLVM_DEBUG(...) __VA_ARGS__
 
 namespace llvm {
 
@@ -22,16 +22,16 @@ using LoopCounts =
     // The header
     const MachineBasicBlock*,
     std::tuple<
-      // Max accesses for any path leading to the loop header
-      unsigned,
-      // Max accesses for any path in the loop starting from the loop header
-      // until a latch or exit block
-      unsigned,
-      // Max accesses for any path starting in the parent of this loop,
+      // Min/Max accesses for any path leading to the loop header
+      std::pair<unsigned,unsigned>,
+      // Min/Max accesses for any path in the loop starting from the loop header
+      // until a latch
+      std::pair<unsigned,unsigned>,
+      // Min/Max accesses for any path starting in the parent of this loop,
       // entering the loop, and eventually exiting through the given block
       std::map<
         const MachineBasicBlock*,
-        unsigned
+        std::pair<unsigned,unsigned>
       >
     >
   >;
@@ -41,11 +41,11 @@ using LoopCounts =
 template<
   typename MachineBasicBlock
 >
-unsigned getBlockCount(
+std::pair<unsigned,unsigned> getBlockCount(
   const MachineBasicBlock* from,
-  std::map<const MachineBasicBlock*,unsigned> &block_counts
+  std::map<const MachineBasicBlock*,std::pair<unsigned,unsigned>> &block_counts
 ){
-  return block_counts.count(from) ? block_counts[from] : 0;
+  return block_counts.count(from) ? block_counts[from] : std::make_pair((unsigned)0,(unsigned)0);
 }
 
 // Gets memory access count of the block while taking into account
@@ -54,9 +54,9 @@ template<
   typename MachineBasicBlock,
   typename MachineLoopInfo
 >
-unsigned getExitCount(
+std::pair<unsigned,unsigned> getExitCount(
     const MachineLoopInfo *LI,
-    std::map<const MachineBasicBlock*, unsigned> &block_counts,
+    std::map<const MachineBasicBlock*, std::pair<unsigned,unsigned>> &block_counts,
     LoopCounts<MachineBasicBlock> &loop_counts,
     const MachineBasicBlock* from,
     unsigned depth
@@ -77,6 +77,34 @@ unsigned getExitCount(
   }
 }
 
+template<
+  typename MachineBasicBlock,
+  typename MachineLoopInfo,
+  typename Iter,
+  typename Filter,
+  typename GetDepth
+>
+std::pair<unsigned, unsigned> minMaxForAll(
+    const MachineLoopInfo *LI,
+    std::map<const MachineBasicBlock*, std::pair<unsigned,unsigned>> &block_counts,
+    LoopCounts<MachineBasicBlock> &loop_counts,
+    Iter begin, Iter end, Filter filter, GetDepth loop_depth
+) {
+  unsigned min =  INT_MAX;
+  unsigned max = 0;
+  bool none = true;
+  std::for_each(begin, end, [&](auto bb){
+    if(filter(bb)){
+      auto exitCount = getExitCount(LI, block_counts, loop_counts, bb, loop_depth(bb));
+      assert(exitCount.first <= INT_MAX);
+      min = std::min(min, exitCount.first);
+      max = std::max(max, exitCount.second);
+      none=false;
+    }
+  });
+  return std::make_pair(none? 0:min, max);
+}
+
 /// Performs Memory Access Analysis, i.e., counting how many memory accesses different paths
 /// may perform.
 /// Should be given the entry block to the function to be analyzed,
@@ -91,20 +119,20 @@ template<
   typename MachineLoopInfo
 >
 std::pair<
-  // The maximum number of accesses on any path leading to the block
+  // The minimum/maximum number of accesses on any path leading to the block
   // starting from the innermost loop header (including both the loop header and the block itself)
-  std::map<const MachineBasicBlock*, unsigned>,
+  std::map<const MachineBasicBlock*, std::pair<unsigned,unsigned>>,
   LoopCounts<MachineBasicBlock>
 >
 memoryAccessAnalysis(
     const MachineBasicBlock *start_mbb,
     const MachineLoopInfo *LI,
     unsigned (*countAccesses)(const MachineBasicBlock *mbb),
-    uint64_t (*loopBoundMax)(const MachineBasicBlock *mbb)
+    std::pair<uint64_t, uint64_t> (*loopBounds)(const MachineBasicBlock *mbb)
 ) {
   LLVM_DEBUG(dbgs() << "\nStarting Memory Access Analysis\n");
 
-  std::map<const MachineBasicBlock*, unsigned> block_counts;
+  std::map<const MachineBasicBlock*, std::pair<unsigned,unsigned>> block_counts;
   LoopCounts<MachineBasicBlock> loop_counts;
   std::queue<const MachineBasicBlock*> worklist;
 
@@ -126,17 +154,16 @@ memoryAccessAnalysis(
       );
 
       // Calculate count for block itself
-      auto old_count = getBlockCount(current, block_counts);
       // Loop header restarts the count as if they have no predecessors
       auto new_count = countAccesses(current);
-      assert(new_count >= old_count);
+
       auto had_assignment = block_counts.count(current);
-      block_counts[current] = new_count;
+      block_counts[current] = std::make_pair(new_count,new_count);
+      LLVM_DEBUG(
+        dbgs() << "Block '" << current->getName() << "' assigned: " << new_count << ", " << new_count << "\n";
+      );
       // Enqueue successors if needed
-      if(new_count > old_count || !had_assignment) {
-        LLVM_DEBUG(
-          dbgs() << "Block '" << current->getName() << "' assigned: " << new_count << "\n";
-        );
+      if(!had_assignment) {
         std::for_each(current->succ_begin(), current->succ_end(), [&](auto succ){
           if(succ != current) {
             LLVM_DEBUG(
@@ -149,38 +176,41 @@ memoryAccessAnalysis(
 
       // Now calculate characteristics for the loop
 
-      // Find highest predecessor
-      auto old_pred_max = std::get<0>(loop_counts[current]);
-      unsigned pred_max = 0;
-      std::for_each(current->pred_begin(), current->pred_end(), [&](auto pred){
-        if(LI->getLoopDepth(pred) < loop->getLoopDepth()){
-          pred_max = std::max(pred_max, getExitCount(LI, block_counts, loop_counts, pred, LI->getLoopDepth(pred)));
-        }
-      });
-      assert(pred_max >= old_pred_max);
-      std::get<0>(loop_counts[current]) = pred_max;
+      // Find lowest/highest predecessor
+      auto old_pred_counts = std::get<0>(loop_counts[current]);
+      unsigned pred_min, pred_max;
+      std::tie(pred_min, pred_max) = minMaxForAll(
+          LI, block_counts, loop_counts,
+          current->pred_begin(), current->pred_end(),
+          [&](auto pred){return LI->getLoopDepth(pred) < loop->getLoopDepth();},
+          [&](auto pred){return LI->getLoopDepth(pred);}
+        );
+
+      std::get<0>(loop_counts[current]) = std::make_pair(pred_min,pred_max);
       LLVM_DEBUG(
-        if(pred_max > old_pred_max){
-          dbgs() << "Assigned predecessor count: " << pred_max << "\n";
+        if(pred_min < old_pred_counts.first || pred_max > old_pred_counts.second){
+          dbgs() << "Assigned predecessor count: " << pred_min << ", " << pred_max << "\n";
         }
       );
 
-      // Calculate max iteration count
-      auto old_max_iter = std::get<1>(loop_counts[current]);
-      unsigned new_max_iter = 0;
+      // Calculate min/max iteration count
+      auto old_iter_count = std::get<1>(loop_counts[current]);
 
       SmallVector<MachineBasicBlock*> loop_ends;
-      loop->getExitingBlocks(loop_ends);
+//      loop->getExitingBlocks(loop_ends);
       loop->getLoopLatches(loop_ends);
+      unsigned new_iter_min, new_iter_max;
+      std::tie(new_iter_min, new_iter_max) = minMaxForAll(
+          LI, block_counts, loop_counts,
+          loop_ends.begin(), loop_ends.end(),
+          [&](auto end){return true;},
+          [&](auto end){return loop->getLoopDepth();}
+        );
 
-      for(auto bb: loop_ends) {
-        new_max_iter = std::max(new_max_iter, getExitCount(LI, block_counts, loop_counts, bb, loop->getLoopDepth()));
-      }
-      assert(new_max_iter >= old_max_iter);
-      std::get<1>(loop_counts[current]) = new_max_iter;
+      std::get<1>(loop_counts[current]) = std::make_pair(new_iter_min,new_iter_max);
       LLVM_DEBUG(
-        if(new_max_iter > old_max_iter){
-          dbgs() << "Assigned single iteration count: " << new_max_iter << "\n";
+        if(new_iter_min < old_iter_count.first || new_iter_max > old_iter_count.second){
+          dbgs() << "Assigned single iteration count: " << new_iter_min << ", " << new_iter_max << "\n";
         }
       );
 
@@ -190,19 +220,25 @@ memoryAccessAnalysis(
       for(auto *exit_block: loop_exits){
         auto old_exit_count = std::get<2>(loop_counts[current])[exit_block];
         auto exit_block_count = getExitCount(LI, block_counts, loop_counts, exit_block, loop->getLoopDepth());
-        unsigned new_exit_count;
-        auto full_loop_iters = loopBoundMax(loop->getHeader()) - 1;
+        assert(loopBounds(loop->getHeader()).first >= 1 && "Shouldn't iterate less than once");
+        auto min_full_loop_iters = loopBounds(loop->getHeader()).first - 1;
+        auto max_full_loop_iters = loopBounds(loop->getHeader()).second - 1;
 
-        new_exit_count =
-            std::get<0>(loop_counts[current]) +
-            (std::get<1>(loop_counts[current]) * full_loop_iters) +
-            exit_block_count;
-        assert(new_exit_count >= old_exit_count);
-        std::get<2>(loop_counts[current])[exit_block] = new_exit_count;
+        unsigned new_min_exit_count =
+            std::get<0>(loop_counts[current]).first +
+            (std::get<1>(loop_counts[current]).first * min_full_loop_iters) +
+            exit_block_count.first;
+        unsigned new_max_exit_count =
+            std::get<0>(loop_counts[current]).second +
+            (std::get<1>(loop_counts[current]).second * max_full_loop_iters) +
+            exit_block_count.second;
 
-        if(new_exit_count > old_exit_count) {
+        std::get<2>(loop_counts[current])[exit_block] = std::make_pair(new_min_exit_count,new_max_exit_count);
+
+        if(new_min_exit_count < old_exit_count.first || new_max_exit_count > old_exit_count.second) {
           LLVM_DEBUG(
-            dbgs() << "Exit '" << exit_block->getName() << "' assigned: " << new_exit_count << "\n";
+            dbgs() << "Exit '" << exit_block->getName() << "' assigned: "
+              << new_min_exit_count << ", " << new_max_exit_count << "\n";
           );
           std::for_each(exit_block->succ_begin(), exit_block->succ_end(), [&](auto succ){
             if(LI->getLoopDepth(succ) < loop->getLoopDepth()) {
@@ -217,22 +253,27 @@ memoryAccessAnalysis(
     } else {
       auto old_count = getBlockCount(current, block_counts);
 
-      // Get max of predecessors
-      unsigned pred_max = 0;
-      std::for_each(current->pred_begin(), current->pred_end(), [&](auto pred){
-        pred_max = std::max(pred_max, getExitCount(LI, block_counts, loop_counts, pred, loop? loop->getLoopDepth():0));
-      });
+      // Get min/max of predecessors
+      unsigned pred_min, pred_max;
+      std::tie(pred_min, pred_max) = minMaxForAll(
+          LI, block_counts, loop_counts,
+          current->pred_begin(), current->pred_end(),
+          [&](auto pred){return true;},
+          [&](auto pred){return loop? loop->getLoopDepth():0;}
+        );
 
       // Update count
-      auto new_count = pred_max + countAccesses(current);
-      assert(new_count >= old_count);
+      auto new_min_count = pred_min + countAccesses(current);
+      auto new_max_count = pred_max + countAccesses(current);
+
       auto had_assignment = block_counts.count(current);
-      block_counts[current] = new_count;
+      block_counts[current] = std::make_pair(new_min_count,new_max_count);
 
       // Enqueue successors if needed
-      if(new_count > old_count || !had_assignment) {
+      if(new_min_count > old_count.first || new_max_count > old_count.second || !had_assignment) {
         LLVM_DEBUG(
-          dbgs() << "Block '" << current->getName() << "' assigned: " << new_count << "\n";
+          dbgs() << "Block '" << current->getName() << "' assigned: "
+            << new_min_count << ", " << new_max_count << "\n";
         );
         std::for_each(current->succ_begin(), current->succ_end(), [&](auto succ){
           LLVM_DEBUG(

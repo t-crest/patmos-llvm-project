@@ -12,6 +12,7 @@ add_llvm_component_library(LLVMPatmosSinglePath
   PredicateDefinition.cpp
   OppositePredicateCompensation.cpp
   MemoryAccessNormalization.cpp
+  BoundedDominators.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

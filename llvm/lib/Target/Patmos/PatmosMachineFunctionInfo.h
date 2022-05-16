@@ -94,6 +94,9 @@ class PatmosMachineFunctionInfo : public MachineFunctionInfo {
   /// True if this function is to be single-path converted
   bool SinglePathConvert;
 
+  /// True if this function is a pseudo-root single-path function
+  bool SinglePathPseudoRoot;
+
   /// FIs created for SinglePath conversion
   /// | LoopCnts | S0Spills | ExcessSpills |
   std::vector<int> SinglePathFIs;
@@ -120,7 +123,7 @@ public:
   explicit PatmosMachineFunctionInfo(MachineFunction &MF) :
     StackCacheReservedBytes(0), StackReservedBytes(0), VarArgsFI(0),
     RegScavengingFI(0), S0SpillReg(0),
-    SinglePathConvert(false), SPS0SpillOffset(0), SPExcessSpillOffset(0),
+    SinglePathConvert(false), SinglePathPseudoRoot(false), SPS0SpillOffset(0), SPExcessSpillOffset(0),
     SPCallSpillOffset(0)
     {}
 
@@ -206,6 +209,14 @@ public:
 
   bool isSinglePath(void) const {
     return SinglePathConvert;
+  }
+
+  void setSinglePathPseudoRoot(bool pr=true) {
+    SinglePathPseudoRoot = pr;
+  }
+
+  bool isSinglePathPseudoRoot(void) const {
+    return SinglePathPseudoRoot;
   }
 
   void addSinglePathFI(int fi) {

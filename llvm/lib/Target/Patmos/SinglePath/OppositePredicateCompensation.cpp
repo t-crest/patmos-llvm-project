@@ -19,11 +19,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "OppositePredicateCompensation.h"
+#include "PatmosMachineFunctionInfo.h"
 #include "llvm/ADT/Statistic.h"
+#include "TargetInfo/PatmosTargetInfo.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 
-#define DEBUG_TYPE "patmos-const-exec"
+#include <map>
+#include <set>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "patmos-const-exec"
 
 STATISTIC(CompLoads,     "Number of non-phi instructions added by the 'opposite' constant execution time compensation");
 
@@ -49,12 +55,17 @@ bool OppositePredicateCompensation::runOnMachineFunction(MachineFunction &MF) {
 
 void OppositePredicateCompensation::compensate(MachineFunction &MF)
 {
+  auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;
+
   std::for_each(MF.begin(), MF.end(), [&](auto &BB){
     auto *block = PSPI->getRootScope()->findBlockOf(&BB);
     assert(block && "MBB is not associated with a PredicatedBlock");
 
+    auto dominates = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot()  &&
+        bounded_doms.begin()->second.count(&BB);
+
     for(auto instr_iter = BB.begin(); instr_iter != BB.end(); ++instr_iter){
-      if( instr_iter->mayLoadOrStore() && PatmosInstrInfo::getMemType(*instr_iter) == PatmosII::MEM_M) {
+      if( !dominates && instr_iter->mayLoadOrStore() && PatmosInstrInfo::getMemType(*instr_iter) == PatmosII::MEM_M) {
         auto old_pred = block->getInstructionPredicates()[&*instr_iter];
 
         DebugLoc DL;

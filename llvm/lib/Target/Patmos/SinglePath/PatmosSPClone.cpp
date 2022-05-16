@@ -43,10 +43,7 @@ using namespace llvm;
 #define DEBUG_TYPE "patmos-singlepath"
 
 STATISTIC(NumSPRoots,     "Number of single-path roots");
-STATISTIC(NumSPReachable, "Number of functions marked as single-path "
-                          "reachable from roots");
-STATISTIC(NumSPUsed,      "Number of functions marked as single-path "
-                          "because of <used> attribute");
+STATISTIC(NumSPClone,     "Number of function clones");
 
 namespace {
 
@@ -133,7 +130,6 @@ bool PatmosSPClone::doFinalization(Module &M) {
   return false;
 }
 
-
 bool PatmosSPClone::runOnModule(Module &M) {
   LLVM_DEBUG( dbgs() <<
          "[Single-Path] Clone functions reachable from single-path roots\n");
@@ -170,14 +166,12 @@ bool PatmosSPClone::runOnModule(Module &M) {
     if (used.count(F->getName()) && !blacklst.count(F->getName())) {
       LLVM_DEBUG( dbgs() << "Used: " << F->getName() << "\n" );
       cloneAndMark(F);
-      NumSPUsed++;
       explore(F);
       continue;
     }
   }
-  return (NumSPRoots + NumSPReachable + NumSPUsed) > 0;
+  return NumSPClone > 0;
 }
-
 
 void PatmosSPClone::loadFromGlobalVariable(SmallSet<StringRef, 32> &Result,
                                           const GlobalVariable *GV) const {
@@ -204,7 +198,6 @@ void PatmosSPClone::handleRoot(Function *F) {
   explore(F);
 }
 
-
 void PatmosSPClone::cloneAndMark(Function *F) {
   ValueToValueMapTy VMap;
   Function *SPF = CloneFunction(F, VMap, NULL);
@@ -218,10 +211,23 @@ void PatmosSPClone::cloneAndMark(Function *F) {
   if (SPF->hasFnAttribute("sp-root")) {
     SPF->removeFnAttr("sp-root");
   }
+  NumSPClone++;
+
+  if(PatmosSinglePathInfo::usePseudoRoots()) {
+    ValueToValueMapTy VMap2;
+    Function *SPPseudoF = CloneFunction(F, VMap2, NULL);
+    SPPseudoF->setName(F->getName() + Twine("_pseudo_sp_"));
+    SPPseudoF->addFnAttr("sp-pseudo");
+    LLVM_DEBUG( dbgs() << "  Clone function: " << F->getName()
+                  << " -> " << SPPseudoF->getName() << "\n");
+    if (SPPseudoF->hasFnAttribute("sp-root")) {
+      SPPseudoF->removeFnAttr("sp-root");
+    }
+    NumSPClone++;
+  }
 
   ClonedFunctions.insert(F);
 }
-
 
 void PatmosSPClone::explore(Function *F) {
   auto * mod = F->getParent();
@@ -249,12 +255,12 @@ void PatmosSPClone::explore(Function *F) {
         if (!ClonedFunctions.count(Callee)) {
           // clone function
           cloneAndMark(Callee);
-          NumSPReachable++;
+          NumSPClone++;
           // recurse into callee
           explore(Callee);
         } else {
           // check for cycle in call graph
-          if (!ExploreFinished.count(F)) {
+          if (!ExploreFinished.count(Callee)) {
             report_fatal_error("Single-path code generation failed due to "
               "recursive call to '" + Callee->getName()
               + "' in '" + F->getName() + "'!");

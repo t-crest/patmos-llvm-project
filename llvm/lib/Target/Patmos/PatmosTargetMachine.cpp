@@ -149,6 +149,7 @@ namespace {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
         addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
         if (PatmosSinglePathInfo::isConstant()) {
+          addPass(createPatmosBoundedDominatorsPass());
           addPass(createMemoryAccessNormalizationPass(getPatmosTargetMachine()));
         }
       }
@@ -172,6 +173,7 @@ namespace {
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
         if (PatmosSinglePathInfo::isConstant()) {
+          addPass(createPatmosBoundedDominatorsPass());
           addPass(createOppositePredicateCompensationPass(getPatmosTargetMachine()));
         }
         addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));

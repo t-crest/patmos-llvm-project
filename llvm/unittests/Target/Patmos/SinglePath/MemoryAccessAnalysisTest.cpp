@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "SinglePath/MemoryAccessAnalysis.h"
+#include "Mocks.h"
 
 using namespace llvm;
 
@@ -11,246 +12,61 @@ using ::testing::UnorderedElementsAreArray;
 using ::testing::Eq;
 using ::testing::IsEmpty;
 
-namespace llvm{
-
-  /// following function was copied from:
-  ///https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
-  template<typename ... Args>
-  std::string string_format( const std::string& format, Args ... args )
-  {
-      int size_s = std::snprintf( nullptr, 0, format.c_str(), args ... ) + 1; // Extra space for '\0'
-      assert(size_s > 0 );
-      auto size = static_cast<size_t>( size_s );
-      std::unique_ptr<char[]> buf( new char[ size ] );
-      std::snprintf( buf.get(), size, format.c_str(), args ... );
-      return std::string( buf.get(), buf.get() + size - 1 ); // We don't want the '\0' inside
-  }
-
-  class MockMBB {
-  public:
-
-    MockMBB(unsigned access_count, int iter_max):
-        access_count(access_count),
-        iter_max(iter_max),
-        preds(nullptr), succs(nullptr)
-    {}
-
-    unsigned access_count;
-	int iter_max;
-
-	// We use pointers to vectors because using vectors directly always
-	// resulted in segmentation fault. Don't know why. This is a workaround.
-    std::vector<MockMBB*> *preds;
-	std::vector<MockMBB*> *succs;
-	
-	void set_preds(std::vector<MockMBB*> *new_preds){
-	  preds = new_preds;
-	}
-	
-	void set_succs(std::vector<MockMBB*> *new_succs){
-	    succs = new_succs;
-	}
-	
-	std::vector<MockMBB*>::const_iterator pred_begin() const {
-		return preds->begin();
-	}
-	
-	std::vector<MockMBB*>::const_iterator pred_end() const {
-		return preds->end();
-	}
-	
-	unsigned pred_size() const {
-		return preds->size();
-	}
-	
-	std::vector<MockMBB*>::const_iterator succ_begin() const {
-		return succs->begin();
-	}
-	
-	std::vector<MockMBB*>::const_iterator succ_end() const {
-		return succs->end();
-	}
-	
-	std::string getName() const {
-		return string_format("MockMBB(%d,%d)", access_count, iter_max);
-	}
-  };
-  
-  unsigned countAccess(const MockMBB *mbb){
-	  return mbb->access_count;
-  }
-  
-  uint64_t iterMax(const MockMBB *mbb){
-	  return mbb->iter_max;
-  }
-    
-  class MockLoop {
-  public:
-
-    const MockLoop *parent;
-	std::vector<MockMBB*> mbbs;
-	std::vector<MockMBB*> latches;
-	std::vector<MockMBB*> exits;
-
-    MockLoop( const MockLoop *parent,
-        std::vector<MockMBB*> new_mbbs,
-        std::vector<MockMBB*> new_latches,
-        std::vector<MockMBB*> new_exits
-	): parent(parent), mbbs(new_mbbs), latches(new_latches), exits(new_exits)
-    {}
-	
-	MockMBB* getHeader() const {
-		return mbbs[0];
-	}
-
-    void getExitingBlocks(SmallVectorImpl<MockMBB *> &out) const {
-        out.append(exits.begin(),exits.end());
-    }
-
-    void getExitEdges(SmallVectorImpl<std::pair<MockMBB *,MockMBB *>> &out) const {
-        SmallVector<MockMBB*> loop_exits;
-        getExitingBlocks(loop_exits);
-        for(auto *exit_block: loop_exits){
-          std::for_each(exit_block->succ_begin(), exit_block->succ_end(), [&](auto succ){
-            if(!contains(succ)) {
-              out.push_back(std::make_pair(exit_block, succ));
-            }
-          });
-        }
-    }
-
-    void getLoopLatches(SmallVectorImpl<MockMBB *> &out) const {
-        out.append(latches.begin(),latches.end());
-    }
-	
-	bool contains(const MockMBB *mbb) const {
-		return std::find(mbbs.begin(),mbbs.end(),mbb) != mbbs.end();
-	}
-	
-	bool isLoopLatch(const MockMBB *mbb) const {
-	    assert(contains(mbb) && "isLoopLatch must only be called on blocks that are part of the loop");
-		return std::find(latches.begin(),latches.end(),mbb) != latches.end();
-	}
-	
-	bool isLoopExiting(const MockMBB *mbb) const {
-	    assert(contains(mbb) && "isLoopExiting must only be called on blocks that are part of the loop");
-		return std::find(exits.begin(),exits.end(),mbb) != exits.end();
-	}
-
-    unsigned getLoopDepth() const {
-        if(!parent){
-          return 1;
-        } else {
-          return parent->getLoopDepth() + 1;
-        }
-    }
-
-    const MockLoop* getParentLoop() const {
-      return parent;
-    }
-
-  };
-  
-  class MockLoopInfo {
-  public:
-
-	std::vector<MockLoop*> loops;
-    MockLoopInfo()
-    {}
-	
-	void add_loop(MockLoop* l) {
-		loops.push_back(l);
-	}
-	
-	const MockLoop* getLoopFor(const MockMBB *mbb) const {
-	    unsigned depth = 0;
-	    const MockLoop* result = nullptr;
-	    while(true) {
-          auto found = std::find_if(loops.begin(), loops.end(),
-              [&](auto l){ return l->contains(mbb) && l->getLoopDepth() > depth;});
-          if(found != loops.end()) {
-            result = *found;
-            depth = result->getLoopDepth();
-          } else {
-              break;
-          }
-	    }
-	    return result;
-	}
-	
-	bool isLoopHeader(const MockMBB *mbb) const {
-		auto found = std::find_if(loops.begin(), loops.end(), 
-			[&](auto l){ return l->getHeader() == mbb;});
-		return found != loops.end();
-	}
-	
-	unsigned getLoopDepth(const MockMBB *mbb) const {
-		auto loop = getLoopFor(mbb);
-		if(loop) {
-			return loop->getLoopDepth();
-		} else {
-			return 0;
-		}
-	}
-
-    std::vector<MockLoop*>::const_iterator begin() const{
-      return loops.begin();
-    }
-
-    std::vector<MockLoop*>::const_iterator end() const{
-      return loops.end();
-    }
-  };
-}
-
 namespace {
 
-/// Used to protect literal arrays from the preprocessor.
-/// see https://stackoverflow.com/questions/5503362/passing-array-literal-as-macro-argument
-#define arr(...) __VA_ARGS__
-/// Easy way to define the predecessors and successors of a block.
-/// Lists must be given in braces '{...}'
-#define set_preds_succs(block, preds, succs) \
-  std::vector<MockMBB*> block ## _pred = preds; \
-  std::vector<MockMBB*> block ## _succ = succs; \
-  block.set_preds(& block ## _pred); \
-  block.set_succs(& block ## _succ);
+typedef MockMBB<std::tuple<int,int,int>> MockMBB;
+typedef MockLoop<std::tuple<int,int,int>> MockLoop;
+typedef MockLoopInfo<std::tuple<int,int,int>> MockLoopInfo;
+
+#define mockMBB(name, accesses, min, max) mockMBBBase(name, std::make_tuple(accesses,min,max))
+#define pair(p1,p2) std::make_pair(p1,p2)
+#define pair_u(p1,p2) std::make_pair((unsigned)p1,(unsigned)p2)
+
+unsigned countAccess(const MockMBB *mbb){
+    return std::get<0>(mbb->payload);
+}
+
+std::pair<uint64_t, uint64_t> loopbounds(const MockMBB *mbb){
+  assert(std::get<1>(mbb->payload)>=1);
+  assert(std::get<1>(mbb->payload)<=std::get<2>(mbb->payload));
+  return pair(std::get<1>(mbb->payload),std::get<2>(mbb->payload));
+}
 
 TEST(MemoryAccessAnalysisTest, OneMBB){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(0,-1);
+  mockMBB(mockMBB1,0,-1,-1);
   set_preds_succs(mockMBB1, arr({}),arr({}));
 
-  auto result1 = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result1 = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
     result1.first,
     UnorderedElementsAreArray({
-      std::make_pair(&mockMBB1, 0),
+      pair(&mockMBB1, pair(0,0)),
     })
   );
   EXPECT_THAT(result1.second,IsEmpty());
 
-  MockMBB mockMBB2(1,-1);
+  mockMBB(mockMBB2,1,-1,-1);
   set_preds_succs(mockMBB2, arr({}), arr({}));
 
-  auto result2 = memoryAccessAnalysis(&mockMBB2,&LI,countAccess,iterMax);
+  auto result2 = memoryAccessAnalysis(&mockMBB2,&LI,countAccess,loopbounds);
   EXPECT_THAT(
-      result2.first,
-      UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 1),
-      })
+    result2.first,
+    UnorderedElementsAreArray({
+      pair(&mockMBB2, pair(1,1)),
+    })
   );
   EXPECT_THAT(result2.second,IsEmpty());
 
-  MockMBB mockMBB3(1345,-1);
+  mockMBB(mockMBB3,1345,-1,-1);
   set_preds_succs(mockMBB3, arr({}), arr({}));
 
-  auto result3 = memoryAccessAnalysis(&mockMBB3,&LI,countAccess,iterMax);
+  auto result3 = memoryAccessAnalysis(&mockMBB3,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result3.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 1345),
+        pair(&mockMBB3, pair(1345,1345)),
       })
   );
   EXPECT_THAT(result3.second,IsEmpty());
@@ -259,17 +75,17 @@ TEST(MemoryAccessAnalysisTest, OneMBB){
 TEST(MemoryAccessAnalysisTest, Consecutive){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(3,-1);
-  MockMBB mockMBB2(4,-1);
+  mockMBB(mockMBB1,3,-1,-1);
+  mockMBB(mockMBB2,4,-1,-1);
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 3),
-        std::make_pair(&mockMBB2, 7),
+        pair(&mockMBB1, pair(3,3)),
+        pair(&mockMBB2, pair(7,7)),
       })
   );
   EXPECT_THAT(result.second,IsEmpty());
@@ -278,17 +94,17 @@ TEST(MemoryAccessAnalysisTest, Consecutive){
 TEST(MemoryAccessAnalysisTest, FirstCountZero){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(0,-1);
-  MockMBB mockMBB2(6,-1);
+  mockMBB(mockMBB1,0,-1,-1);
+  mockMBB(mockMBB2,6,-1,-1);
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 0),
-        std::make_pair(&mockMBB2, 6),
+        pair(&mockMBB1, pair(0,0)),
+        pair(&mockMBB2, pair(6,6)),
       })
   );
   EXPECT_THAT(result.second,IsEmpty());
@@ -297,23 +113,23 @@ TEST(MemoryAccessAnalysisTest, FirstCountZero){
 TEST(MemoryAccessAnalysisTest, Branch){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(2,-1);
-  MockMBB mockMBB3(3,-1);
-  MockMBB mockMBB4(4,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,-1,-1);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2, &mockMBB3}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB4}));
   set_preds_succs(mockMBB3, arr({&mockMBB1}),arr({&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB2, &mockMBB3}), arr({}));
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 3),
-        std::make_pair(&mockMBB3, 4),
-        std::make_pair(&mockMBB4, 8),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(3,3)),
+        pair(&mockMBB3, pair(4,4)),
+        pair(&mockMBB4, pair(7,8)),
       })
   );
   EXPECT_THAT(result.second,IsEmpty());
@@ -322,39 +138,79 @@ TEST(MemoryAccessAnalysisTest, Branch){
 TEST(MemoryAccessAnalysisTest, Loop){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(2, 4);
-  MockMBB mockMBB3(3,-1);
-  MockMBB mockMBB4(4,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,1,4);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2}));
   set_preds_succs(mockMBB4, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB2 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 2),
-        std::make_pair(&mockMBB3, 5),
-        std::make_pair(&mockMBB4, 22),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(5,5)),
+        pair(&mockMBB4, pair(7,22)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(1));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(5));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(5,5)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 18),
+        pair(&mockMBB2, pair(3,18)),
+      })
+  );
+}
+
+TEST(MemoryAccessAnalysisTest, LoopConst){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,5,5);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2}), arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2, &mockMBB3 },
+      { &mockMBB3 },
+      { &mockMBB2 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
+  EXPECT_THAT(
+      result.first,
+      UnorderedElementsAreArray({
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(5,5)),
+        pair(&mockMBB4, pair(27,27)),
+      })
+  );
+  EXPECT_THAT(result.second, SizeIs(1));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(5,5)));
+  EXPECT_THAT(
+      std::get<2>(result.second[&mockMBB2]),
+      UnorderedElementsAreArray({
+        pair(&mockMBB2, pair(23,23)),
       })
   );
 }
@@ -362,39 +218,39 @@ TEST(MemoryAccessAnalysisTest, Loop){
 TEST(MemoryAccessAnalysisTest, LoopZeroHeader){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(0, 4);
-  MockMBB mockMBB3(3,-1);
-  MockMBB mockMBB4(4,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,0,1,4);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2}));
   set_preds_succs(mockMBB4, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB2 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 0),
-        std::make_pair(&mockMBB3, 3),
-        std::make_pair(&mockMBB4, 14),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(0,0)),
+        pair(&mockMBB3, pair(3,3)),
+        pair(&mockMBB4, pair(5,14)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(1));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(3));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(3,3)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 10),
+        pair(&mockMBB2, pair(1,10)),
       })
   );
 }
@@ -402,36 +258,79 @@ TEST(MemoryAccessAnalysisTest, LoopZeroHeader){
 TEST(MemoryAccessAnalysisTest, LoopOneMBB){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(2, 8);
-  MockMBB mockMBB3(3,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,3,8);
+  mockMBB(mockMBB3,3,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2 },
       { &mockMBB2 },
       { &mockMBB2 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 2),
-        std::make_pair(&mockMBB3, 20),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(10,20)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(1));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(2));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(2,2)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 17),
+        pair(&mockMBB2, pair(7,17)),
+      })
+  );
+}
+
+TEST(MemoryAccessAnalysisTest, LoopMultiPreds){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,-1,-1);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,3,8);
+  mockMBB(mockMBB5,5,-1,-1);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2,&mockMBB3}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1}), arr({&mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB1}), arr({&mockMBB4}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2,&mockMBB3,&mockMBB4}),arr({&mockMBB4,&mockMBB5}));
+  set_preds_succs(mockMBB5, arr({&mockMBB4}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB4 },
+      { &mockMBB4 },
+      { &mockMBB4 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
+  EXPECT_THAT(
+      result.first,
+      UnorderedElementsAreArray({
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(3,3)),
+        pair(&mockMBB3, pair(4,4)),
+        pair(&mockMBB4, pair(4,4)),
+        pair(&mockMBB5, pair(20,41)),
+      })
+  );
+  EXPECT_THAT(result.second, SizeIs(1));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB4]), Eq(pair_u(3,4)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB4]), Eq(pair_u(4,4)));
+  EXPECT_THAT(
+      std::get<2>(result.second[&mockMBB4]),
+      UnorderedElementsAreArray({
+        pair(&mockMBB4, pair(15,36)),
       })
   );
 }
@@ -439,38 +338,78 @@ TEST(MemoryAccessAnalysisTest, LoopOneMBB){
 TEST(MemoryAccessAnalysisTest, LoopNonHeaderExit){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(2, 2);
-  MockMBB mockMBB3(3,-1);
-  MockMBB mockMBB4(4,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,1,2);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}), arr({}));
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB3 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 2),
-        std::make_pair(&mockMBB3, 5),
-        std::make_pair(&mockMBB4, 15),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(5,5)),
+        pair(&mockMBB4, pair(10,15)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(1));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(5));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(5,5)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 11),
+        pair(&mockMBB3, pair(6,11)),
+      })
+  );
+}
+
+TEST(MemoryAccessAnalysisTest, LoopMultipleExits){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,4,17);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3,&mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2,&mockMBB3}), arr({}));
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2, &mockMBB3 },
+      { &mockMBB3 },
+      { &mockMBB2,&mockMBB3 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
+  EXPECT_THAT(
+      result.first,
+      UnorderedElementsAreArray({
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(5,5)),
+        pair(&mockMBB4, pair(22,90)),
+      })
+  );
+  EXPECT_THAT(result.second, SizeIs(1));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(5,5)));
+  EXPECT_THAT(
+      std::get<2>(result.second[&mockMBB2]),
+      UnorderedElementsAreArray({
+        pair(&mockMBB2, pair(18,83)),
+        pair(&mockMBB3, pair(21,86)),
       })
   );
 }
@@ -478,41 +417,41 @@ TEST(MemoryAccessAnalysisTest, LoopNonHeaderExit){
 TEST(MemoryAccessAnalysisTest, LoopNonHeaderNonLatchExit){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(0,-1);
-  MockMBB mockMBB2(2, 3);
-  MockMBB mockMBB3(0,-1);
-  MockMBB mockMBB4(4,-1);
-  MockMBB mockMBB5(2,-1);
+  mockMBB(mockMBB1,0,-1,-1);
+  mockMBB(mockMBB2,2,1,3);
+  mockMBB(mockMBB3,0,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
+  mockMBB(mockMBB5,2,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB4,&mockMBB5}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}), arr({&mockMBB2}));
   set_preds_succs(mockMBB5, arr({&mockMBB3}), arr({}));
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB4 },
       { &mockMBB3 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 0),
-        std::make_pair(&mockMBB2, 2),
-        std::make_pair(&mockMBB3, 2),
-        std::make_pair(&mockMBB4, 6),
-        std::make_pair(&mockMBB5, 16),
+        pair(&mockMBB1, pair(0,0)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(2,2)),
+        pair(&mockMBB4, pair(6,6)),
+        pair(&mockMBB5, pair(4,16)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(0));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(6));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(0,0)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(6,6)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 14),
+        pair(&mockMBB3, pair(2,14)),
       })
   );
 }
@@ -520,42 +459,42 @@ TEST(MemoryAccessAnalysisTest, LoopNonHeaderNonLatchExit){
 TEST(MemoryAccessAnalysisTest, LoopMultipleLatches){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(2, 7);
-  MockMBB mockMBB3(3,-1);
-  MockMBB mockMBB4(4,-1);
-  MockMBB mockMBB5(5,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,2,2,7);
+  mockMBB(mockMBB3,3,-1,-1);
+  mockMBB(mockMBB4,4,-1,-1);
+  mockMBB(mockMBB5,5,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB4,&mockMBB2}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2}));
   set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB3, &mockMBB4 },
       { &mockMBB2 }
   );
   LI.add_loop(&mockLoop1);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 1),
-        std::make_pair(&mockMBB2, 2),
-        std::make_pair(&mockMBB3, 5),
-        std::make_pair(&mockMBB4, 9),
-        std::make_pair(&mockMBB5, 62),
+        pair(&mockMBB1, pair(1,1)),
+        pair(&mockMBB2, pair(2,2)),
+        pair(&mockMBB3, pair(5,5)),
+        pair(&mockMBB4, pair(9,9)),
+        pair(&mockMBB5, pair(13,62)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(1));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(1));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(9));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(1,1)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(5,9)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 57),
+        pair(&mockMBB2, pair(8,57)),
       })
   );
 }
@@ -563,23 +502,23 @@ TEST(MemoryAccessAnalysisTest, LoopMultipleLatches){
 TEST(MemoryAccessAnalysisTest, LoopNested){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(10,-1);
-  MockMBB mockMBB2(20,7);
-  MockMBB mockMBB3(30,3);
-  MockMBB mockMBB4(40,-1);
-  MockMBB mockMBB5(50,-1);
+  mockMBB(mockMBB1,10,-1,-1);
+  mockMBB(mockMBB2,20,4,7);
+  mockMBB(mockMBB3,30,2,3);
+  mockMBB(mockMBB4,40,-1,-1);
+  mockMBB(mockMBB5,50,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
   set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB3 },
       { &mockMBB2 }
   );
-  llvm::MockLoop mockLoop2(&mockLoop1,
+  MockLoop mockLoop2(&mockLoop1,
       { &mockMBB3, &mockMBB4 },
       { &mockMBB4 },
       { &mockMBB3 }
@@ -587,32 +526,32 @@ TEST(MemoryAccessAnalysisTest, LoopNested){
   LI.add_loop(&mockLoop1);
   LI.add_loop(&mockLoop2);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 10),
-        std::make_pair(&mockMBB2, 20),
-        std::make_pair(&mockMBB3, 30),
-        std::make_pair(&mockMBB4, 70),
-        std::make_pair(&mockMBB5, 1220),
+        pair(&mockMBB1, pair(10,10)),
+        pair(&mockMBB2, pair(20,20)),
+        pair(&mockMBB3, pair(30,30)),
+        pair(&mockMBB4, pair(70,70)),
+        pair(&mockMBB5, pair(440,1220)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(2));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(10));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(190));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(10,10)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(120,190)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 1170),
+        pair(&mockMBB2, pair(390,1170)),
       })
   );
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(20));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(70));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(pair_u(20,20)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(pair_u(70,70)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB3]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 190),
+        pair(&mockMBB3, pair(120,190)),
       })
   );
 }
@@ -620,23 +559,23 @@ TEST(MemoryAccessAnalysisTest, LoopNested){
 TEST(MemoryAccessAnalysisTest, LoopLatchFromNested){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(11,-1);
-  MockMBB mockMBB2(22,2);
-  MockMBB mockMBB3(33,4);
-  MockMBB mockMBB4(44,-1);
-  MockMBB mockMBB5(55,-1);
+  mockMBB(mockMBB1,11,-1,-1);
+  mockMBB(mockMBB2,22,1,2);
+  mockMBB(mockMBB3,33,1,4);
+  mockMBB(mockMBB4,44,-1,-1);
+  mockMBB(mockMBB5,55,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB2}));
   set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       {&mockMBB2,&mockMBB3,&mockMBB4},
       {&mockMBB3,&mockMBB4},
       {&mockMBB2}
   );
-  llvm::MockLoop mockLoop2(&mockLoop1,
+  MockLoop mockLoop2(&mockLoop1,
       {&mockMBB3,&mockMBB4},
       {&mockMBB4},
       {&mockMBB3,&mockMBB4}
@@ -644,33 +583,33 @@ TEST(MemoryAccessAnalysisTest, LoopLatchFromNested){
   LI.add_loop(&mockLoop1);
   LI.add_loop(&mockLoop2);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 11),
-        std::make_pair(&mockMBB2, 22),
-        std::make_pair(&mockMBB3, 33),
-        std::make_pair(&mockMBB4, 77),
-        std::make_pair(&mockMBB5, 418),
+        pair(&mockMBB1, pair(11,11)),
+        pair(&mockMBB2, pair(22,22)),
+        pair(&mockMBB3, pair(33,33)),
+        pair(&mockMBB4, pair(77,77)),
+        pair(&mockMBB5, pair(88,418)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(2));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(11));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(330));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(11,11)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(55,330)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 363),
+        pair(&mockMBB2, pair(33,363)),
       })
   );
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(22));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(77));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(pair_u(22,22)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(pair_u(77,77)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB3]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 286),
-        std::make_pair(&mockMBB4, 330),
+        pair(&mockMBB3, pair(55,286)),
+        pair(&mockMBB4, pair(99,330)),
       })
   );
 }
@@ -678,23 +617,23 @@ TEST(MemoryAccessAnalysisTest, LoopLatchFromNested){
 TEST(MemoryAccessAnalysisTest, LoopExitFromNested){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(12,-1);
-  MockMBB mockMBB2(23,16);
-  MockMBB mockMBB3(34,6);
-  MockMBB mockMBB4(45,-1);
-  MockMBB mockMBB5(56,-1);
+  mockMBB(mockMBB1,12,-1,-1);
+  mockMBB(mockMBB2,23,5,16);
+  mockMBB(mockMBB3,34,3,6);
+  mockMBB(mockMBB4,45,-1,-1);
+  mockMBB(mockMBB5,56,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB5, arr({&mockMBB2,&mockMBB4}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB3 },
       { &mockMBB2, &mockMBB4 }
   );
-  llvm::MockLoop mockLoop2(&mockLoop1,
+  MockLoop mockLoop2(&mockLoop1,
       { &mockMBB3, &mockMBB4 },
       { &mockMBB4 },
       { &mockMBB3, &mockMBB4 }
@@ -702,34 +641,34 @@ TEST(MemoryAccessAnalysisTest, LoopExitFromNested){
   LI.add_loop(&mockLoop1);
   LI.add_loop(&mockLoop2);
 
-  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,iterMax);
+  auto result = memoryAccessAnalysis(&mockMBB1,&LI,countAccess,loopbounds);
   EXPECT_THAT(
       result.first,
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB1, 12),
-        std::make_pair(&mockMBB2, 23),
-        std::make_pair(&mockMBB3, 34),
-        std::make_pair(&mockMBB4, 79),
-        std::make_pair(&mockMBB5, 8020),
+        pair(&mockMBB1, pair(12,12)),
+        pair(&mockMBB2, pair(23,23)),
+        pair(&mockMBB3, pair(34,34)),
+        pair(&mockMBB4, pair(79,79)),
+        pair(&mockMBB5, pair(951,7345)),
       })
   );
   EXPECT_THAT(result.second, SizeIs(2));
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(12));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(497));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB2]), Eq(pair_u(12,12)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB2]), Eq(pair_u(215,452)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB2]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB2, 7490),
-        std::make_pair(&mockMBB4, 7964),
+        pair(&mockMBB2, pair(895,6815)),
+        pair(&mockMBB4, pair(1132,7289)),
       })
   );
-  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(23));
-  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(79));
+  EXPECT_THAT(std::get<0>(result.second[&mockMBB3]), Eq(pair_u(23,23)));
+  EXPECT_THAT(std::get<1>(result.second[&mockMBB3]), Eq(pair_u(79,79)));
   EXPECT_THAT(
       std::get<2>(result.second[&mockMBB3]),
       UnorderedElementsAreArray({
-        std::make_pair(&mockMBB3, 452),
-        std::make_pair(&mockMBB4, 497),
+        pair(&mockMBB3, pair(215,452)),
+        pair(&mockMBB4, pair(260,497)),
       })
   );
 }
@@ -737,7 +676,7 @@ TEST(MemoryAccessAnalysisTest, LoopExitFromNested){
 TEST(MemoryAccessCompensationTest, OneMBB){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(9,-1);
+  mockMBB(mockMBB1,9,-1,-1);
   set_preds_succs(mockMBB1, arr({}),arr({}));
 
   auto result = memoryAccessCompensation(&mockMBB1, &LI, countAccess);
@@ -748,8 +687,8 @@ TEST(MemoryAccessCompensationTest, OneMBB){
 TEST(MemoryAccessCompensationTest, TwoMBB){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(9,-1);
-  MockMBB mockMBB2(4,-1);
+  mockMBB(mockMBB1,9,-1,-1);
+  mockMBB(mockMBB2,4,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
@@ -759,7 +698,7 @@ TEST(MemoryAccessCompensationTest, TwoMBB){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB1,&mockMBB2), 13),
+        pair(pair(&mockMBB1,&mockMBB2), 13),
       })
   );
 }
@@ -767,8 +706,8 @@ TEST(MemoryAccessCompensationTest, TwoMBB){
 TEST(MemoryAccessCompensationTest, FirstCountZero){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(0,-1);
-  MockMBB mockMBB2(4,-1);
+  mockMBB(mockMBB1,0,-1,-1);
+  mockMBB(mockMBB2,4,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
@@ -778,7 +717,7 @@ TEST(MemoryAccessCompensationTest, FirstCountZero){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB1,&mockMBB2), 4),
+        pair(pair(&mockMBB1,&mockMBB2), 4),
       })
   );
 }
@@ -786,8 +725,8 @@ TEST(MemoryAccessCompensationTest, FirstCountZero){
 TEST(MemoryAccessCompensationTest, AllZero){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(0,-1);
-  MockMBB mockMBB2(0,-1);
+  mockMBB(mockMBB1,0,-1,-1);
+  mockMBB(mockMBB2,0,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
@@ -800,9 +739,9 @@ TEST(MemoryAccessCompensationTest, AllZero){
 TEST(MemoryAccessCompensationTest, TwoReturns){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(3,-1);
-  MockMBB mockMBB2(24,-1);
-  MockMBB mockMBB3(5,-1);
+  mockMBB(mockMBB1,3,-1,-1);
+  mockMBB(mockMBB2,24,-1,-1);
+  mockMBB(mockMBB3,5,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2, &mockMBB3}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({}));
@@ -813,8 +752,8 @@ TEST(MemoryAccessCompensationTest, TwoReturns){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB1,&mockMBB2), 27),
-        std::make_pair(std::make_pair(&mockMBB1,&mockMBB3), 8),
+        pair(pair(&mockMBB1,&mockMBB2), 27),
+        pair(pair(&mockMBB1,&mockMBB3), 8),
       })
   );
 }
@@ -822,10 +761,10 @@ TEST(MemoryAccessCompensationTest, TwoReturns){
 TEST(MemoryAccessCompensationTest, Merge){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(67,-1);
-  MockMBB mockMBB2(2,-1);
-  MockMBB mockMBB3(12,-1);
-  MockMBB mockMBB4(8,-1);
+  mockMBB(mockMBB1,67,-1,-1);
+  mockMBB(mockMBB2,2,-1,-1);
+  mockMBB(mockMBB3,12,-1,-1);
+  mockMBB(mockMBB4,8,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2, &mockMBB3}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB4}));
@@ -837,8 +776,8 @@ TEST(MemoryAccessCompensationTest, Merge){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB4), 77),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 87),
+        pair(pair(&mockMBB2,&mockMBB4), 77),
+        pair(pair(&mockMBB3,&mockMBB4), 87),
       })
   );
 }
@@ -846,13 +785,13 @@ TEST(MemoryAccessCompensationTest, Merge){
 TEST(MemoryAccessCompensationTest, MergeTwoReturns){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(14,-1);
-  MockMBB mockMBB2(25,-1);
-  MockMBB mockMBB3(0,-1);
-  MockMBB mockMBB4(23,-1);
-  MockMBB mockMBB5(2,-1);
-  MockMBB mockMBB6(4,-1);
-  MockMBB mockMBB7(16,-1);
+  mockMBB(mockMBB1,14,-1,-1);
+  mockMBB(mockMBB2,25,-1,-1);
+  mockMBB(mockMBB3,0,-1,-1);
+  mockMBB(mockMBB4,23,-1,-1);
+  mockMBB(mockMBB5,2,-1,-1);
+  mockMBB(mockMBB6,4,-1,-1);
+  mockMBB(mockMBB7,16,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2, &mockMBB3, &mockMBB4, &mockMBB5}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB6}));
@@ -867,10 +806,10 @@ TEST(MemoryAccessCompensationTest, MergeTwoReturns){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB6), 43),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB6), 18),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB7), 53),
-        std::make_pair(std::make_pair(&mockMBB5,&mockMBB7), 32),
+        pair(pair(&mockMBB2,&mockMBB6), 43),
+        pair(pair(&mockMBB3,&mockMBB6), 18),
+        pair(pair(&mockMBB4,&mockMBB7), 53),
+        pair(pair(&mockMBB5,&mockMBB7), 32),
       })
   );
 }
@@ -878,11 +817,11 @@ TEST(MemoryAccessCompensationTest, MergeTwoReturns){
 TEST(MemoryAccessCompensationTest, TwoPredecessorsToNonEnd){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(2,-1);
-  MockMBB mockMBB2(3,-1);
-  MockMBB mockMBB3(4,-1);
-  MockMBB mockMBB4(5,-1);
-  MockMBB mockMBB5(6,-1);
+  mockMBB(mockMBB1,2,-1,-1);
+  mockMBB(mockMBB2,3,-1,-1);
+  mockMBB(mockMBB3,4,-1,-1);
+  mockMBB(mockMBB4,5,-1,-1);
+  mockMBB(mockMBB5,6,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB4}));
@@ -895,9 +834,9 @@ TEST(MemoryAccessCompensationTest, TwoPredecessorsToNonEnd){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB4), 5),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 6),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB5), 11),
+        pair(pair(&mockMBB2,&mockMBB4), 5),
+        pair(pair(&mockMBB3,&mockMBB4), 6),
+        pair(pair(&mockMBB4,&mockMBB5), 11),
       })
   );
 }
@@ -905,15 +844,15 @@ TEST(MemoryAccessCompensationTest, TwoPredecessorsToNonEnd){
 TEST(MemoryAccessCompensationTest, OneMBBLoop){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(54,-1);
-  MockMBB mockMBB2(4,2);
-  MockMBB mockMBB3(7,-1);
+  mockMBB(mockMBB1,54,-1,-1);
+  mockMBB(mockMBB2,4,1,2);
+  mockMBB(mockMBB3,7,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2 },
       { &mockMBB2 },
       { &mockMBB2 }
@@ -925,8 +864,8 @@ TEST(MemoryAccessCompensationTest, OneMBBLoop){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB2), 4),
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB3), 65),
+        pair(pair(&mockMBB2,&mockMBB2), 4),
+        pair(pair(&mockMBB2,&mockMBB3), 65),
       })
   );
 }
@@ -934,17 +873,17 @@ TEST(MemoryAccessCompensationTest, OneMBBLoop){
 TEST(MemoryAccessCompensationTest, Loop){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(4,-1);
-  MockMBB mockMBB2(4,9);
-  MockMBB mockMBB3(7,-1);
-  MockMBB mockMBB4(25,-1);
+  mockMBB(mockMBB1,4,-1,-1);
+  mockMBB(mockMBB2,4,1,9);
+  mockMBB(mockMBB3,7,-1,-1);
+  mockMBB(mockMBB4,25,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2}));
   set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB2 }
@@ -956,8 +895,8 @@ TEST(MemoryAccessCompensationTest, Loop){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 11),
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB4), 33),
+        pair(pair(&mockMBB3,&mockMBB2), 11),
+        pair(pair(&mockMBB2,&mockMBB4), 33),
       })
   );
 }
@@ -965,11 +904,11 @@ TEST(MemoryAccessCompensationTest, Loop){
 TEST(MemoryAccessCompensationTest, LoopTwoLatches){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(23,-1);
-  MockMBB mockMBB2(78,9);
-  MockMBB mockMBB3(45,-1);
-  MockMBB mockMBB4(2,-1);
-  MockMBB mockMBB5(5,-1);
+  mockMBB(mockMBB1,23,-1,-1);
+  mockMBB(mockMBB2,78,1,9);
+  mockMBB(mockMBB3,45,-1,-1);
+  mockMBB(mockMBB4,2,-1,-1);
+  mockMBB(mockMBB5,5,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
@@ -977,7 +916,7 @@ TEST(MemoryAccessCompensationTest, LoopTwoLatches){
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2}));
   set_preds_succs(mockMBB5, arr({&mockMBB2}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB3,&mockMBB4 },
       { &mockMBB2 }
@@ -989,9 +928,9 @@ TEST(MemoryAccessCompensationTest, LoopTwoLatches){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 123),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB2), 125),
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB5), 106),
+        pair(pair(&mockMBB3,&mockMBB2), 123),
+        pair(pair(&mockMBB4,&mockMBB2), 125),
+        pair(pair(&mockMBB2,&mockMBB5), 106),
       })
   );
 }
@@ -999,17 +938,17 @@ TEST(MemoryAccessCompensationTest, LoopTwoLatches){
 TEST(MemoryAccessCompensationTest, LoopNonHeadExit){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(6,-1);
-  MockMBB mockMBB2(9,11);
-  MockMBB mockMBB3(78,-1);
-  MockMBB mockMBB4(34,-1);
+  mockMBB(mockMBB1,6,-1,-1);
+  mockMBB(mockMBB2,9,1,11);
+  mockMBB(mockMBB3,78,-1,-1);
+  mockMBB(mockMBB4,34,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB3 }
@@ -1021,8 +960,8 @@ TEST(MemoryAccessCompensationTest, LoopNonHeadExit){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 87),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 127),
+        pair(pair(&mockMBB3,&mockMBB2), 87),
+        pair(pair(&mockMBB3,&mockMBB4), 127),
       })
   );
 }
@@ -1030,38 +969,38 @@ TEST(MemoryAccessCompensationTest, LoopNonHeadExit){
 TEST(MemoryAccessCompensationTest, NestedLoop){
   MockLoopInfo LI;
 
-    MockMBB mockMBB1(10,-1);
-    MockMBB mockMBB2(20,7);
-    MockMBB mockMBB3(30,3);
-    MockMBB mockMBB4(40,-1);
-    MockMBB mockMBB5(50,-1);
-    set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-    set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-    set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-    set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
-    set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
+  mockMBB(mockMBB1,10,-1,-1);
+  mockMBB(mockMBB2,20,1,7);
+  mockMBB(mockMBB3,30,1,3);
+  mockMBB(mockMBB4,40,-1,-1);
+  mockMBB(mockMBB5,50,-1,-1);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
+  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
+  set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
 
-    llvm::MockLoop mockLoop1(nullptr,
-        { &mockMBB2, &mockMBB3, &mockMBB4 },
-        { &mockMBB3 },
-        { &mockMBB2 }
-    );
-    llvm::MockLoop mockLoop2(&mockLoop1,
-        { &mockMBB3, &mockMBB4 },
-        { &mockMBB4 },
-        { &mockMBB3 }
-    );
-    LI.add_loop(&mockLoop1);
-    LI.add_loop(&mockLoop2);
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2, &mockMBB3, &mockMBB4 },
+      { &mockMBB3 },
+      { &mockMBB2 }
+  );
+  MockLoop mockLoop2(&mockLoop1,
+      { &mockMBB3, &mockMBB4 },
+      { &mockMBB4 },
+      { &mockMBB3 }
+  );
+  LI.add_loop(&mockLoop1);
+  LI.add_loop(&mockLoop2);
 
   auto result = memoryAccessCompensation(&mockMBB1, &LI, countAccess);
 
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB5), 80),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 50),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB3), 70),
+        pair(pair(&mockMBB2,&mockMBB5), 80),
+        pair(pair(&mockMBB3,&mockMBB2), 50),
+        pair(pair(&mockMBB4,&mockMBB3), 70),
       })
   );
 }
@@ -1069,11 +1008,11 @@ TEST(MemoryAccessCompensationTest, NestedLoop){
 TEST(MemoryAccessCompensationTest, TwoNonLatchHeaderPreds){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(1,-1);
-  MockMBB mockMBB2(0,-1);
-  MockMBB mockMBB3(10,-1);
-  MockMBB mockMBB4(7,5);
-  MockMBB mockMBB5(3,-1);
+  mockMBB(mockMBB1,1,-1,-1);
+  mockMBB(mockMBB2,0,-1,-1);
+  mockMBB(mockMBB3,10,-1,-1);
+  mockMBB(mockMBB4,7,1,5);
+  mockMBB(mockMBB5,3,-1,-1);
 
   set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB4}));
@@ -1081,7 +1020,7 @@ TEST(MemoryAccessCompensationTest, TwoNonLatchHeaderPreds){
   set_preds_succs(mockMBB4, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB4,&mockMBB5}));
   set_preds_succs(mockMBB5, arr({&mockMBB4}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB4 },
       { &mockMBB4 },
       { &mockMBB4 }
@@ -1093,10 +1032,10 @@ TEST(MemoryAccessCompensationTest, TwoNonLatchHeaderPreds){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB4), 1),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 11),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB4), 7),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB5), 10),
+        pair(pair(&mockMBB2,&mockMBB4), 1),
+        pair(pair(&mockMBB3,&mockMBB4), 11),
+        pair(pair(&mockMBB4,&mockMBB4), 7),
+        pair(pair(&mockMBB4,&mockMBB5), 10),
       })
   );
 }
@@ -1104,23 +1043,23 @@ TEST(MemoryAccessCompensationTest, TwoNonLatchHeaderPreds){
 TEST(MemoryAccessCompensationTest, LoopExitFromNested){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(12,-1);
-  MockMBB mockMBB2(23,16);
-  MockMBB mockMBB3(34,6);
-  MockMBB mockMBB4(45,-1);
-  MockMBB mockMBB5(56,-1);
+  mockMBB(mockMBB1,12,-1,-1);
+  mockMBB(mockMBB2,23,1,16);
+  mockMBB(mockMBB3,34,1,6);
+  mockMBB(mockMBB4,45,-1,-1);
+  mockMBB(mockMBB5,56,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB5, arr({&mockMBB2,&mockMBB4}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2, &mockMBB3, &mockMBB4 },
       { &mockMBB3 },
       { &mockMBB2, &mockMBB4 }
   );
-  llvm::MockLoop mockLoop2(&mockLoop1,
+  MockLoop mockLoop2(&mockLoop1,
       { &mockMBB3, &mockMBB4 },
       { &mockMBB4 },
       { &mockMBB3, &mockMBB4 }
@@ -1133,10 +1072,10 @@ TEST(MemoryAccessCompensationTest, LoopExitFromNested){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB5), 91),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 57),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB3), 79),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB5), 170),
+        pair(pair(&mockMBB2,&mockMBB5), 91),
+        pair(pair(&mockMBB3,&mockMBB2), 57),
+        pair(pair(&mockMBB4,&mockMBB3), 79),
+        pair(pair(&mockMBB4,&mockMBB5), 170),
       })
   );
 }
@@ -1144,23 +1083,23 @@ TEST(MemoryAccessCompensationTest, LoopExitFromNested){
 TEST(MemoryAccessCompensationTest, LoopLatchFromNested){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(11,-1);
-  MockMBB mockMBB2(22,2);
-  MockMBB mockMBB3(33,4);
-  MockMBB mockMBB4(44,-1);
-  MockMBB mockMBB5(55,-1);
+  mockMBB(mockMBB1,11,-1,-1);
+  mockMBB(mockMBB2,22,1,2);
+  mockMBB(mockMBB3,33,1,4);
+  mockMBB(mockMBB4,44,-1,-1);
+  mockMBB(mockMBB5,55,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB2}));
   set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       {&mockMBB2,&mockMBB3,&mockMBB4},
       {&mockMBB3,&mockMBB4},
       {&mockMBB2}
   );
-  llvm::MockLoop mockLoop2(&mockLoop1,
+  MockLoop mockLoop2(&mockLoop1,
       {&mockMBB3,&mockMBB4},
       {&mockMBB4},
       {&mockMBB3,&mockMBB4}
@@ -1173,10 +1112,10 @@ TEST(MemoryAccessCompensationTest, LoopLatchFromNested){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB5), 88),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB2), 55),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB3), 77),
-        std::make_pair(std::make_pair(&mockMBB4,&mockMBB2), 99),
+        pair(pair(&mockMBB2,&mockMBB5), 88),
+        pair(pair(&mockMBB3,&mockMBB2), 55),
+        pair(pair(&mockMBB4,&mockMBB3), 77),
+        pair(pair(&mockMBB4,&mockMBB2), 99),
       })
   );
 }
@@ -1184,21 +1123,21 @@ TEST(MemoryAccessCompensationTest, LoopLatchFromNested){
 TEST(MemoryAccessCompensationTest, TwoConsecutiveLoops){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(3,-1);
-  MockMBB mockMBB2(1, 10);
-  MockMBB mockMBB3(6, 2);
-  MockMBB mockMBB4(10,-1);
+  mockMBB(mockMBB1,3,-1,-1);
+  mockMBB(mockMBB2,1,1,10);
+  mockMBB(mockMBB3,6,1,2);
+  mockMBB(mockMBB4,10,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2 },
       { &mockMBB2 },
       { &mockMBB2 }
   );
-  llvm::MockLoop mockLoop2(nullptr,
+  MockLoop mockLoop2(nullptr,
       { &mockMBB3 },
       { &mockMBB3 },
       { &mockMBB3 }
@@ -1211,9 +1150,9 @@ TEST(MemoryAccessCompensationTest, TwoConsecutiveLoops){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB2), 1),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB3), 6),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 20),
+        pair(pair(&mockMBB2,&mockMBB2), 1),
+        pair(pair(&mockMBB3,&mockMBB3), 6),
+        pair(pair(&mockMBB3,&mockMBB4), 20),
       })
   );
 }
@@ -1221,16 +1160,16 @@ TEST(MemoryAccessCompensationTest, TwoConsecutiveLoops){
 TEST(MemoryAccessCompensationTest, LoopExitToNonEnd){
   MockLoopInfo LI;
 
-  MockMBB mockMBB1(2,-1);
-  MockMBB mockMBB2(1, 10);
-  MockMBB mockMBB3(3, 2);
-  MockMBB mockMBB4(10,-1);
+  mockMBB(mockMBB1,2,-1,-1);
+  mockMBB(mockMBB2,1,1,10);
+  mockMBB(mockMBB3,3,1,2);
+  mockMBB(mockMBB4,10,-1,-1);
   set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
   set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
   set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB4}));
   set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
 
-  llvm::MockLoop mockLoop1(nullptr,
+  MockLoop mockLoop1(nullptr,
       { &mockMBB2 },
       { &mockMBB2 },
       { &mockMBB2 }
@@ -1242,10 +1181,9 @@ TEST(MemoryAccessCompensationTest, LoopExitToNonEnd){
   EXPECT_THAT(
       result,
       UnorderedElementsAreArray({
-        std::make_pair(std::make_pair(&mockMBB2,&mockMBB2), 1),
-        std::make_pair(std::make_pair(&mockMBB3,&mockMBB4), 16),
+        pair(pair(&mockMBB2,&mockMBB2), 1),
+        pair(pair(&mockMBB3,&mockMBB4), 16),
       })
   );
 }
-
 }

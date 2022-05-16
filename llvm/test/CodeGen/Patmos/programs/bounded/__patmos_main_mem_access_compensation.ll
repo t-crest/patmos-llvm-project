@@ -8,17 +8,19 @@
 ; loads to main memory.
 ;
 ; __patmos_main_mem_access_compensation has a custom calling convention:
-; it can only clobber r3(max),r4(remaining), and r5. 
+; it can only clobber r3(max),r4(remaining),r5, and r6. 
 ; It must remember to save s0 before using predicates.
-define i32 @__patmos_main_mem_access_compensation(i32 %max, i32 %remaining) {  
+@__patmos_main_mem_access_compensation = alias void (i32,i32), void (i32,i32)* @__patmos_comp_fun_for_testing
+
+define void @__patmos_comp_fun_for_testing(i32 %max, i32 %remaining) {  
 entry:
   call void asm sideeffect "
 		mfs $$r5 = $$s0
-		__patmos_main_mem_access_compensation_loop:
+		__patmos_comp_fun_for_testing_loop:
 		cmpult			$$p2 = $$r0, $$r3
 		cmpult			$$p3 = $$r0, $$r4
 		lwm		($$p3)	$$r0 = [$$r0]
-		br 		($$p2) 	__patmos_main_mem_access_compensation_loop
+		br 		($$p2) 	__patmos_comp_fun_for_testing_loop
 		sub 	($$p3) 	$$r4 = $$r4, 1
 		sub 			$$r3 = $$r3, 1
 		mts $$s0 = $$r5

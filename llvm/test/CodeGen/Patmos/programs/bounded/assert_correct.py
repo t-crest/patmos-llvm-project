@@ -228,14 +228,19 @@ compile_and_test_matrix("", "", [
         ("", ""), 
         # Single-path code without dual-issue
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
+        # Single-path code without dual-issue
+        ("-mpatmos-disable-pseudo-roots -mpatmos-singlepath=" + sp_root, "-D ideal"), 
         # Single-path with dual-issue
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"),
         # Constant execution time using opposite predicate compensation       
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=opposite", "-D lru2"), 
+        # Constant execution time using decrementing counter compensation with pointer
+        # to specific function
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=counter -mpatmos-cet-compensation-function=__patmos_comp_fun_for_testing", "-D lru2"),
         # Constant execution time using decrementing counter compensation
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=counter", "-D lru2"),
         # Constant execution time using heuristic choice between other algorithms
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=hybrid", "-D lru2")
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=hybrid", "-D lru2"),
     ],
     # Optimization levels
     ["", "-O1", "-O2"]

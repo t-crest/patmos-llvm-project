@@ -5,7 +5,13 @@ entry:
 		li		$$r31	= 2064384
 		mts		$$ss	= $0
 		mts		$$st	= $0
-		brcfnd 	$1
+		callnd 	$1
+		mts 	$$srb = $$r0
+		mts 	$$sro = $$r0
+		ret
+		nop
+		nop
+		nop
 	", "r,r,~{r31},~{ss},~{st}"
 	(i32 2097152, i32 ()* @pre_main)
   unreachable

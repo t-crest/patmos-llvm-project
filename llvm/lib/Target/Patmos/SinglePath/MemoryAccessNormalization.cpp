@@ -20,21 +20,23 @@
 #include "MemoryAccessAnalysis.h"
 #include "OppositePredicateCompensation.h"
 #include "PatmosSinglePathInfo.h"
+#include "PatmosMachineFunctionInfo.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 
-#include "deque"
-
-#define DEBUG_TYPE "patmos-const-exec"
+#include <deque>
+#include <set>
 
 using namespace llvm;
 
-STATISTIC(CounterComp, "How many functions were converted to constant execution time using 'counter' algorithm");
-STATISTIC(OppositeComp, "How many functions were converted to constant execution time using 'opposite' algorithm");
-STATISTIC(NoComp, "How many functions did not get any constant execution time compensation");
-STATISTIC(CntCmpInstr, "Number of non-phi instructions added by the 'counter' constant execution time compensation algorithm");
+#define DEBUG_TYPE "patmos-const-exec"
+
+STATISTIC(CounterComp, "Number of functions using 'counter' algorithm for constant execution time");
+STATISTIC(OppositeComp, "Number of functions using 'opposite' algorithm for constant execution time");
+STATISTIC(NoComp, "Number of functions not needing any compensation for constant execution time");
+STATISTIC(CntCmpInstr, "Number of non-phi instructions added by the 'counter' compensation algorithm");
 
 char MemoryAccessNormalization::ID = 0;
 
@@ -66,46 +68,56 @@ static unsigned countAccesses(const MachineBasicBlock *mbb){
 
 /// Returns the maximum loop bound of the given block, assuming it is
 /// the header of a loop
-static uint64_t getLoopBoundMax(const MachineBasicBlock *mbb){
-  return getLoopBounds(mbb)->second;
+static std::pair<uint64_t,uint64_t> getLoopBoundMax(const MachineBasicBlock *mbb){
+  auto bounds = getLoopBounds(mbb);
+  assert(bounds && "No bounds were given");
+  return *bounds;
 }
 
-/// Returns the maximum possible main memory accesses the function can do
-unsigned MemoryAccessNormalization::getAccessBounds(MachineFunction &MF, llvm::MachineLoopInfo &LI) {
+/// Returns the minimum/maximum possible main memory accesses the function can do
+std::pair<unsigned,unsigned> MemoryAccessNormalization::getAccessBounds(MachineFunction &MF, llvm::MachineLoopInfo &LI) {
   auto accesses_counts = memoryAccessAnalysis(MF.getBlockNumbered(0), &LI,
       countAccesses, getLoopBoundMax);
 
-  // Find the max number of accesses among all final blocks in the function
-  unsigned max_end_accesses = 0;
-  const MachineBasicBlock *max_end_block = nullptr;
+  // Find the min/max number of accesses among all final blocks in the function
+  unsigned max_end_accesses;
+  unsigned min_end_accesses;
+  const MachineBasicBlock *end_block = nullptr;
   for (auto bb_iter = MF.begin(); bb_iter != MF.end(); ++bb_iter) {
     if (bb_iter->succ_size() == 0) {
-      auto block_count = accesses_counts.first[&*bb_iter];
-      if (block_count >= max_end_accesses) {
-        max_end_accesses = block_count;
-        max_end_block = &*bb_iter;
-      }
+      auto block_counts = accesses_counts.first[&*bb_iter];
+
+      min_end_accesses = block_counts.first;
+      max_end_accesses = block_counts.second;
+
+      end_block = &*bb_iter;
+      break;
     }
   }
-  assert(max_end_block && "Didn't find a final block");
+  assert(end_block && "Didn't find a final block");
+  assert(min_end_accesses <= max_end_accesses && "Invalid access counts");
   LLVM_DEBUG(
     dbgs() << "\nMemory Access Analysis Results:\n";
     dbgs() << "\tSingle Blocks:\n";
     for(auto mbb_iter=MF.begin(); mbb_iter != MF.end(); mbb_iter++){
-      dbgs() << "\t\t" << mbb_iter->getName() << ": " << accesses_counts.first[&*mbb_iter] << "\n";
+      dbgs() << "\t\t" << mbb_iter->getName() << ": "
+          << accesses_counts.first[&*mbb_iter].first << ", "<< accesses_counts.first[&*mbb_iter].second << "\n";
     }
     dbgs() << "\tLoops:\n";
     for(auto entry: accesses_counts.second){
-      dbgs() << "\t\t" << entry.first->getName() << ": Predecessor Max: " << std::get<0>(entry.second)
-          << ", Body Max: " << std::get<1>(entry.second) << "\n";
+      dbgs() << "\t\t" << entry.first->getName()
+          << ": Predecessor Min,Max: " << std::get<0>(entry.second).first << ", "<< std::get<0>(entry.second).second
+          << " Body Min,Max: " << std::get<1>(entry.second).first << ", " << std::get<1>(entry.second).second << "\n";
       dbgs() << "\t\t\tExits:\n";
       for(auto exit_entry: std::get<2>(entry.second)){
-        dbgs() << "\t\t\t\t" << exit_entry.first->getName() << ": " << exit_entry.second << "\n";
+        dbgs() << "\t\t\t\t" << exit_entry.first->getName() << ": "
+            << exit_entry.second.first << ", " << exit_entry.second.second << "\n";
       }
     }
-    dbgs() << "\tMax Access Count in block '" << max_end_block->getName() << "': " << max_end_accesses << "\n";
+    dbgs() << "\tMin/Max Access Count in block '" << end_block->getName() << "': "
+        << min_end_accesses << ", " << max_end_accesses << "\n";
   );
-  return max_end_accesses;
+  return std::make_pair(min_end_accesses, max_end_accesses);
 }
 
 /// Sets the function attribute that flags that this function should use 'opposite' compensation algorithm
@@ -128,15 +140,24 @@ bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
     if(PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::hybrid ||
         PatmosSinglePathInfo::getCETCompAlgo() == CompensationAlgo::counter
     ){
-      auto max_accesses = getAccessBounds(MF, getAnalysis<MachineLoopInfo>());
+      auto accessBounds = getAccessBounds(MF, getAnalysis<MachineLoopInfo>());
 
-      if(max_accesses > 0 ) {
-        auto counter_algo_instr_need = counter_compensate(MF,max_accesses, false);
+      auto min_accesses = /*MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot()? accessBounds.first:*/0;
+      auto comp_accesses = accessBounds.second - min_accesses;
+
+      if(comp_accesses > 0 ) {
+        auto counter_algo_instr_need = counter_compensate(MF,comp_accesses, false);
 
         // Get the number of instructions the opposite predicate compensation algorithm
         // would add to the function
+        auto isPseudoRoot = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot();
+        auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;
         auto opposite_algo_instr_need = 0;
-        std::for_each(MF.begin(), MF.end(), [&](auto &BB){ opposite_algo_instr_need += countAccesses(&BB);});
+        std::for_each(MF.begin(), MF.end(), [&](auto &BB){
+          if(!isPseudoRoot || !bounded_doms.begin()->second.count(&BB)){
+            opposite_algo_instr_need += countAccesses(&BB);
+          }
+        });
 
         LLVM_DEBUG(
             dbgs() << "\nInstructions needed (at least) for the 'counter' compensation algorithm:"<< counter_algo_instr_need << "\n";
@@ -148,7 +169,7 @@ bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
         ) {
           CounterComp++;
           CntCmpInstr += counter_algo_instr_need;
-          auto added = counter_compensate(MF,max_accesses, true);
+          auto added = counter_compensate(MF,comp_accesses, true);
           assert(counter_algo_instr_need == added);
 
           LLVM_DEBUG(
@@ -190,15 +211,18 @@ static Register new_vreg(MachineFunction &MF) {
 /// If 'should_insert' is false, no instructions are added and the function
 /// isn't changed. However, the count is still performed and returned as if
 /// instructions were added.
-unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_end_accesses, bool should_insert) {
-  assert(max_end_accesses != 0 && "No compensation needed if no accesses are done");
+unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_compensation, bool should_insert) {
+  assert(max_compensation != 0 && "No compensation needed if no accesses are done");
 
   auto &LI = getAnalysis<MachineLoopInfo>();
   auto &RI = MF.getRegInfo();
   unsigned insert_count = 0;
+  auto isPseudoRoot = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot();
   DebugLoc DL;
 
   auto compensation = memoryAccessCompensation(MF.getBlockNumbered(0), &LI, countAccesses);
+  auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;;
+  assert(bounded_doms.size() == 1 && "Bounded Dominator Analysis didn't find a unique end block.");
 
   LLVM_DEBUG(
     dbgs() << "\nMemory Access Compensation Results:\n";
@@ -232,14 +256,17 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
 
     if(current->pred_size() == 0) {
       // Initialize counter at entry block
-      auto count_and_init_reg = compensateEntryBlock(MF, current, max_end_accesses, should_insert);
+      auto count_and_init_reg = compensateEntryBlock(MF, current, max_compensation, should_insert);
       insert_count += count_and_init_reg.first;
       block_regs[current] = count_and_init_reg.second;
     } else if(current->pred_size() == 1) {
       auto *pred = *current->pred_begin();
       assert(block_regs.count(pred) && "Predecessor hasn't been assigned yet");
 
-      if(compensation.count({pred, current})) {
+      if( compensation.count({pred, current}) &&
+          // current doesn't dominate
+          (!isPseudoRoot || !bounded_doms.begin()->second.count(current))
+      ) {
         // Need to decrement counter.
         auto decremented_reg = new_vreg(MF);
         block_regs[current] = decremented_reg;
@@ -270,7 +297,7 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
     }
   }
 
-  insert_count += compensateEnd(MF, block_regs, max_end_accesses, should_insert);
+  insert_count += compensateEnd(MF, block_regs, max_compensation, should_insert);
   return insert_count;
 }
 
@@ -496,10 +523,11 @@ unsigned MemoryAccessNormalization::compensateEnd(
         auto *call_instr = MF.CreateMachineInstr(TII->get(Patmos::CALLND), DL,true);
         auto call_instr_builder = MachineInstrBuilder(MF, call_instr)
           .addReg(Patmos::NoRegister).addImm(0)
-          .addExternalSymbol("__patmos_main_mem_access_compensation")
+          .addExternalSymbol(PatmosSinglePathInfo::getCompensationFunction())
           .addReg(Patmos::R3, RegState::ImplicitKill)
           .addReg(Patmos::R4, RegState::ImplicitKill)
           .addReg(Patmos::R5, RegState::ImplicitDefine)
+          .addReg(Patmos::R6, RegState::ImplicitDefine)
           .addReg(Patmos::SRB, RegState::ImplicitDefine)
           .addReg(Patmos::SRO,  RegState::ImplicitDefine)
           .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated

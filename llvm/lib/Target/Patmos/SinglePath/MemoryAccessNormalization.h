@@ -4,6 +4,7 @@
 #include "Patmos.h"
 #include "PatmosTargetMachine.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
+#include "BoundedDominators.h"
 
 #define DEBUG_TYPE "patmos-const-exec"
 
@@ -15,7 +16,7 @@ private:
   const PatmosRegisterInfo *TRI;
   const PatmosInstrInfo *TII;
 
-  unsigned getAccessBounds(MachineFunction &, llvm::MachineLoopInfo &);
+  std::pair<unsigned,unsigned> getAccessBounds(MachineFunction &, llvm::MachineLoopInfo &);
   std::pair<unsigned, Register> compensateEntryBlock(
       MachineFunction &, MachineBasicBlock *, unsigned, bool);
   bool ensureBlockAndPredsAssigned(
@@ -48,6 +49,8 @@ public:
   /// getAnalysisUsage - Specify which passes this pass depends on
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineLoopInfo>();
+    AU.addRequired<BoundedDominators>();
+    AU.addPreserved<BoundedDominators>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 

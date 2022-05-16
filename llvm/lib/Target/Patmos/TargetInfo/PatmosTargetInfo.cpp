@@ -9,7 +9,6 @@
 
 #include "Patmos.h"
 #include "PatmosTargetInfo.h"
-#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Metadata.h"
@@ -17,6 +16,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 
 using namespace llvm;
 
@@ -60,6 +60,40 @@ Optional<std::pair<uint64_t, uint64_t>> llvm::getLoopBounds(const MachineBasicBl
 Target &llvm::getThePatmosTarget() {
   static Target ThePatmosTarget;
   return ThePatmosTarget;
+}
+
+const Function *llvm::getCallTarget(const MachineInstr *MI) {
+  const Module *M = MI->getParent()->getParent()->getFunction().getParent();
+  const MachineOperand &MO = MI->getOperand(2);
+  const Function *Target = NULL;
+  llvm::StringRef TargetName = "";
+  if (MO.isGlobal()) {
+    Target = dyn_cast<Function>(MO.getGlobal());
+    if(!Target) {
+      TargetName = MO.getGlobal()->getName();
+    }
+  } else if (MO.isSymbol()) {
+    TargetName = MO.getSymbolName();
+    Target = M->getFunction(TargetName);
+  }
+
+  if(!Target) {
+    if(auto *alias = M->getNamedAlias(TargetName)) {
+      Target = M->getFunction(alias->getAliasee()->getName());
+    }
+  }
+
+  return Target;
+}
+
+
+MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
+  auto *F = getCallTarget(MI);
+  MachineFunction *MF;
+  if (F && (MF = &MI->getParent()->getParent()->getMMI().getOrCreateMachineFunction((Function&)*F))) {
+    return MF;
+  }
+  return NULL;
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetInfo() {

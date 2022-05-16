@@ -30,6 +30,8 @@
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 
 @cond = global i32 0
+@_1 = global i32 1
+@_2 = global i32 2
 
 define i32 @init_func()  {
 entry:
@@ -39,24 +41,27 @@ entry:
   br i1 %cmp, label %if.then, label %if.else
 
 if.then:
-  %cmp2 = icmp slt i32 %cond, 1
+  %0 = load volatile i32, i32* @_1
+  %cmp2 = icmp slt i32 %cond, %0
   br i1 %cmp2, label %if.then2, label %if.else2
 
 if.then2:
-  %xm1 = add nsw i32 %x, -1
+  %xm1 = sub nsw i32 %x, 1
   br label %if.then.end
   
 if.else2:
-  %xp1 = add nsw i32 %x, 1
+  %1 = load volatile i32, i32* @_1
+  %xp1 = add nsw i32 %x, %1
   br label %if.then.end
   
 if.then.end:
   %xx1 = phi i32 [ %xm1, %if.then2 ], [ %xp1, %if.else2 ]
-  %xx1m2 = add nsw i32 %xx1, -2
+  %xx1m2 = sub nsw i32 %xx1, 2
   br label %end
 
 if.else:
-  %xp2 = add nsw i32 %x, 2
+  %2 = load volatile i32, i32* @_2
+  %xp2 = add nsw i32 %x, %2
   br label %end
 
 end:                                        
