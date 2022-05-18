@@ -99,7 +99,7 @@ bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {
 }
 
 bool PatmosSinglePathInfo::isEnabled(const Function &F) {
-  return isRoot(F) || isReachable(F) || isMaybe(F);
+  return isRoot(F) || isMaybe(F);
 }
 bool PatmosSinglePathInfo::isEnabled(const MachineFunction &MF) {
   return PatmosSinglePathInfo::isEnabled(MF.getFunction());
@@ -110,13 +110,6 @@ bool PatmosSinglePathInfo::isRoot(const Function &F) {
 }
 bool PatmosSinglePathInfo::isRoot(const MachineFunction &MF) {
   return PatmosSinglePathInfo::isRoot(MF.getFunction());
-}
-
-bool PatmosSinglePathInfo::isReachable(const Function &F) {
-  return F.hasFnAttribute("sp-reachable");
-}
-bool PatmosSinglePathInfo::isReachable(const MachineFunction &MF) {
-  return PatmosSinglePathInfo::isReachable(MF.getFunction());
 }
 
 bool PatmosSinglePathInfo::isMaybe(const Function &F) {
