@@ -24,6 +24,7 @@ env:
   NEWLIB_BUILD_PATH: build-newlib
   BENCH_PATH: patmos-benchmarks
   BENCH_BUILD_PATH: build-bench
+  CET_TESTS_PATH: patmos-cet-test-suite
   LLD_PATH: lld
   
 jobs:

@@ -220,3 +220,20 @@ runs:
         cmake $GITHUB_WORKSPACE/$BENCH_PATH -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/$BENCH_PATH/cmake/patmos-clang-toolchain.cmake -DENABLE_TESTING=true
         make $J
         ctest $J -V
+    # Download CET Test Suite
+    - name: Download CET test suite
+      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
+      env:
+        CET_TESTS_COMMIT: 8d9520fde1e150c7805a8c11d6b3c0c4a7d039c4
+      shell: bash
+      run: |
+        git clone https://github.com/t-crest/patmos-cet-test-suite ${{env.CET_TESTS_PATH}}
+        cd ${{env.CET_TESTS_PATH}}
+        git checkout $CET_TESTS_COMMIT
+    # Run CET Test Suite
+    - name: Run CET Test Suite
+      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
+      working-directory: ${{env.CET_TESTS_PATH}}
+      shell: bash
+      run: |
+        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v
