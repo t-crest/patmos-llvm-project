@@ -3176,6 +3176,10 @@ def mimplicit_float : Flag<["-"], "mimplicit-float">, Group<m_Group>;
 def mrecip : Flag<["-"], "mrecip">, Group<m_Group>;
 def mrecip_EQ : CommaJoined<["-"], "mrecip=">, Group<m_Group>, Flags<[CC1Option]>,
   MarshallingInfoStringVector<CodeGenOpts<"Reciprocals">>;
+def mpatmos_enable_cet : Flag<["-"], "mpatmos-enable-cet">, Group<m_Group>, Flags<[CC1Option]>,
+  MarshallingInfoFlag<CodeGenOpts<"PatmosEnableCet">>, HelpText<"Enable constant execution time code generation.">;
+def mpatmos_cet_functions : CommaJoined<["-"], "mpatmos-cet-functions=">, Group<m_Group>, Flags<[CC1Option]>,
+  MarshallingInfoStringVector<CodeGenOpts<"PatmosCetFuncs">>, HelpText<"Functions that should use constant execution time code generation. Requires -mpatmos-enable-cet to have an effect.">;
 def mprefer_vector_width_EQ : Joined<["-"], "mprefer-vector-width=">, Group<m_Group>, Flags<[CC1Option]>,
   HelpText<"Specifies preferred vector width for auto-vectorization. Defaults to 'none' which allows target specific decisions.">,
   MarshallingInfoString<CodeGenOpts<"PreferVectorWidth">>;

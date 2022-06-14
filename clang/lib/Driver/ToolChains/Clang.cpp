@@ -4218,6 +4218,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                                 << TripleStr;
   }
 
+  if(Triple.isPatmos()) {
+    Args.AddLastArg(CmdArgs, options::OPT_mpatmos_enable_cet);
+    Args.AddLastArg(CmdArgs, options::OPT_mpatmos_cet_functions);
+  }
+
   // Push all default warning arguments that are specific to
   // the given target.  These come before user provided warning options
   // are provided.

@@ -1,17 +1,16 @@
-// RUN: %clang_cc1 -triple=patmos %s -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 -triple=patmos %s -mpatmos-enable-cet -mpatmos-cet-functions="some_fn" -emit-llvm -o - | FileCheck %s
 // END.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Test the "singlepath" attribute produces a function with a "sp-root" in its
-// attribute list and "noinline".
+// Test that can designate a function to be constant execution time using the -mpatmos-cet-functions
+// command line argument
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // CHECK: @some_fn() 
 // CHECK-SAME: #[[FN_ATTR:[0-9]]]
-__attribute__((singlepath))
-int some_fn()  {}
+int some_fn()  { return 0;}
 
 // CHECK: attributes #[[FN_ATTR]] = {
 // CHECK-SAME: noinline 

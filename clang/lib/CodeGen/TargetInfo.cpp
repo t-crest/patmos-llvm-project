@@ -10787,7 +10787,10 @@ public:
     const FunctionDecl *FD = dyn_cast<FunctionDecl>(D);
     if (!FD) return;
     llvm::Function *Fn = cast<llvm::Function>(GV);
-    if (FD->hasAttr<SinglePathAttr>()) {
+    auto is_cet_fun = CGM.getCodeGenOpts().PatmosEnableCet &&
+        std::any_of(CGM.getCodeGenOpts().PatmosCetFuncs.begin(), CGM.getCodeGenOpts().PatmosCetFuncs.end(),
+            [&](auto fn_name){ return fn_name == FD->getName();});
+    if (FD->hasAttr<SinglePathAttr>() || is_cet_fun) {
       Fn->addFnAttr("sp-root");
       Fn->addFnAttr(llvm::Attribute::NoInline);
     }

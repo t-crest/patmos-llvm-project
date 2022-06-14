@@ -324,6 +324,9 @@ public:
 
   std::vector<std::string> Reciprocals;
 
+  /// List of functions that should be code generated with constant execution time
+  std::vector<std::string> PatmosCetFuncs;
+
   /// The preferred width for auto-vectorization transforms. This is intended to
   /// override default transforms based on the width of the architected vector
   /// registers.

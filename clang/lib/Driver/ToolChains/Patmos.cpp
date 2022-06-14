@@ -428,6 +428,8 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     LLCArgs.push_back("-O0");
   }
 
+  bool sp_enabled = false;
+  bool const_exec_enabled = false;
   for (ArgList::const_iterator
          it = Args.begin(), ie = Args.end(); it != ie; ++it) {
     Arg *A = *it;
@@ -444,7 +446,23 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
           A->claim();
           LLCArgs.push_back(v);
         }
+        if(std::string(v).rfind("--mpatmos-singlepath",0) == 0) {
+          sp_enabled = true;
+        }
+        if(std::string(v).rfind("--mpatmos-enable-cet",0) == 0) {
+          const_exec_enabled = true;
+        }
       }
+    }
+  }
+
+  // Ensure constant execution time flags are set if needed
+  if(Args.getLastArg(options::OPT_mpatmos_enable_cet)) {
+    if(!sp_enabled) {
+      LLCArgs.push_back("--mpatmos-singlepath=");
+    }
+    if(!const_exec_enabled) {
+      LLCArgs.push_back("--mpatmos-enable-cet");
     }
   }
 
