@@ -111,6 +111,76 @@ class FCFG {
       }
       return os;
     }
+
+    void dump() {
+      dbgs() << "FCFG:\n\tEntry: " << &nentry << "\n";
+      dbgs() << "\t\tSuccs: ";
+      for(auto iter=nentry.succs_begin(); iter != nentry.succs_end(); iter++) {
+        auto *node = *iter;
+        auto block = node->Block;
+        dbgs() << "[" << node << "]";
+        if(block){
+          dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+        }
+        dbgs() << ", ";
+      }
+      dbgs() << "\n\t\tPreds: ";
+      for(auto iter=nentry.preds_begin(); iter != nentry.preds_end(); iter++) {
+        auto *node = *iter;
+        auto block = node->Block;
+        dbgs() << "[" << node << "]";
+        if(block){
+          dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+        }
+        dbgs() << ", ";
+      }
+
+      dbgs() << "\n\tExit: " << &nexit << "\n\t\tSuccs: ";
+      for(auto iter=nexit.succs_begin(); iter != nexit.succs_end(); iter++) {
+        auto *node = *iter;
+        auto block = node->Block;
+        dbgs() << "[" << node << "]";
+        if(block){
+          dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+        }
+        dbgs() << ", ";
+      }
+      dbgs() << "\n\t\tPreds: ";
+      for(auto iter=nexit.preds_begin(); iter != nexit.preds_end(); iter++) {
+        auto *node = *iter;
+        auto block = node->Block;
+        dbgs() << "[" << node << "]";
+        if(block){
+          dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+        }
+        dbgs() << ", ";
+      }
+
+      for(auto n: nodes) {
+
+        dbgs() << "\n\tNode: " << n.first->getMBB()->getNumber() << "." << n.first->getMBB()->getName() << "\n\t\tSuccs: ";
+        for(auto iter=n.second.succs_begin(); iter != n.second.succs_end(); iter++) {
+          auto *node = *iter;
+          auto block = node->Block;
+          dbgs() << "[" << node << "]";
+          if(block){
+            dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+          }
+          dbgs() << ", ";
+        }
+        dbgs() << "\n\t\tPreds: ";
+        for(auto iter=n.second.preds_begin(); iter != n.second.preds_end(); iter++) {
+          auto *node = *iter;
+          auto block = node->Block;
+          dbgs() << "[" << node << "]";
+          if(block){
+            dbgs() << "BB#" << block->getMBB()->getNumber() << "." << block->getMBB()->getName();
+          }
+          dbgs() << ", ";
+        }
+      }
+      dbgs() << "\n";
+    }
   private:
     std::map<const PredicatedBlock*, Node> nodes;
     void _rdfs(Node *n, std::set<Node*> &V,
@@ -224,12 +294,9 @@ public:
   /// Returns the FCFG of this scope.
   FCFG buildfcfg(void) {
 
-    auto fcfgBlocks = Pub.getScopeBlocks();
+    auto fcfgBlocks = Pub.getFcfgBlocks();
     std::set<const PredicatedBlock *> succBlocks(++fcfgBlocks.begin(), fcfgBlocks.end());
-    for(auto subscope: Subscopes){
-      fcfgBlocks.push_back(subscope->getHeader());
-      succBlocks.insert(subscope->getHeader());
-    }
+
 
     FCFG fcfg(Pub.getHeader());
 
@@ -373,7 +440,7 @@ public:
           dbgs() << "none";
         }else{
           for(auto p: preds){
-            dbgs() << p;
+            dbgs() << p << ", ";
           }
         }
         dbgs() << "\n";
@@ -404,7 +471,7 @@ public:
             pair.first, *block->getBlockPredicates().begin(),
             e.second, std::get<0>(condition), std::get<1>(condition)
         });
-      } // end for each definition edge
+      }
     }
   }
 
@@ -586,10 +653,17 @@ public:
   {
     std::set<std::pair<const PredicatedBlock*, const PredicatedBlock*>> outs;
 
-    for(auto block: Blocks){
-      auto exits = block->getExitTargets();
+    for(auto block: Blocks){auto exits = block->getExitTargets();
       for(auto t: exits){
         outs.insert(std::make_pair(block,t));
+      }
+    }
+    for(auto subheader: Subscopes) {
+      // Find all exits from inner loop that also exit this loop
+      for(auto subOut: subheader->Priv->getOutEdges()){
+        if(!Pub.findBlockOf(subOut.second->getMBB())) {
+          outs.insert(subOut);
+        }
       }
     }
 
@@ -609,7 +683,7 @@ public:
     report_fatal_error(
         "Single-path code generation failed! "
         "Could not find the PredicatedBlock of MBB: '" +
-        mbb->getParent()->getFunction().getName() + "'!");
+        mbb->getName() + "'!");
   }
 
   std::vector<PredicatedBlock*> getSubheaders()
@@ -653,19 +727,14 @@ public:
   }
 
   void assignSuccessors(){
-    // Add the successors to all blocks
-    auto fcfgBlocks = Pub.getFcfgBlocks();
-    if(!Pub.isTopLevel()){
-      auto parentFcfgBlocks = Parent->getFcfgBlocks();
-      fcfgBlocks.insert(fcfgBlocks.end(), parentFcfgBlocks.begin(), parentFcfgBlocks.end());
-    }
     for(auto block: Blocks){
       auto mbb = block->getMBB();
       std::for_each(mbb->succ_begin(), mbb->succ_end(), [&](MachineBasicBlock* succMbb){
-        auto found = std::find_if(fcfgBlocks.begin(), fcfgBlocks.end(),
-            [&](auto b){ return b->getMBB() == succMbb;});
-        assert(found != fcfgBlocks.end());
-        block->addSuccessor(*found, 0);
+        auto succPredBlock = getPredicatedFcfg(succMbb);
+        if(!succPredBlock) {
+          succPredBlock = getPredicatedParent(succMbb);
+        }
+        block->addSuccessor(succPredBlock, 0);
       });
     }
 
@@ -693,8 +762,10 @@ SPScope::SPScope(SPScope *parent, MachineLoop &loop, MachineFunction &MF, Machin
   for(auto edge: ExitEdges){
     auto found = std::find_if(Priv->Blocks.begin(), Priv->Blocks.end(),
         [&](auto block){ return block->getMBB() == edge.first; });
-    assert(found != Priv->Blocks.end());
-    (*found)->addExitTarget(Priv->getPredicatedParent(edge.second));
+    llvm::PredicatedBlock *second = Priv->getPredicatedParent(edge.second);
+    if(found != Priv->Blocks.end()){
+      (*found)->addExitTarget(second);
+    }
   }
 
   if( auto bounds = getLoopBounds(header) ) {
@@ -815,6 +886,7 @@ std::vector<PredicatedBlock*> SPScope::getScopeBlocks() const
 std::vector<PredicatedBlock*> SPScope::getBlocksTopoOrd() const
 {
   auto fcfg = Priv->buildfcfg();
+
   // dfs the fcfg in postorder
   std::vector<PredicatedBlock *> PO;
   for (auto I = po_begin(&fcfg), E = po_end(&fcfg);
@@ -897,6 +969,8 @@ SPScope * SPScope::createSPScopeTree(MachineFunction &MF, MachineLoopInfo &LI, c
   LLVM_DEBUG({
       dbgs() << "Initial scope tree:\n";
       Root->dump(dbgs(), 0, true);
+      dbgs() << "Function: \n";
+      MF.dump();
   });
 
   // analyze each scope
@@ -964,4 +1038,14 @@ PredicatedBlock* SPScope::findBlockOf(const MachineBasicBlock* mbb) const {
   }else{
     return inScope;
   }
+}
+
+PredicatedBlock* SPScope::findBlockOfGlobal(const MachineBasicBlock* mbb) const {
+  // Find the root
+  auto root = this;
+  while(root->getParent()) {
+    root = root->getParent();
+  }
+  assert(root);
+  return root->findBlockOf(mbb);
 }

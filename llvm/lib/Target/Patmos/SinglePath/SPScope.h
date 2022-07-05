@@ -165,6 +165,10 @@ namespace llvm {
       /// scope. Otherwise, NULL is returned.
       PredicatedBlock* findBlockOf(const MachineBasicBlock*) const;
 
+      /// Returns the block that manages the given MBB, if it exists in any
+      /// scope connected to this one either by subscope or parent scopes.
+      PredicatedBlock* findBlockOfGlobal(const MachineBasicBlock*) const;
+
       /// Create an SPScope tree, return the top-level scope.
       /// The tree needs to be destroyed by the client, by deleting the top-level scope.
       static SPScope * createSPScopeTree(MachineFunction &MF, MachineLoopInfo &LI, const PatmosInstrInfo*);
