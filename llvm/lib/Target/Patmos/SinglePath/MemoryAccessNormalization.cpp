@@ -504,12 +504,11 @@ unsigned MemoryAccessNormalization::compensateEnd(
       if (should_insert) {
         // Put the max possible into r3 as input
         auto max_opcode = max_end_accesses > 4095 ? Patmos::LIl : Patmos::LIi;
-        auto max_inst = BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
           Patmos::R3)
           .addReg(Patmos::NoRegister).addImm(0)
           .addImm(max_end_accesses)
-          .setMIFlags(MachineInstr::FrameSetup)
-          .getInstr();
+          .setMIFlags(MachineInstr::FrameSetup);
 
         assert(block_regs.count(BB) && "End block doesn't have a counter register");
 
@@ -517,6 +516,15 @@ unsigned MemoryAccessNormalization::compensateEnd(
         BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(Patmos::COPY),
           Patmos::R4)
           .addReg(block_regs[BB]);
+
+        // Put the max possible into r4 in case the whole function is disabled
+        // forcing the maximum compensation.
+        // We negate the default predicate, such that the maximum compensation is only
+        // used when the whole function is disabled.
+        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+          Patmos::R4)
+          .addReg(Patmos::NoRegister).addImm(1)
+          .addImm(max_end_accesses);
 
         // Insert call. Since the compensation function doesn't follow usual calling convention,
         // manually set use definitions
@@ -539,5 +547,5 @@ unsigned MemoryAccessNormalization::compensateEnd(
       report_fatal_error("Can't handle functions with multiple return blocks");
     }
   }
-  return 2;
+  return 3;
 }

@@ -993,8 +993,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           int i = instr->findFirstPredOperandIdx();
           if (i != -1) {
             unsigned preg = instr->getOperand(i).getReg();
-            int      flag = instr->getOperand(++i).getImm();
-            return (preg!=Patmos::NoRegister && (preg!=Patmos::P0 || instrPredNeg)) || flag;
+            return (preg!=Patmos::NoRegister && (preg!=Patmos::P0 || instrPredNeg));
           }
           // no predicates at all
           return false;
@@ -1008,7 +1007,14 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           assert(PO1.isReg() && PO2.isImm() &&
                  "Unexpected Patmos predicate operand");
           PO1.setReg(predReg);
-          PO2.setImm(instrPredNeg);
+
+          if(MI->getOperand(i+1).getImm()) {
+            // Patmos::NoRegister is negated, so negate the assigned register
+            PO2.setImm(instrPredNeg? 0:1);
+          } else {
+            PO2.setImm(instrPredNeg);
+          }
+
         } else {
           DEBUG_TRACE( dbgs() << "    in MBB#" << MBB->getNumber()
                         << ": instruction already predicated: " << *MI );
