@@ -475,11 +475,6 @@ void PatmosSPReduce::doReduceFunction(MachineFunction &MF) {
   // simplify it
   mergeMBBs(MF);
 
-  // Perform the elimination of LD/ST on the large basic blocks
-  ElimLdStCnt += GuardsLdStElim->process();
-  delete GuardsLdStElim;
-
-
   // Remove frame index operands from inserted loads and stores to stack
   eliminateFrameIndices(MF);
 
@@ -1390,11 +1385,6 @@ void LinearizeWalker::enterSubscope(SPScope *S) {
     int fi = Pass.PMFI->getSinglePathS0SpillFI(S->getDepth() - 1);
     Pass.TII->copyPhysReg(*PrehdrMBB, PrehdrMBB->end(), DL,
         Pass.GuardsReg, Patmos::S0, false);
-    // we insert a dummy load for the RedundantLdStEliminator
-    MachineInstr *Dummy = AddDefaultPred(BuildMI(*PrehdrMBB, PrehdrMBB->end(),
-          DL, Pass.TII->get(Patmos::LBC), Pass.GuardsReg))
-          .addFrameIndex(fi).addImm(0); // address
-    Pass.GuardsLdStElim->addRemovableInst(Dummy);
     AddDefaultPred(BuildMI(*PrehdrMBB, PrehdrMBB->end(), DL,
             Pass.TII->get(Patmos::SBC)))
       .addFrameIndex(fi).addImm(0) // address
@@ -1417,11 +1407,6 @@ void LinearizeWalker::enterSubscope(SPScope *S) {
       .addImm(loop); // the loop bound
 
     int fi = Pass.PMFI->getSinglePathLoopCntFI(S->getDepth()-1);
-    // we insert a dummy load for the RedundantLdStEliminator
-    MachineInstr *Dummy = AddDefaultPred(BuildMI(*PrehdrMBB, PrehdrMBB->end(),
-          DL, Pass.TII->get(Patmos::LWC), Pass.GuardsReg))
-          .addFrameIndex(fi).addImm(0); // address
-    Pass.GuardsLdStElim->addRemovableInst(Dummy);
     // store the initialized loop bound to its stack slot
     AddDefaultPred(BuildMI(*PrehdrMBB, PrehdrMBB->end(), DL,
             Pass.TII->get(Patmos::SWC)))
