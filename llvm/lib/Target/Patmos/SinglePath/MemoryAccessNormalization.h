@@ -31,7 +31,7 @@ private:
   unsigned compensateEnd(
       MachineFunction &, std::map<MachineBasicBlock*, Register> &,
       unsigned, bool);
-  unsigned counter_compensate(MachineFunction &, unsigned , bool);
+  unsigned counter_compensate(MachineFunction &, unsigned, unsigned, bool);
 
 public:
   static char ID;

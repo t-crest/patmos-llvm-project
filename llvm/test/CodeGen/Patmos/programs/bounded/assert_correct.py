@@ -228,8 +228,6 @@ compile_and_test_matrix("", "", [
         ("", ""), 
         # Single-path code without dual-issue
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
-        # Single-path code without dual-issue
-        ("-mpatmos-disable-pseudo-roots -mpatmos-singlepath=" + sp_root, "-D ideal"), 
         # Single-path with dual-issue
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"),
         # Constant execution time using opposite predicate compensation       
@@ -243,7 +241,7 @@ compile_and_test_matrix("", "", [
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=hybrid", "-D lru2"),
     ],
     # Optimization levels
-    ["", "-O1", "-O2"]
+    ["", "-O1", "-O2", "-O2 -mpatmos-disable-pseudo-roots"]
 ])
 
 # Success

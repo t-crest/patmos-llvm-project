@@ -142,11 +142,11 @@ bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
     ){
       auto accessBounds = getAccessBounds(MF, getAnalysis<MachineLoopInfo>());
 
-      auto min_accesses = /*MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot()? accessBounds.first:*/0;
-      auto comp_accesses = accessBounds.second - min_accesses;
+      auto min_accesses = PatmosSinglePathInfo::isRootLike(MF)? accessBounds.first:0;
+      auto max_accesses = accessBounds.second;
 
-      if(comp_accesses > 0 ) {
-        auto counter_algo_instr_need = counter_compensate(MF,comp_accesses, false);
+      if((max_accesses - min_accesses) > 0) {
+        auto counter_algo_instr_need = counter_compensate(MF, max_accesses, min_accesses, false);
 
         // Get the number of instructions the opposite predicate compensation algorithm
         // would add to the function
@@ -169,7 +169,7 @@ bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
         ) {
           CounterComp++;
           CntCmpInstr += counter_algo_instr_need;
-          auto added = counter_compensate(MF,comp_accesses, true);
+          auto added = counter_compensate(MF, max_accesses, min_accesses, true);
           assert(counter_algo_instr_need == added);
 
           LLVM_DEBUG(
@@ -211,8 +211,8 @@ static Register new_vreg(MachineFunction &MF) {
 /// If 'should_insert' is false, no instructions are added and the function
 /// isn't changed. However, the count is still performed and returned as if
 /// instructions were added.
-unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_compensation, bool should_insert) {
-  assert(max_compensation != 0 && "No compensation needed if no accesses are done");
+unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_compensation, unsigned min_compensation, bool should_insert) {
+  assert((max_compensation - min_compensation) != 0 && "No compensation needed if no accesses are done");
 
   auto &LI = getAnalysis<MachineLoopInfo>();
   auto &RI = MF.getRegInfo();
@@ -329,7 +329,11 @@ std::pair<unsigned, Register> MemoryAccessNormalization::compensateEntryBlock(
 
   if(MF.size() == 1) {
     // Only one block, meaning no edges in 'compensation'
-    // Therefore, add decrement in the block
+    // Therefore, add decrement in the same block.
+    // This is needed for non-root-like functions for when they are disabled.
+    assert(!PatmosSinglePathInfo::isRootLike(MF) &&
+        "Root-like single-block function shouldn't need decrementing");
+
     if(max_end_accesses <= 4095) {
       insert_count++;
       if(should_insert){
@@ -516,15 +520,16 @@ unsigned MemoryAccessNormalization::compensateEnd(
         BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(Patmos::COPY),
           Patmos::R4)
           .addReg(block_regs[BB]);
-
-        // Put the max possible into r4 in case the whole function is disabled
-        // forcing the maximum compensation.
-        // We negate the default predicate, such that the maximum compensation is only
-        // used when the whole function is disabled.
-        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
-          Patmos::R4)
-          .addReg(Patmos::NoRegister).addImm(1)
-          .addImm(max_end_accesses);
+        if (!PatmosSinglePathInfo::isRootLike(MF)) {
+          // Put the max possible into r4 in case the whole function is disabled
+          // forcing the maximum compensation.
+          // We negate the default predicate, such that the maximum compensation is only
+          // used when the whole function is disabled.
+          BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+            Patmos::R4)
+            .addReg(Patmos::NoRegister).addImm(1)
+            .addImm(max_end_accesses);
+        }
 
         // Insert call. Since the compensation function doesn't follow usual calling convention,
         // manually set use definitions
@@ -548,4 +553,5 @@ unsigned MemoryAccessNormalization::compensateEnd(
     }
   }
   return 3;
+//  return 2 + (PatmosSinglePathInfo::isRootLike(MF)?0:1);
 }

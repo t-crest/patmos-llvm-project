@@ -88,6 +88,9 @@ namespace llvm {
       static bool isPseudoRoot(const Function &F);
       static bool isPseudoRoot(const MachineFunction &MF);
 
+      static bool isRootLike(const Function &F);
+      static bool isRootLike(const MachineFunction &MF);
+
       static const char* getCompensationFunction();
 
       /// isConstant - Return true if should produce constant execution-time,

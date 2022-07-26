@@ -146,6 +146,13 @@ bool PatmosSinglePathInfo::isPseudoRoot(const MachineFunction &MF) {
   return PatmosSinglePathInfo::isPseudoRoot(MF.getFunction());
 }
 
+bool PatmosSinglePathInfo::isRootLike(const Function &F) {
+  return isRoot(F) || isPseudoRoot(F);
+}
+bool PatmosSinglePathInfo::isRootLike(const MachineFunction &MF) {
+  return isRootLike(MF.getFunction());
+}
+
 void PatmosSinglePathInfo::getRootNames(std::set<StringRef> &S) {
   S.insert( SPRootList.begin(), SPRootList.end() );
   S.erase("");
