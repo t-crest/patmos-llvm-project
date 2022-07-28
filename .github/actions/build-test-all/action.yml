@@ -201,6 +201,23 @@ runs:
       if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
       shell: bash
       run: tar -xvf $(find . -name 'patmos-llvm-*.tar.gz') -C $GITHUB_WORKSPACE/$INSTALL_PATH
+    # Download CET Test Suite
+    - name: Download CET test suite
+      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
+      env:
+        CET_TESTS_COMMIT: 9aaece64b99462870087be08f8659246ab3b7315
+      shell: bash
+      run: |
+        git clone https://github.com/t-crest/patmos-cet-test-suite ${{env.CET_TESTS_PATH}}
+        cd ${{env.CET_TESTS_PATH}}
+        git checkout $CET_TESTS_COMMIT
+    # Run CET Test Suite
+    - name: Run CET Test Suite
+      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
+      working-directory: ${{env.CET_TESTS_PATH}}
+      shell: bash
+      run: |
+        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v
     # Download Benchmark
     - name: Download Benchmark test suite
       if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
@@ -220,20 +237,3 @@ runs:
         cmake $GITHUB_WORKSPACE/$BENCH_PATH -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/$BENCH_PATH/cmake/patmos-clang-toolchain.cmake -DENABLE_TESTING=true
         make $J
         ctest $J -V
-    # Download CET Test Suite
-    - name: Download CET test suite
-      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
-      env:
-        CET_TESTS_COMMIT: a1b58d9aaaa695c2a03d2aa71519234c70547ae9
-      shell: bash
-      run: |
-        git clone https://github.com/t-crest/patmos-cet-test-suite ${{env.CET_TESTS_PATH}}
-        cd ${{env.CET_TESTS_PATH}}
-        git checkout $CET_TESTS_COMMIT
-    # Run CET Test Suite
-    - name: Run CET Test Suite
-      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
-      working-directory: ${{env.CET_TESTS_PATH}}
-      shell: bash
-      run: |
-        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v
