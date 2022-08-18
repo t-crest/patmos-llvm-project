@@ -55,8 +55,12 @@ private:
   /// least 1 cycle between the two instructions.
   /// If the instructions are part of bundles, the whole bundle is taken into
   /// account.
-  unsigned calculateLatency(MachineBasicBlock::iterator) const;
+  /// If boolean is true, latency is only returned for control flow instructions.
+  unsigned calculateLatency(MachineBasicBlock::iterator, bool) const;
 
+  /// Runs a list scheduler on the given block to avoid empty delay slots
+  /// in non-control-flow instructions.
+  void runListSchedule(MachineBasicBlock *mbb);
 };
 
 }

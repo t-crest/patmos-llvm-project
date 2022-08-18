@@ -86,7 +86,6 @@ const Function *llvm::getCallTarget(const MachineInstr *MI) {
   return Target;
 }
 
-
 MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
   auto *F = getCallTarget(MI);
   MachineFunction *MF;
@@ -94,6 +93,58 @@ MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
     return MF;
   }
   return NULL;
+}
+
+/// Returns true if the given opcode represents a load instruction.
+/// Pseudo-instructions aren't considered.
+bool llvm::isLoadInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::LBC:
+    case Patmos::LBL:
+    case Patmos::LBM:
+    case Patmos::LBS:
+    case Patmos::LBUC:
+    case Patmos::LBUL:
+    case Patmos::LBUM:
+    case Patmos::LBUS:
+    case Patmos::LHC:
+    case Patmos::LHL:
+    case Patmos::LHM:
+    case Patmos::LHS:
+    case Patmos::LHUC:
+    case Patmos::LHUL:
+    case Patmos::LHUM:
+    case Patmos::LHUS:
+    case Patmos::LWC:
+    case Patmos::LWL:
+    case Patmos::LWM:
+    case Patmos::LWS:
+      return true;
+  }
+}
+
+/// Returns true if the given opcode represents a store instruction.
+/// Pseudo-instructions aren't considered.
+bool llvm::isStoreInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::SBC:
+    case Patmos::SBL:
+    case Patmos::SBM:
+    case Patmos::SBS:
+    case Patmos::SHC:
+    case Patmos::SHL:
+    case Patmos::SHM:
+    case Patmos::SHS:
+    case Patmos::SWC:
+    case Patmos::SWL:
+    case Patmos::SWM:
+    case Patmos::SWS:
+      return true;
+  }
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetInfo() {

@@ -6,6 +6,7 @@ set(PatmosSource
   PredicatedBlockTest.cpp
   MemoryAccessAnalysisTest.cpp
   BoundedDominatorAnalysisTest.cpp
+  ListSchedulerTest.cpp
   )
 
 add_llvm_unittest(SinglePathTests

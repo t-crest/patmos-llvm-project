@@ -35,8 +35,16 @@ Optional<std::pair<uint64_t, uint64_t>> getLoopBounds(const MachineBasicBlock * 
 
 const Function *getCallTarget(const MachineInstr *MI);
 
-
 MachineFunction *getCallTargetMF(const MachineInstr *MI);
+
+
+/// Returns true if the given opcode represents a load instruction.
+/// Pseudo-instructions aren't considered.
+bool isLoadInst(unsigned opcode);
+
+/// Returns true if the given opcode represents a store instruction.
+/// Pseudo-instructions aren't considered.
+bool isStoreInst(unsigned opcode);
 
 } // namespace llvm
 
