@@ -36,6 +36,8 @@ add_llvm_target(PatmosCodeGen
   PatmosEnsureAlignment.cpp
   PatmosIntrinsicElimination.cpp
   MachineModulePass.cpp
+  PMLExport.cpp
+  PatmosExport.cpp
   
   LINK_COMPONENTS
   PatmosDesc 

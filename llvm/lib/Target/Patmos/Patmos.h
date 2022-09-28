@@ -17,6 +17,7 @@
 
 #include "MCTargetDesc/PatmosMCTargetDesc.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 
 
@@ -53,6 +54,11 @@ namespace llvm {
   ModulePass *createPatmosCallGraphBuilder();
   ModulePass *createPatmosStackCacheAnalysis(const PatmosTargetMachine &tm);
   ModulePass *createPatmosStackCacheAnalysisInfo(const PatmosTargetMachine &tm);
+  ModulePass *createPatmosModuleExportPass(PatmosTargetMachine &TM,
+                                             std::string& Filename,
+                                             std::string& BitcodeFilename,
+                                             ArrayRef<std::string> Roots,
+                         bool SerializeAll);
 
   extern char &PatmosPostRASchedulerID;
 } // end namespace llvm;

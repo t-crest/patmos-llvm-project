@@ -226,6 +226,9 @@ compile_and_test_matrix("", "", [
     [
         # Traditional code
         ("", ""), 
+        # Traditional code with PML output, just to make sure we can
+        # output it without errors. Testing the output is not done.
+        ("-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root, ""), 
         # Single-path code without dual-issue
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
         # Single-path with dual-issue

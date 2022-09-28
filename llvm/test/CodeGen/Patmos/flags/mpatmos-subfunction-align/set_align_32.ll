@@ -30,7 +30,7 @@
 @_7 = global i32 7
 
 ; CHECK: .p2align 5
-; CHECK: .fstart	main, .Ltmp{{[0-9]}}-main, 32
+; CHECK: .fstart	main, .PPGtmp{{[0-9]}}-main, 32
 ; CHECK-NEXT: main:
 
 ; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <main>:

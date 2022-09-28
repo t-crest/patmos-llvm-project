@@ -10,7 +10,7 @@
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 
 ; CHECK: .p2align 5
-; CHECK: .fstart	main, .Ltmp{{[0-9]}}-main, 32
+; CHECK: .fstart	main, .PPGtmp{{[0-9]}}-main, 32
 ; CHECK-NEXT: main:
 
 ; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <main>:
@@ -29,7 +29,7 @@ entry:
 	()
 	
 ; CHECK: .p2align 5
-; CHECK: .fstart	[[INLINE1:.LBB0_[0-9]]], .Ltmp{{[0-9]}}-[[INLINE1]], 32
+; CHECK: .fstart	[[INLINE1:.LBB0_[0-9]]], .PPGtmp{{[0-9]}}-[[INLINE1]], 32
 ; CHECK-LABEL: .inline_1:
 
 ; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <.inline_1>:
@@ -44,7 +44,7 @@ entry:
 	(i32 %0)
 
 ; CHECK: .p2align 5
-; CHECK: .fstart	[[INLINE2:.LBB0_[0-9]]], .Ltmp{{[0-9]}}-[[INLINE2]], 32
+; CHECK: .fstart	[[INLINE2:.LBB0_[0-9]]], .PPGtmp{{[0-9]}}-[[INLINE2]], 32
 ; CHECK-LABEL: .inline_2:
 
 ; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <.inline_2>:
@@ -64,7 +64,7 @@ entry:
 	(i32 %1)
 
 ; CHECK: .p2align 5
-; CHECK: .fstart	[[INLINE3:.LBB0_[0-9]]], .Ltmp{{[0-9]}}-[[INLINE3]], 32	
+; CHECK: .fstart	[[INLINE3:.LBB0_[0-9]]], .PPGtmp{{[0-9]}}-[[INLINE3]], 32	
 ; CHECK-LABEL: .inline_3:
 
 ; ALIGN: {{[0-9]*[0|2|4|6|8|a|c|e]4}} <.inline_3>:

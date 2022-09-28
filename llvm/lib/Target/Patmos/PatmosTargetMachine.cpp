@@ -63,19 +63,30 @@ namespace {
       cl::init(false),
       cl::desc("Disable if-converter for Patmos."),
       cl::Hidden);
+  static cl::opt<std::string> SerializeMachineCode(
+      "mpatmos-serialize",
+      cl::init(""),
+      cl::desc("Export PML specification of generated machine code to FILE"));
+  static cl::list<std::string>SerializeRoots("mpatmos-serialize-functions",
+     cl::desc("Export only given method (default: 'main') and those reachable from them"),
+     cl::CommaSeparated);
+
 
   /// Patmos Code Generator Pass Configuration Options.
   class PatmosPassConfig : public TargetPassConfig {
   private:
-    const std::string DefaultRoot;
 
   public:
     PatmosPassConfig(PatmosTargetMachine &TM, PassManagerBase &PM)
-     : TargetPassConfig(TM, PM), DefaultRoot("main")
+     : TargetPassConfig(TM, PM)
     {
       if( PatmosSinglePathInfo::isConstant() && !PatmosSinglePathInfo::isEnabled() ) {
           report_fatal_error("The 'mpatmos-enable-cet' option "
               "requires the 'mpatmos-singlepath' option to also be set.");
+      }
+      if( !SerializeRoots.empty() && SerializeMachineCode=="" ){
+        report_fatal_error("The 'mpatmos-serialize-functions' option "
+            "requires the 'mpatmos-serialize' option to also be set.");
       }
 
       // Enable preRA MI scheduler.
@@ -226,6 +237,17 @@ namespace {
       addPass(createPatmosDelaySlotKillerPass(getPatmosTargetMachine()));
 
       addPass(createPatmosEnsureAlignmentPass(getPatmosTargetMachine()));
+
+      // Serialize machine code
+      if (!SerializeMachineCode.empty()) {
+        std::string empty("");
+        if(SerializeRoots.empty()){
+          SerializeRoots.push_back("main");
+        }
+
+        addPass(createPatmosModuleExportPass(getPatmosTargetMachine(),
+            SerializeMachineCode, empty, SerializeRoots, false));
+      }
     }
   };
 } // namespace

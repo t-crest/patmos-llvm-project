@@ -33,7 +33,7 @@ PatmosMCAsmInfo::PatmosMCAsmInfo(const Triple &TheTriple)
   SeparatorString = ";";
   CommentString = "#";
   LabelSuffix = ":";
-  PrivateGlobalPrefix = ".L";
+  PrivateGlobalPrefix = ".PPG"; // Patmos Private Global (PGP)
   AlignmentIsInBytes = true;
   MaxInstLength = 8; // for long immediates
   SupportsDebugInformation = true;

@@ -31,23 +31,13 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include <memory>
+#include <string>
+#include <stdexcept>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
-
-/// EnableBasicBlockSymbols - If enabled, symbols for basic blocks are emitted
-/// containing the name of their IR representation, appended by their
-/// MBB number (for uniqueness). Note that this also includes MBBs which are
-/// not necessarily branch/call targets.
-static cl::opt<bool> EnableBasicBlockSymbols(
-  "mpatmos-enable-bb-symbols",
-  cl::init(false),
-  cl::desc("Enable (additional) generation of symbols "
-           "named like the IR basic blocks."),
-  cl::Hidden);
-
-
 
 void PatmosAsmPrinter::emitFunctionEntryLabel() {
   // Create a temp label that will be emitted at the end of the first cache block (at the end of the function
@@ -61,6 +51,20 @@ void PatmosAsmPrinter::emitFunctionEntryLabel() {
   AsmPrinter::emitFunctionEntryLabel();
 }
 
+/// This function is copied from: https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
+/// with minimal changes.
+/// Works like std::format, except for C++14 (std::format was introduced in C++20)
+template<typename ... Args>
+std::string string_format( const std::string& format, Args ... args )
+{
+    int size_s = std::snprintf( nullptr, 0, format.c_str(), args ... ) + 1; // Extra space for '\0'
+    if( size_s <= 0 ){ report_fatal_error( "Error during formatting." ); }
+    auto size = static_cast<size_t>( size_s );
+    std::unique_ptr<char[]> buf( new char[ size ] );
+    std::snprintf( buf.get(), size, format.c_str(), args ... );
+    return std::string( buf.get(), buf.get() + size - 1 ); // We don't want the '\0' inside
+}
+
 void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // First align the block if needed (don't align the first block).
   // We must align first to ensure that any added nops are put
@@ -71,7 +75,6 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   if (align.value() && (MBB.getParent()->getBlockNumbered(0) != &MBB)) {
       emitAlignment(align);
   }
-
   // Then emit .fstart/.size if needed
   if (isFStart(&MBB) && (MBB.getParent()->getBlockNumbered(0) != &MBB)) {
     // We need an address symbol from the next block
@@ -98,29 +101,19 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   AsmPrinter::emitBasicBlockStart(MBB);
   ((MachineBasicBlock &) MBB).setAlignment(align);
 
+  // We always emit a label for each block using the below format
+  // because 'Platin' needs it in the object file when doing WCET analysis.
+  auto platin_label_string = string_format(".LBB%d_%d", MBB.getParent()->getFunctionNumber(), MBB.getNumber());
+  auto *platin_label = OutContext.getOrCreateSymbol(platin_label_string);
+
+  if(platin_label->isUndefined()){
+    OutStreamer->emitLabel(platin_label);
+  }
+
   emitBasicBlockBegin(MBB);
 }
 
 void PatmosAsmPrinter::emitBasicBlockBegin(const MachineBasicBlock &MBB) {
-  // If special generation of BB symbols is enabled,
-  // do so for every MBB.
-  if (EnableBasicBlockSymbols) {
-    // create a symbol with the BBs name
-    SmallString<128> bbname;
-    getMBBIRName(&MBB, bbname);
-    MCSymbol *bbsym = OutContext.getOrCreateSymbol(bbname.str());
-    OutStreamer->emitLabel(bbsym);
-
-    // set basic block size
-    unsigned int bbsize = 0;
-    for(MachineBasicBlock::const_instr_iterator i(MBB.instr_begin()),
-        ie(MBB.instr_end()); i!=ie; ++i)
-    {
-      bbsize += i->getDesc().Size;
-    }
-    OutStreamer->emitELFSize(bbsym, MCConstantExpr::create(bbsize, OutContext));
-  }
-
   // Print loop bound information if needed
   if (auto loop_bounds = getLoopBounds(&MBB)){
     OutStreamer->GetCommentOS() << "Loop bound: [";
