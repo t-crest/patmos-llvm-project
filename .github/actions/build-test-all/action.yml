@@ -33,6 +33,9 @@ inputs:
     description: 'Wether to run any tests'
     required: true
     default: true
+  artifact-name:
+    description: 'The name to use for the github artifact uploaded of the built package.'
+    required: false
         
 runs:
   using: "composite"
@@ -43,7 +46,6 @@ runs:
         mkdir -p $BUILD_PATH
         mkdir -p $COMPILER_RT_BUILD_PATH
         mkdir -p $NEWLIB_BUILD_PATH
-        mkdir -p $BENCH_BUILD_PATH
     - run: echo "::group::Configure LLVM Build"
       shell: bash
     - working-directory: ${{env.BUILD_PATH}}
@@ -196,7 +198,7 @@ runs:
       shell: bash
       run: make $J PatmosPackage
     # Install Package
-    - name: Download Benchmark test suite
+    - name: Install Compiler Binaries
       working-directory: ${{env.BUILD_PATH}}
       if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
       shell: bash
@@ -218,22 +220,10 @@ runs:
       shell: bash
       run: |
         $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v
-    # Download Benchmark
-    - name: Download Benchmark test suite
-      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
-      env:
-        BENCH_COMMIT: 197791f2583906b76f2cd6b2abe66fed3ddc318b
-      shell: bash
-      run: |
-        git clone https://github.com/t-crest/patmos-benchmarks ${{env.BENCH_PATH}}
-        cd ${{env.BENCH_PATH}}
-        git checkout $BENCH_COMMIT
-    # Build & Tests Benchmarks
-    - name: Build & Test Benchmarks
-      if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
-      working-directory: ${{env.BENCH_BUILD_PATH}}
-      shell: bash
-      run: |
-        cmake $GITHUB_WORKSPACE/$BENCH_PATH -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/$BENCH_PATH/cmake/patmos-clang-toolchain.cmake -DENABLE_TESTING=true
-        make $J
-        ctest $J -V
+    # Upload Package artifact
+    - name: Upload Package Artifact
+      if: inputs.enable-package == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{inputs.artifact-name}}
+        path: ${{env.BUILD_PATH}}/patmos-unknown-unknown-elf/package-temp/patmos-llvm-*.tar.gz

@@ -34,8 +34,8 @@ jobs:
     strategy:
       fail-fast: false
     env: 
-      CC: gcc-9
-      CXX: g++-9
+      CC: gcc
+      CXX: g++
     steps:
       - uses: actions/checkout@v2
       - name: Build and Run LLVM Unit and Regression Tests
@@ -53,18 +53,34 @@ jobs:
         working-directory: ${{env.BUILD_PATH}}
         run: make $J llc llvm-link clang llvm-config llvm-objdump opt
   
-  test-patmos:
-    name: Test (${{matrix.platform}})
+  package-patmos:
+    name: Build, Test, and Package (${{matrix.platform}})
     runs-on: ${{matrix.platform}}
     strategy:
       fail-fast: false
       matrix:
         include: 
-          - platform: ubuntu-18.04
-            cc: gcc-9
-            cxx: g++-9
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
             simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
-          - platform: macOS-10.15
+          - platform: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
+          - platform: ubuntu-20.04
+            cc: gcc
+            cxx: g++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
+          - platform: macos-latest
+            cc: clang
+            cxx: clang++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz
+          - platform: macos-12
+            cc: clang
+            cxx: clang++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz
+          - platform: macOS-11
             cc: clang
             cxx: clang++
             simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz
@@ -76,7 +92,7 @@ jobs:
       SIMULATOR_LINK: ${{matrix.simulator_link}}
     
     steps:
-      - if: startsWith(matrix.platform, 'macOs')
+      - if: startsWith(matrix.platform, 'mac')
         name: Install GNU-tar as 'tar'
         run: |
           brew install gnu-tar
@@ -97,6 +113,68 @@ jobs:
         uses: ./.github/actions/build-test-all
         with:
           enable-assertions: true
+          artifact-name: package-${{matrix.platform}}
+  
+  test-benchmarks:
+    name: Test Benchmarks (${{matrix.platform}})
+    runs-on: ${{matrix.platform}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: 
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
+          - platform: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
+          - platform: ubuntu-20.04
+            cc: gcc
+            cxx: g++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-linux-gnu.tar.gz
+          - platform: macos-latest
+            cc: clang
+            cxx: clang++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz
+          - platform: macos-12
+            cc: clang
+            cxx: clang++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz
+          - platform: macOS-11
+            cc: clang
+            cxx: clang++
+            simulator_link: https://github.com/t-crest/patmos-simulator/releases/download/1.0.2/patmos-simulator-x86_64-apple-darwin17.7.0.tar.gz      
+    needs: [package-patmos]     
+    env:
+      SIMULAROT_TAR: patmos-simulator.tar.gz
+      CC: ${{matrix.cc}}
+      CXX: ${{matrix.cxx}}
+      SIMULATOR_LINK: ${{matrix.simulator_link}}
+    
+    steps:
+      - if: startsWith(matrix.platform, 'mac')
+        name: Install GNU-tar as 'tar'
+        run: |
+          brew install gnu-tar
+          # Set gtar to be available as 'tar'
+          echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+      - uses: actions/checkout@v2
+      - name: Install Dependencies
+        run: |
+          mkdir -p $INSTALL_PATH
+          cd $INSTALL_PATH
+          # Dowload Dependencies
+          wget -O $SIMULAROT_TAR $SIMULATOR_LINK
+          # Extract dependencies
+          tar -xvf $SIMULAROT_TAR
+          # Set path
+          echo "$GITHUB_WORKSPACE/$INSTALL_PATH/bin" >> $GITHUB_PATH
+      - name: Build and Run LLVM Unit and Regression Tests
+        uses: ./.github/actions/test-benchmarks
+        with:
+          artifact-name: package-${{matrix.platform}}
   release:
     name: Release (${{matrix.platform}})
     runs-on: ${{matrix.platform}}
@@ -106,14 +184,20 @@ jobs:
       fail-fast: true
       matrix:
         include: 
-          - platform: ubuntu-18.04
-            cc: gcc-9
-            cxx: g++-9
-          - platform: macOS-10.15
+          - platform: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+          - platform: ubuntu-20.04
+            cc: gcc
+            cxx: g++
+          - platform: macos-12
+            cc: clang
+            cxx: clang++
+          - platform: macos-11
             cc: clang
             cxx: clang++
     # Run after the test jobs finish      
-    needs: [test-patmos, test-non-patmos]
+    needs: [package-patmos, test-benchmarks, test-non-patmos]
     # Run only if this was triggered by a tag
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     env:
@@ -123,7 +207,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - if: startsWith(matrix.platform, 'macOs')
+      - if: startsWith(matrix.platform, 'macos')
         name: Install GNU-tar as 'tar'
         run: |
           brew install gnu-tar
@@ -133,8 +217,10 @@ jobs:
       - name: Build LLVM, Compiler-RT, Newlib, and Package
         uses: ./.github/actions/build-test-all
         with:
-          enable-assertions: false
+          # Compiler currently doesn't work without assertions enabled
+          enable-assertions: true
           enable-tests: false
+          artifact-name: package-${{matrix.platform}}
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:

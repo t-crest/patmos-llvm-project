@@ -401,7 +401,7 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
       default:
         {
           LLVM_DEBUG(dbgs() << "LowerFormalArguments Unhandled argument type: "
-               << RegVT.getSimpleVT().SimpleTy << "\n");
+               << ((uint8_t)RegVT.getSimpleVT().SimpleTy) << "\n");
           llvm_unreachable(0);
         }
       case MVT::i32:

@@ -642,7 +642,7 @@ static bool is_number(const std::string& s)
 }
 static void map_str_or_int(const char *key, StringValue value, IO &io) {
   if(is_number(value.Value)){
-    long int v = strtol(value.Value.c_str(), nullptr, 10);
+    auto v = UnsignedValue(strtol(value.Value.c_str(), nullptr, 10));
     io.mapOptional(key, v);
   } else {
     io.mapOptional(key, value,"");
