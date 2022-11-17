@@ -1,6 +1,14 @@
 
 # Save the target triple in a variable
-execute_process( COMMAND gcc -dumpmachine OUTPUT_VARIABLE TARGET_TRIPLE OUTPUT_STRIP_TRAILING_WHITESPACE )
+execute_process( COMMAND gcc -dumpmachine OUTPUT_VARIABLE DUMP_MACHINE OUTPUT_STRIP_TRAILING_WHITESPACE )
+message(STATUS "Machine Triple: ${DUMP_MACHINE}")
+if (${DUMP_MACHINE} MATCHES "x86_64-linux-gnu")
+	set( TARGET_TRIPLE "x86_64-linux-gnu")
+elseif(${DUMP_MACHINE} MATCHES "x86_64-apple-darwin.*")
+	set( TARGET_TRIPLE "x86_64-apple-darwin")
+else()
+	message(FATAL_ERROR "Unsupported platform for packaging")
+endif()
 set( PROJECT_NAME "patmos-llvm")
 set( PATMOS_TRIPLE "patmos-unknown-unknown-elf" )
 set( PACKAGE_TEMP_DIR "${PATMOS_TRIPLE}/package-temp")
@@ -27,16 +35,23 @@ set( NEWLIB_INCLUDES # List of dirs from which to get only the files
 	"newlib/libc/machine/patmos/sys" # -> include/sys
 	"newlib/libc/machine/patmos/include" # -> include
 )
+set( MOVED_BINARIES
+	"${PACKAGE_TEMP_DIR}/bin/patmos-llc" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-llvm-link" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-clang-12" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-llvm-config" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-llvm-objdump" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-opt" 
+	"${PACKAGE_TEMP_DIR}/bin/patmos-lld"
+)
 set( PACKAGE_ITEMS
 	# Package binaries
-	"bin/llc" "bin/llvm-link" "bin/clang-12" "bin/llvm-config" "bin/llvm-objdump" "bin/opt" "bin/lld"
-	
-	# Moved binaries 
-	"${PACKAGE_TEMP_DIR}/bin/clang" # Actually a symlink
-	"${PACKAGE_TEMP_DIR}/bin/ld.lld" # Actually a symlink
+	${MOVED_BINARIES}
+	"${PACKAGE_TEMP_DIR}/bin/patmos-clang" # Actually a symlink
+	"${PACKAGE_TEMP_DIR}/bin/patmos-ld.lld" # Actually a symlink
 
 	# Clang headers
-	"lib/clang" 
+	"${PACKAGE_TEMP_DIR}/lib/clang" 
 	
 	# Std headers
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include"
@@ -48,8 +63,25 @@ add_custom_target(PatmosPackageTempDirs
     "${CMAKE_COMMAND}" -E make_directory 
 	"${PACKAGE_TEMP_DIR}/bin" 
 	"${PACKAGE_TEMP_DIR}/lib" 
+	"${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include" 
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/lib"
 	"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include"
+)
+add_custom_command(
+	OUTPUT ${MOVED_BINARIES} "${PACKAGE_TEMP_DIR}/lib/clang" 
+	
+	COMMAND cp "bin/llc" "${PACKAGE_TEMP_DIR}/bin/patmos-llc"
+	COMMAND cp "bin/llvm-link" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-link"
+	COMMAND cp "bin/clang-12" "${PACKAGE_TEMP_DIR}/bin/patmos-clang-12"
+	COMMAND cp "bin/llvm-config" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-config"
+	COMMAND cp "bin/llvm-objdump" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-objdump"
+	COMMAND cp "bin/opt" "${PACKAGE_TEMP_DIR}/bin/patmos-opt"
+	COMMAND cp "bin/lld" "${PACKAGE_TEMP_DIR}/bin/patmos-lld"
+
+	DEPENDS 
+		PatmosPackageTempDirs 
+		"bin/llc" "bin/llvm-link" "bin/clang-12" "bin/llvm-config" 
+		"bin/llvm-objdump" "bin/opt" "bin/lld" 
 )
 add_custom_command(
 	OUTPUT ${PACKAGE_ITEMS_LIBS}
@@ -73,6 +105,14 @@ add_custom_command(
 		"../build-compiler-rt/lib/generic/libclang_rt.builtins-patmos.a"
 )
 add_custom_command(
+	OUTPUT "${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/stdint.h" 	# We need a target, but don't want to define all the files
+	
+	COMMAND rsync "lib/clang/12.0.1/include/*" "${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/"
+	
+	DEPENDS 
+		PatmosPackageTempDirs "lib/clang/12.0.1/include/stdint.h"
+)
+add_custom_command(
 	OUTPUT "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/newlib.h" # We need a target, but don't want to define all the files
 	COMMAND rsync "../patmos-newlib/newlib/libc/include/*" "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/"
 	COMMAND rsync "../patmos-newlib/newlib/libc/include/machine/*" "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/machine/"
@@ -84,10 +124,12 @@ add_custom_command(
 )
 
 ADD_CUSTOM_TARGET(symlink-clang-lld
-	COMMAND ${CMAKE_COMMAND} -E create_symlink patmos-clang-12 ${PACKAGE_TEMP_DIR}/bin/clang
-	COMMAND ${CMAKE_COMMAND} -E create_symlink patmos-lld ${PACKAGE_TEMP_DIR}/bin/ld.lld
+	COMMAND ${CMAKE_COMMAND} -E create_symlink patmos-clang-12 ${PACKAGE_TEMP_DIR}/bin/patmos-clang
+	COMMAND ${CMAKE_COMMAND} -E create_symlink patmos-lld ${PACKAGE_TEMP_DIR}/bin/patmos-ld.lld
 	DEPENDS clang PatmosPackageTempDirs		  
-	)		  
+	)	
+STRING(REGEX REPLACE "${PACKAGE_TEMP_DIR}/" ";"  PACKAGE_ITEMS_IN_TAR ${PACKAGE_ITEMS})
+STRING(REGEX REPLACE "${PACKAGE_TEMP_DIR}/" ";"  PACKAGE_INFO_FILE_IN_TAR ${PACKAGE_INFO_FILE})
 # Build release tarball containing binaries and metadata
 add_custom_command(
 	OUTPUT ${PACKAGE_TAR_GZ} 
@@ -95,12 +137,7 @@ add_custom_command(
 		${PACKAGE_TAR} ${PACKAGE_INFO_FILE} 
 
 	# Package binaries
-	COMMAND tar -cf ${PACKAGE_TAR} 
-		# Rename add "patmos-*" to all binary names
-		--transform 's,bin/,bin/patmos-,' 
-		# Remove temp dir from paths
-		--transform 's,^${PACKAGE_TEMP_DIR}/,,'
-		${PACKAGE_ITEMS}
+	COMMAND tar -cf ${PACKAGE_TAR} -C ${PACKAGE_TEMP_DIR}/ ${PACKAGE_ITEMS_IN_TAR}
 
 	# Build YAML info file
 	COMMAND ${CMAKE_COMMAND} -E echo "name: ${PROJECT_NAME}" > ${PACKAGE_INFO_FILE}
@@ -113,14 +150,15 @@ add_custom_command(
 	COMMAND tar -tf ${PACKAGE_TAR} | sed "s/^/  /" >> ${PACKAGE_INFO_FILE}
 	
 	# Add the info file to the package
-	COMMAND tar -rf ${PACKAGE_TAR} ${PACKAGE_INFO_FILE}
-		# Remove temp dir from paths
-		--transform 's,^${PACKAGE_TEMP_DIR}/,,'
+	COMMAND tar -rf ${PACKAGE_TAR} -C ${PACKAGE_TEMP_DIR}/ ${PACKAGE_INFO_FILE_IN_TAR}
 	
 	# Compress the tar
 	COMMAND gzip -9 < ${PACKAGE_TAR} > ${PACKAGE_TAR_GZ}
 	
-	DEPENDS ${PACKAGE_TARGETS} ${PACKAGE_ITEMS_LIBS} symlink-clang-lld "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/newlib.h"
+	DEPENDS 
+		${PACKAGE_TARGETS} ${PACKAGE_ITEMS_LIBS} ${MOVED_BINARIES} symlink-clang-lld 
+		"${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/stdint.h" 
+		"${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/newlib.h" 
 )
 # Rename release tarball target to something better.
 add_custom_target(PatmosPackage DEPENDS ${PACKAGE_TAR_GZ})
