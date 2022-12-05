@@ -21,6 +21,7 @@
 namespace llvm {
 class PatmosFrameLowering : public TargetFrameLowering {
 protected:
+  const PatmosTargetMachine &TM;
   const PatmosSubtarget &STC;
 
   /// getEffectiveStackCacheSize - Return the size of the stack cache that can
@@ -67,8 +68,8 @@ protected:
   /// \see PatmosMachineFunctionInfo
   void patchCallSites(MachineFunction &MF) const;
 public:
-  explicit PatmosFrameLowering(const PatmosSubtarget &sti, const DataLayout* DL)
-        : TargetFrameLowering(StackGrowsDown, DL->getStackAlignment(), 0), STC(sti) {
+  explicit PatmosFrameLowering(const PatmosTargetMachine &TM, const PatmosSubtarget &sti, const DataLayout* DL)
+        : TargetFrameLowering(StackGrowsDown, DL->getStackAlignment(), 0), TM(TM), STC(sti) {
     }
 
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
@@ -80,11 +81,8 @@ public:
 
   bool hasFP(const MachineFunction &MF) const override;
 
-  /// processFunctionBeforeCalleeSavedScan - This method is called immediately
-  /// before PrologEpilogInserter scans the physical registers used to determine
-  /// what callee saved registers should be spilled. This method is optional.
-  virtual void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
-                                                 RegScavenger *RS = NULL) const;
+  void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
+                            RegScavenger *RS) const override;
   bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MI,
                                  ArrayRef<CalleeSavedInfo> CSI,

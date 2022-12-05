@@ -46,10 +46,16 @@ namespace llvm{
     /// Whether this instruction is a conditional branch out of the MBB
     bool conditional_branch;
 
+    /// Whether
+    bool may_second_slot;
+
+    /// Whether
+    bool is_long;
+
     MockInstr(std::set<Operand> reads, std::set<Operand> writes, unsigned latency, bool poisons,
-        bool memory_access, bool conditional_branch):
+        bool memory_access, bool conditional_branch, bool may_second_slot=true, bool is_long = false):
       reads(reads), writes(writes), poisons(poisons), memory_access(memory_access), latency(latency),
-      conditional_branch(conditional_branch)
+      conditional_branch(conditional_branch), may_second_slot(may_second_slot), is_long(is_long)
     {}
 
     bool is_read(Operand r) {
@@ -92,6 +98,25 @@ namespace llvm{
   bool conditional_branch(const MockInstr* instr) {
     return instr->conditional_branch;
   }
+
+  bool may_second_slot(void*, const MockInstr* instr) {
+    return instr->may_second_slot;
+  }
+
+  bool is_long(const MockInstr* instr) {
+    return instr->is_long;
+  }
+
+  llvm::Optional<std::tuple<
+      void*,
+      bool (*)(void*, const MockInstr *),
+      bool (*)(const MockInstr *)
+    >> disable_dual_issue = None;
+  llvm::Optional<std::tuple<
+      void*,
+      bool (*)(void*, const MockInstr *),
+      bool (*)(const MockInstr *)
+    >> enable_dual_issue = std::make_tuple((void*)nullptr, may_second_slot, is_long);
 
   class MockMBB {
   public:
@@ -136,10 +161,23 @@ TEST(ListSchedulerTest, UnrelatedInstructions){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+        pair(3, 3),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(1, 1),
@@ -158,13 +196,24 @@ TEST(ListSchedulerTest, PoisonAddsNop){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(3, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(6, 1),
       })
   );
 }
@@ -178,13 +227,24 @@ TEST(ListSchedulerTest, DelayAddsNop){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(2, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
       })
   );
 }
@@ -199,13 +259,25 @@ TEST(ListSchedulerTest, FillDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(2, 1),
+        pair(1, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
         pair(1, 2),
       })
   );
@@ -222,10 +294,22 @@ TEST(ListSchedulerTest, PreferLongDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
+      UnorderedElementsAreArray({
+        pair(2, 0),
+        pair(1, 1),
+        pair(0, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
       UnorderedElementsAreArray({
         pair(2, 0),
         pair(1, 1),
@@ -243,13 +327,13 @@ TEST(ListSchedulerTest, MaintainMemAccessOrder){
    * However, in this case it must stay as the third
    */
   block(mockMBB, arr({
-    MockInstr({Operand::R0},{Operand::R1},1,false,true,false),
-    MockInstr({Operand::R1},{Operand::R2},0,false,true,false),
-    MockInstr({Operand::R3},{Operand::R3},0,false,true,false),
+    MockInstr({Operand::R0},{Operand::R1},1,false,true,false,false,false),
+    MockInstr({Operand::R1},{Operand::R2},0,false,true,false,false,false),
+    MockInstr({Operand::R3},{Operand::R3},0,false,true,false,false,false),
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -257,6 +341,18 @@ TEST(ListSchedulerTest, MaintainMemAccessOrder){
         pair(0, 0),
         pair(2, 1),
         pair(3, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(6, 2),
       })
   );
 }
@@ -270,10 +366,21 @@ TEST(ListSchedulerTest, ConstantsCantPoison){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(1, 1),
@@ -290,10 +397,21 @@ TEST(ListSchedulerTest, ConstantsDontDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
       UnorderedElementsAreArray({
         pair(0, 0),
         pair(1, 1),
@@ -310,10 +428,21 @@ TEST(ListSchedulerTest, ConstantsDontMakeDependence){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
       UnorderedElementsAreArray({
         pair(1, 0),
         pair(0, 1),
@@ -325,13 +454,13 @@ TEST(ListSchedulerTest, WeakDepInDelay){
   /* Test that a weak dependency on a delayed instruction can be scheduled in the delay slot
    */
   block(mockMBB, arr({
-    MockInstr({Operand::R2},{Operand::R2},1,true,true,false),
+    MockInstr({Operand::R2},{Operand::R2},1,true,true,false,false,false),
     MockInstr({Operand::R2, Operand::R1},{Operand::R1},0,false,false,false),
-    MockInstr({Operand::R0},{Operand::R4},1,true,true,false),
+    MockInstr({Operand::R0},{Operand::R4},1,true,true,false,false,false),
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -339,6 +468,18 @@ TEST(ListSchedulerTest, WeakDepInDelay){
         pair(0, 0),
         pair(2, 1),
         pair(1, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(2, 2),
       })
   );
 }
@@ -349,18 +490,18 @@ TEST(ListSchedulerTest, Branch){
   block(mockMBB, arr({
     MockInstr({Operand::R0},{Operand::R1},0,false,false,false),
     MockInstr({Operand::R1},{Operand::R1},3,false,false,false),
-    MockInstr({Operand::R1},{},0,false,false,true),
+    MockInstr({Operand::R1},{},0,false,false,true, false, false), //branch
     MockInstr({Operand::R2},{Operand::R2},0,false,false,false),
     MockInstr({Operand::R3},{Operand::R3},4,false,false,false),
     MockInstr({Operand::R4},{Operand::R4},0,false,false,false),
-    MockInstr({Operand::R3},{},0,false,false,true),
+    MockInstr({Operand::R3},{},0,false,false,true,false,false), //branch
     MockInstr({Operand::R2},{Operand::R2},0,false,false,false),
     MockInstr({Operand::R3},{Operand::R3},0,false,false,false),
     MockInstr({Operand::R4},{Operand::R4},0,false,false,false)
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -377,6 +518,25 @@ TEST(ListSchedulerTest, Branch){
         pair(14, 9),
       })
   );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(10, 2),
+        pair(13, 3),
+        pair(12, 4),
+        pair(14, 5),
+        pair(22, 6),
+        pair(24, 7),
+        pair(25, 8),
+        pair(26, 9),
+      })
+  );
 }
 
 TEST(ListSchedulerTest, WritesToSameArentReordered){
@@ -390,7 +550,7 @@ TEST(ListSchedulerTest, WritesToSameArentReordered){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -398,6 +558,220 @@ TEST(ListSchedulerTest, WritesToSameArentReordered){
         pair(0, 0),
         pair(2, 1),
         pair(3, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(6, 2),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, NoLongInSecondIssue){
+  /* Tests that a long instruction cannot be in the second issue slot and that
+   * another instruction can't be scheduled in its second issue slot
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R0},2,false,false,false),
+    MockInstr({Operand::R2},{Operand::R2},0,false,false,false,false,true),
+    MockInstr({Operand::R1},{Operand::R1},0,false,false,false),
+    MockInstr({Operand::R3},{Operand::R3},0,false,false,false),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(2, 0),
+        pair(0, 1),
+        pair(3, 2),
+        pair(4, 3),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, IneligibleSecondSlot){
+  /* Tests that a short instruction that is ineligible for the second issue slot
+   * gets scheduled in the first.
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R0},0,false,false,false),
+    MockInstr({Operand::R1},{Operand::R1},0,false,false,false,false),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, FinalBranch){
+  /* Tests that when branch doesn't directly depend of previous instructions,
+   * and other factors make it prioritised if it wasn't a branch, it would still
+   * not be moved above instruction the was above it to begin with.
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R0},0,false,false,false),
+    MockInstr({Operand::R1},{Operand::R1},0,false,false,false),
+    MockInstr({Operand::R2},{Operand::R2},0,false,false,false),
+    // We give the branch a high latency so that it would have been prioritised
+    // if it wasn't for the fact that it is a branch too.
+    MockInstr({Operand::R3},{Operand::R3},4,false,false,true),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+        pair(3, 3),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+        pair(3, 3),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
+  /* Tests that when a write is preceded by multiple reads, the write cannot be
+   * move above any of the reads
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R3},{Operand::R0},0,false,false,false),
+    MockInstr({Operand::R3},{Operand::R0},0,false,false,false),
+    MockInstr({Operand::R3},{Operand::R0},0,false,false,false),
+    // We give the last read a latency of 1 so that it is move above the other reads
+    // If the schedule only tracks 1 read (the last), it would then move the write
+    // above the other reads (which it shouldn't).
+    MockInstr({Operand::R3},{Operand::R0},1,false,false,false),
+    // We give the write high latency to give check that it doesn't move above
+    // the reads anyway
+    MockInstr({Operand::R4},{Operand::R3},4,false,false,false),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(0, 3),
+        pair(4, 4),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(0, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, CanFlipBundle){
+  /* Tests that if a bundle's first slot is occupied and the next
+   * ready instruction has to be in the first slot (and is short) then it second
+   * instruction gets the first slot and the other gets the second
+   */
+  block(mockMBB, arr({
+    // Use high latency to ensure this get scheduled first
+    MockInstr({Operand::R1},{Operand::R2},1,false,false,false),
+    // Must be in first slot but is otherwise not priority
+    MockInstr({Operand::R3},{Operand::R4},0,false,false,false,false,false),
+  }));
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, CanFlipBundleAntiDep){
+  /* Tests that if a write to an operand comes after a read, they can be scheduled
+   * together even when the write instruction must be in  the first slot.
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R1},{Operand::R2},0,false,false,false),
+    // Must be in first slot and writes to the read
+    MockInstr({Operand::R3},{Operand::R1},0,false,false,false,false,false),
+  }));
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, BundleWriteWithRead){
+  /* Tests that a write of an operand can be bundled with a preceding read
+   * (since the write writes back to the register after the register is read)
+   */
+  block(mockMBB, arr({
+    // Use high latency to ensure this get scheduled first
+    MockInstr({Operand::R3},{Operand::R2},0,false,false,false),
+    // Must be in first slot but is otherwise not priority
+    MockInstr({Operand::R3},{Operand::R3},0,false,false,false),
+  }));
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
       })
   );
 }

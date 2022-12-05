@@ -40,7 +40,7 @@ bool PatmosSPBundling::runOnMachineFunction(MachineFunction &MF) {
   if ( PSPI->isConverting(MF) && STC.enableBundling(TM.getOptLevel())
   ) {
     SPBlocks += MF.size();
-	doBundlingFunction(PSPI->getRootScope());
+//	doBundlingFunction(PSPI->getRootScope());
   }
   return true;
 }

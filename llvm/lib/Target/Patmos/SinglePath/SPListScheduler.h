@@ -23,6 +23,12 @@ public:
   /// 0 means the instruction's result is ready next cycles
   unsigned latency;
 
+  /// Whether the instruction may be scheduled in the second issue slot.
+  bool may_second_slot;
+
+  /// Whether the instruction takes up both issue slots
+  bool is_long;
+
   /// Predecessors in the graph.
   /// The bool is the strength of the dependency. If true, the dependency is strong, meaning
   /// this node can't be scheduled until after the predecessor finishes executing.
@@ -33,8 +39,12 @@ public:
   /// Successors in the graph
   std::set<std::shared_ptr<Node>> succs;
 
-  Node(unsigned idx, unsigned latency, std::map<std::shared_ptr<Node>, bool> preds, std::set<std::shared_ptr<Node>> succs)
-    : idx(idx), latency(latency), preds(preds), succs(succs) {}
+  Node(unsigned idx, unsigned latency, bool may_second_slot, bool is_long,
+      std::map<std::shared_ptr<Node>, bool> preds,
+      std::set<std::shared_ptr<Node>> succs
+  )
+    : idx(idx), latency(latency), may_second_slot(may_second_slot), is_long(is_long),
+      preds(preds), succs(succs) {}
 
   static void dump_graph(std::set<std::shared_ptr<Node>> roots, raw_ostream& os){
     os << "Instruction Dependence Graph:\n";
@@ -81,7 +91,8 @@ public:
 template<
   typename Instruction,
   typename InstrIter,
-  typename Operand
+  typename Operand,
+  typename MAY_SECOND_SLOT_EXTRA
 >
 std::set<std::shared_ptr<Node>> dependence_graph(
     InstrIter instr_begin, InstrIter instr_end,
@@ -91,7 +102,12 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     bool (*memory_access)(const Instruction *),
     unsigned (*latency)(const Instruction *),
     bool (*is_constant)(Operand),
-    bool (*conditional_branch)(const Instruction *)
+    bool (*conditional_branch)(const Instruction *),
+    Optional<std::tuple<
+        MAY_SECOND_SLOT_EXTRA,
+        bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
+        bool (*)(const Instruction *)
+      >> enable_dual_issue
 ) {
   auto instr_count = std::distance(instr_begin, instr_end);
   assert(instr_count >= 1 && "Cannot create DFG for empty block");
@@ -100,8 +116,8 @@ std::set<std::shared_ptr<Node>> dependence_graph(
   std::set<std::shared_ptr<Node>> roots;
   // Tracks what nodes last wrote each operand
   std::map<Operand, std::shared_ptr<Node>> last_writes;
-  // Tracks what nodes last read each operands
-  std::map<Operand, std::shared_ptr<Node>> last_reads;
+  // Tracks what nodes have read from an operand since it was last written to.
+  std::map<Operand, std::set<std::shared_ptr<Node>>> last_reads;
   // Tracks which node was the last to access memory
   Optional<std::shared_ptr<Node>> last_mem_acc = None;
   // Tracks nodes seen since the last conditional branch
@@ -113,24 +129,33 @@ std::set<std::shared_ptr<Node>> dependence_graph(
   // the given node
   auto update_read_writes = [&](std::shared_ptr<Node> node){
     auto *instr = &(*std::next(instr_begin,node->idx));
+    for(auto r: reads(instr)) {
+      last_reads[r].insert(node);
+    }
     for(auto r: writes(instr)) {
       if(!is_constant(r)){
         last_writes[r] = node;
+        last_reads.erase(r);
       }
-    }
-    for(auto r: reads(instr)) {
-      last_reads[r] = node;
     }
   };
 
   for(unsigned i = 0; i != instr_count; i++) {
     auto *instr = &(*std::next(instr_begin, i));
-    std::shared_ptr<Node> node(new Node(i, latency(instr), {},{}));
+    auto is_long = false;
+    auto may_second_slot = false;
+    if(enable_dual_issue) {
+      auto may_second_slot_extra = std::get<0>(*enable_dual_issue);
+      may_second_slot = std::get<1>(*enable_dual_issue)(may_second_slot_extra, instr);
+      is_long = std::get<2>(*enable_dual_issue)(instr);
+    }
+    assert(is_long? !may_second_slot: true);
+    std::shared_ptr<Node> node(new Node(i, latency(instr), may_second_slot, is_long, {},{}));
 
     // Control dependency
     // Must not reorder past conditional branches
     if(last_branch) {
-      node->preds[*last_branch] |= false;
+      node->preds[*last_branch] |= true;
     }
 
     // Memory access dependency
@@ -152,14 +177,16 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     // Anti-dependency (write must follow last read)
     for(auto write_op : writes(instr)) {
       if(last_reads.count(write_op)) {
-        node->preds[last_reads[write_op]] |= false;
+        for(auto read_node: last_reads[write_op]) {
+          node->preds[read_node] |= false;
+        }
       }
     }
 
     // Output dependency (write must follow last write)
     for(auto write_op : writes(instr)) {
       if(last_writes.count(write_op)) {
-        node->preds[last_writes[write_op]] |= false;
+        node->preds[last_writes[write_op]] |= true;
       }
     }
 
@@ -170,6 +197,8 @@ std::set<std::shared_ptr<Node>> dependence_graph(
       }
       last_non_branch.clear();
       last_branch = node;
+    } else {
+      last_non_branch.insert(node);
     }
 
     // Assign node as successor of all predecessors
@@ -187,7 +216,10 @@ std::set<std::shared_ptr<Node>> dependence_graph(
   return roots;
 }
 
-/// Returns the next node in the ready set that can be scheduled
+/// Returns the next node in the ready set that can be scheduled.
+///
+/// If enable_dual_issue is given, returns the next ready node that may
+/// scheduled in the second issue slot
 template<
   typename Instruction,
   typename InstrIter,
@@ -198,9 +230,29 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     std::set<std::shared_ptr<Node>> &ready,
     std::map<std::shared_ptr<Node>, std::pair<unsigned, std::set<Operand>>> executing,
     std::set<Operand> (*reads)(const Instruction *),
-    std::set<Operand> (*writes)(const Instruction *)
+    std::set<Operand> (*writes)(const Instruction *),
+    bool enable_second_slot,
+    bool requesting_second_slot,
+    bool can_be_long
 ) {
-  // Get all ready nodes that don't access poisoned operands
+  LLVM_DEBUG(
+    dbgs() << "\nReady set (indices): ";
+    for(auto r: ready) {
+      dbgs() << r->idx << ", ";
+    }
+    dbgs() << "\n";
+    dbgs() << "Executing set (Index, Cycles, Poison Operands): ";
+    for(auto entry: executing) {
+      dbgs() << "("<< entry.first->idx << ", " << entry.second.first << ", [";
+      for(auto op: entry.second.second) {
+        dbgs() << op << ", ";
+      }
+      dbgs() << "]), ";
+    }
+    dbgs() << "\n";
+  );
+  // Get all ready nodes that don't access poisoned operands and can be
+  // scheduled in the second issue slot (if needed)
   std::set<std::shared_ptr<Node>> unpoisoned;
   for(auto node: ready){
     auto *instr = &(*std::next(instr_begin, node->idx));
@@ -211,16 +263,20 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     accesses.insert(reads_set.begin(), reads_set.end());
     accesses.insert(writes_set.begin(), writes_set.end());
 
-    if(std::all_of(accesses.begin(), accesses.end(), [&](auto op){
-      for(auto entry: executing)  {
-        if(entry.second.second.count(op)){
-          // Operand is poisoned
-          return false;
+    if( (requesting_second_slot? node->may_second_slot: true) &&
+      std::all_of(accesses.begin(), accesses.end(), [&](auto op){
+        for(auto entry: executing)  {
+          if(entry.second.second.count(op)){
+            // Operand is poisoned
+            return false;
+          }
         }
-      }
-      return true;
-    })){
+        return true;
+      })
+    ){
       unpoisoned.insert(node);
+      // Make sure long instructions aren't scheduled in the second slot
+      assert(requesting_second_slot? !node->is_long: true);
     }
   }
 
@@ -235,14 +291,19 @@ Optional<std::shared_ptr<Node>> get_next_ready(
   Optional<std::shared_ptr<Node>> result = None;
   if(unpoisoned.size() != 0) {
     // Choice priority:
-    // 1. Delay length (long delay before short)
-    // 2. Index (lowest index first)
+    // * Ineligibility for second slot (ineligible instructions first, only if using dual-issue)
+    // * Instruction length (long instruction before short, if first slot and only if using dual-issue)
+    // * Delay length (long delay before short)
+    // * Index (lowest index first)
     auto choice = unpoisoned.begin();
     for(auto unpoisoned_iter = std::next(unpoisoned.begin()); unpoisoned_iter != unpoisoned.end(); unpoisoned_iter++) {
       if(
+        (enable_second_slot?!(*unpoisoned_iter)->may_second_slot && (*choice)->may_second_slot:false) ||
         (*unpoisoned_iter)->latency > (*choice)->latency ||
-        ((*unpoisoned_iter)->latency == (*choice)->latency &&
-         (*unpoisoned_iter)->idx < (*choice)->idx)
+        ((*unpoisoned_iter)->latency == (*choice)->latency && (
+           (!requesting_second_slot && (*unpoisoned_iter)->is_long) ||
+           (*unpoisoned_iter)->idx < (*choice)->idx
+        ))
       ) {
         choice = unpoisoned_iter;
       }
@@ -271,6 +332,14 @@ Optional<std::shared_ptr<Node>> get_next_ready(
 /// should be the second instruction in the old schedule. Likewise, the second
 /// instruction in the new schedule should be the first in the original one.
 ///
+/// If dual-issue is requested, the new schedule indices are divided in 2:
+/// Odd indices for the first instructions in each bundle, and even indices
+/// for the second instruction. If a bundle doesn't have a second instruction,
+/// its even index will not be occupied.
+/// E.g. [(0,1), (1,0)] means the first instruction in the first bundle in the new
+/// schedule should be the second instruction in the old schedule. The second instruction
+/// in the first bundle should then be the first instruction in the old schedule.
+///
 /// If a target schedule index does not have a mapping, it means that index must be given a Nop.
 ///
 /// Arguments:
@@ -290,14 +359,20 @@ Optional<std::shared_ptr<Node>> get_next_ready(
 ///               E.g. Patmos' r0 and p0
 /// * conditional_branch: Whether this instruction is a conditional branch our of the block.
 ///                 E.g. Patmos::BR. Call instructions don't count.
+/// * enable_dual_issue: If given, enables dual issue code and contains
+///                 1) a function that should return true is the given instruction may be
+///                    scheduled in the second issue slot. Otherwise false.
+///                 2) a function that should return true if the instruction takes
+///                    up both issue slots. Otherwise false.
 ///
 /// This scheduler can handle conditional branch instructions in the middle of the instruction
-/// list however does not attempt to occupy their delay slots not add Nops.
+/// list however does not attempt to occupy their delay slots nor add Nops.
 /// Therefore, post-processing is needed to ensure delayed branches/calls get at least Nops after them.
 template<
   typename Instruction,
   typename InstrIter,
-  typename Operand
+  typename Operand,
+  typename MAY_SECOND_SLOT_EXTRA
 >
 std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
@@ -307,7 +382,12 @@ std::map<unsigned, unsigned> list_schedule(
   bool (*memory_access)(const Instruction *),
   unsigned (*latency)(const Instruction *),
   bool (*is_constant)(Operand),
-  bool (*conditional_branch)(const Instruction *)
+  bool (*conditional_branch)(const Instruction *),
+  Optional<std::tuple<
+    MAY_SECOND_SLOT_EXTRA,
+    bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
+    bool (*)(const Instruction *)
+  >> enable_dual_issue
 ) {
   std::map<unsigned, unsigned> result;
   if(std::distance(instr_begin, instr_end) == 0) {
@@ -315,7 +395,7 @@ std::map<unsigned, unsigned> list_schedule(
   }
 
   auto dependence_roots = dependence_graph(instr_begin, instr_end,
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
   LLVM_DEBUG(Node::dump_graph(dependence_roots, dbgs()));
 
   // Instructions that have already been scheduled and finished executing
@@ -325,13 +405,7 @@ std::map<unsigned, unsigned> list_schedule(
   // The value is how many more cycles the execution lasts.
   // The set is the operands that are poisoned while the execution lasts
   std::map<std::shared_ptr<Node>, std::pair<unsigned, std::set<Operand>>> executing;
-  auto update_executing = [&](
-      std::set<std::pair<std::shared_ptr<Node>,
-        std::pair<unsigned, std::set<Operand>>>> new_execs
-  ){
-    for(auto pair: new_execs) {
-      executing[pair.first] = pair.second;
-    }
+  auto update_executing = [&](){
 
     // Any executing that only have 0 left need to be moved to scheduled
     for(auto entry: executing){
@@ -412,29 +486,8 @@ std::map<unsigned, unsigned> list_schedule(
 
   std::set<std::shared_ptr<Node>> ready = ready_nodes();
   for(unsigned idx = 0; (ready.size() + executing.size()) > 0; idx++, ready = ready_nodes()) {
-    LLVM_DEBUG(
-      dbgs() << "\nReady set (indices): ";
-      for(auto r: ready) {
-        dbgs() << r->idx << ", ";
-      }
-      dbgs() << "\n";
-      dbgs() << "Executing set (Index, Cycles, Poison Operands): ";
-      for(auto entry: executing) {
-        dbgs() << "("<< entry.first->idx << ", " << entry.second.first << ", [";
-        for(auto op: entry.second.second) {
-          dbgs() << op << ", ";
-        }
-        dbgs() << "]), ";
-      }
-      dbgs() << "\n";
-    );
-    auto next = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes);
-    std::set<std::pair<std::shared_ptr<Node>,
-            std::pair<unsigned, std::set<Operand>>>> new_execs;
-    if(next) {
-      auto next_node = *next;
+    auto schedule_instruction = [&](auto next_node, unsigned idx){
       auto *next_instr = &(*std::next(instr_begin, next_node->idx));
-      auto next_instr_latency = latency(next_instr);
 
       // Schedule instruction
       assert(!result.count(idx) && "Schedule position already assigned");
@@ -453,9 +506,34 @@ std::map<unsigned, unsigned> list_schedule(
           }
         }
       }
-      new_execs.insert(std::make_pair(next_node, std::make_pair(next_instr_latency, new_poisons)));
+      executing[next_node] = std::make_pair(next_node->latency, new_poisons);
+    };
+
+    auto next = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
+        enable_dual_issue.hasValue(), false, true);
+    if(next) {
+      schedule_instruction(*next, enable_dual_issue? idx*2: idx);
+
+      if(enable_dual_issue && !(*next)->is_long) {
+        ready = ready_nodes();
+        auto next2 = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
+            enable_dual_issue.hasValue(), !(*next)->may_second_slot, false);
+        if(next2) {
+          assert(!(!(*next)->may_second_slot && !(*next2)->may_second_slot)
+              && "Only one instruction in a bundle can occupy the first slot");
+          if(!(*next2)->may_second_slot) {
+            // Move the first instruction to the second slot
+            result[(idx*2)+1] = (*next)->idx;
+            result.erase(idx*2);
+            // Put the second in the first
+            schedule_instruction(*next2, idx*2);
+          } else {
+            schedule_instruction(*next2, (idx*2)+1);
+          }
+        }
+      }
     }
-    update_executing(new_execs);
+    update_executing();
   }
 
   return result;

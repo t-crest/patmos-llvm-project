@@ -97,7 +97,7 @@ PatmosSubtarget::PatmosSubtarget(const Triple &TT,
                                  StringRef CPU,
                                  StringRef FS, const PatmosTargetMachine &TM, CodeGenOpt::Level L) :
   PatmosGenSubtargetInfo(TT, CPU, CPU, FS), TSInfo(),InstrInfo(new PatmosInstrInfo(TM)),
-  FrameLowering(new PatmosFrameLowering(*this, TM.getDataLayout())),
+  FrameLowering(new PatmosFrameLowering(TM,*this, TM.getDataLayout())),
   TLInfo(new PatmosTargetLowering(TM, *this)), OptLevel(L)
 {
   auto CPUName = CPU;
