@@ -76,7 +76,8 @@ public:
         for(auto succ: next->succs) {
           os << succ->idx << ", ";
         }
-        os << "]\n";
+        os << "] Latency[" << next->latency << "] MaySecondSlot["
+            << next->may_second_slot << "] IsLong[" << next->is_long << "]\n";
         to_print.insert(next->succs.begin(), next->succs.end());
       }
 
@@ -235,6 +236,8 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     bool requesting_second_slot,
     bool can_be_long
 ) {
+  assert(requesting_second_slot? !can_be_long:true
+      && "Cannot request long instruction in second slot");
   LLVM_DEBUG(
     dbgs() << "\nReady set (indices): ";
     for(auto r: ready) {
@@ -264,6 +267,7 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     accesses.insert(writes_set.begin(), writes_set.end());
 
     if( (requesting_second_slot? node->may_second_slot: true) &&
+        (can_be_long? true:!node->is_long) &&
       std::all_of(accesses.begin(), accesses.end(), [&](auto op){
         for(auto entry: executing)  {
           if(entry.second.second.count(op)){
@@ -277,6 +281,8 @@ Optional<std::shared_ptr<Node>> get_next_ready(
       unpoisoned.insert(node);
       // Make sure long instructions aren't scheduled in the second slot
       assert(requesting_second_slot? !node->is_long: true);
+      // Make sure long instructions aren't scheduled when disallowed
+      assert((!can_be_long)? !node->is_long: true);
     }
   }
 
@@ -519,6 +525,7 @@ std::map<unsigned, unsigned> list_schedule(
         auto next2 = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
             enable_dual_issue.hasValue(), !(*next)->may_second_slot, false);
         if(next2) {
+          assert(!(*next2)->is_long);
           assert(!(!(*next)->may_second_slot && !(*next2)->may_second_slot)
               && "Only one instruction in a bundle can occupy the first slot");
           if(!(*next2)->may_second_slot) {

@@ -244,7 +244,12 @@ compile_and_test_matrix("", "", [
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=hybrid", "-D lru2"),
     ],
     # Optimization levels
-    ["", "-O1", "-O2", "-O2 -mpatmos-disable-pseudo-roots"]
+    [
+        "", "-O1", "-O2", "-O2 -mpatmos-disable-pseudo-roots", 
+        # We try low subfuction size to ensure the plitter works too 
+        # (without needing to make tests with big functions)
+        "-O2 --mpatmos-max-subfunction-size=64"
+    ]
 ])
 
 # Success

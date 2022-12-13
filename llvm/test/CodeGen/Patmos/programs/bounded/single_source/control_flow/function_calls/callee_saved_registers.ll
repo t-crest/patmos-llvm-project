@@ -89,7 +89,7 @@ entry:
   ; We set all the callee-saved registers before calling the other function.
   ; We then use them after the call, to ensure their value hasn't changed.
   ; we don't check r29-r31 as they have special ABI uses
-  %0 = call i32 asm sideeffect "
+  call void asm sideeffect "
     sres 8
     mov $$r21 = $$r3
     mov $$r22 = $$r3
@@ -103,6 +103,11 @@ entry:
     sws [0] = $$r9
 	mfs $$r9 = $$sro
     sws [1] = $$r9
+	", "~{r9},~{r10},~{r20},~{r21},~{r22},~{r23},~{r24},~{r25},~{r26},~{r27},~{r28},~{srb},~{sro}"
+	()
+  ; We split the assembly into 2 blocks to that function splitter can split freely
+  ; without the assembly blocks being too big
+  %0 = call i32 asm sideeffect "
 	callnd $1
 	lws $$r9 = [1]
 	lws $$r10 = [0]

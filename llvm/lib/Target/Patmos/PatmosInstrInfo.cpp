@@ -711,14 +711,8 @@ unsigned int PatmosInstrInfo::getInstrSize(const MachineInstr *MI) const {
     return ((PatmosInstrAnalyzer*)PAP.OutStreamer.get())->getSize();
   }
   else if (MI->isBundle()) {
-    const MachineBasicBlock *MBB = MI->getParent();
-    auto I = MI;
-    auto E = MBB->instr_end();
-    unsigned Size = 0;
-    while ((++I != &*E) && I->isInsideBundle()) {
-      Size += getInstrSize(I);
-    }
-    return Size;
+    // Bundles can only be made up of 2 4-byte instructions
+    return 8;
   }
   else if (MI->isPseudo()) {
     return 0;

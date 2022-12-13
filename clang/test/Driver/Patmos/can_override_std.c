@@ -21,7 +21,7 @@ int main() {
 }
 
 // Ensure that the correct version of 'patmos_mock_libc_libm_shared_function' is used:
-// CHECK: [[#%x,FN_ADDR]] <patmos_mock_libc_libm_shared_function
-// CHECK-NEXT: li $r1 = 8469
-// CHECK-NEXT: ret
-
+// CHECK-label: [[#%x,FN_ADDR]] <patmos_mock_libc_libm_shared_function
+// CHECK: li $r1 = 8469
+// CHECK: ret
+// CHECK-label: <patmos_mock

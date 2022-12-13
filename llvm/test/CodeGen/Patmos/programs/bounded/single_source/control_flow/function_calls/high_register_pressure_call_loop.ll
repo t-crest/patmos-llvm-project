@@ -1,13 +1,10 @@
 ; RUN: EXEC_ARGS="0=0 1=1 2=2 3=3 4=4 5=5"; \
 ; RUN: %test_execution
-; XFAIL: *
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 ;
 ; Tests that calling a function that contains from a function that uses more than the available
 ; number of registers works.
-;
-; Known to fail when bundling singlepath code.
 ;
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 

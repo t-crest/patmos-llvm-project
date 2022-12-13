@@ -532,6 +532,13 @@ namespace llvm {
           header->JTIDs.insert(jtids.begin(), jtids.end());
         }
       }
+
+      LLVM_DEBUG(dbgs() << "Edges:\n");
+      for(auto pair: Edges) {
+        LLVM_DEBUG(dbgs() << pair.first->MBB->getNumber() << " -> " << pair.second->Dst->MBB->getNumber() << "\n");
+        assert(pair.first->MBB == pair.second->Src->MBB && "The source block doesn't match with the edge's source block");
+      }
+      LLVM_DEBUG(dbgs() << "\n");
     }
 
     /// mayFallThrough - Return true in case the block terminates with a 
@@ -850,6 +857,7 @@ namespace llvm {
                           dst) != headers.end())
             {
               BackEdges.insert(std::make_pair(j->first, j->second));
+              LLVM_DEBUG(dbgs() << "Back edge: '" << src->MBB->getNumber() << "' -> '" << dst->MBB->getNumber() << "'\n");
               Edges.erase(j);
               j = Edges.begin();
               changed = true;
@@ -1507,8 +1515,10 @@ namespace llvm {
         MaxFunctionBlocks = order.size();
       TotalRegions += numRegions;
 
+      LLVM_DEBUG(dbgs() << "Function before renumbering:\n"; MF->dump());
       // renumber blocks according to the new order
       MF->RenumberBlocks();
+      LLVM_DEBUG(dbgs() << "Function after renumbering:\n"; MF->dump());
     }
 
     /// rewriteBranch - if the branch instruction jumps to the target, rewrite 
@@ -1531,7 +1541,14 @@ namespace llvm {
         }
       }
       else {
+        LLVM_DEBUG(dbgs() << "Direct branch in " << BR->getParent()->getFullName()
+                             << "[" << BR->getParent()->getNumber() << "]"
+                             << " branching to " << BR->getOperand(2).getMBB()->getFullName()
+                             << "[" << BR->getOperand(2).getMBB()->getNumber() << "]\n");
+        LLVM_DEBUG(dbgs() << "Branch: "; BR->dump(););
+        LLVM_DEBUG(dbgs() << "Target: " << target->getFullName()<< "\n");
         rewrite = BR->getOperand(2).getMBB() == target;
+        LLVM_DEBUG(dbgs() << "Rewrite?: " << rewrite << "\n");
       }
 
       if (rewrite) {
@@ -1599,6 +1616,7 @@ namespace llvm {
       // skip artificial loop header.
       if (!sbb)
          return;
+      LLVM_DEBUG(dbgs() << "Rewrite edge '" << sbb->getNumber() << "' -> '" << dbb->getNumber() << "'\n");
 
       // destination is an artificial loop header, check all edges that lead 
       // to the real headers of the SCC
@@ -1666,6 +1684,7 @@ namespace llvm {
       // also check back edges
       for(aedges::iterator i(BackEdges.begin()), ie(BackEdges.end()); i != ie;
           i++) {
+        LLVM_DEBUG(dbgs() << "Rewrite back edge: " << i->second->Src->MBB->getNumber() << " -> "<< i->second->Dst->MBB->getNumber()<< "\n";);
         rewriteEdge(i->second->Src, i->second->Dst);
       }
     }
@@ -1892,6 +1911,7 @@ namespace llvm {
                                    MachineDominatorTree &MDT,
                                    MachinePostDominatorTree &MPDT)
     {
+      LLVM_DEBUG(dbgs() << "Splitting block '" << MBB->getNumber() << "' with max size '" << MaxSize << "'\n");
       unsigned int branchFixup = getMaxBlockMargin(PTM, MBB->getAlignment(), true, false, 1);
 
       // make a new block
@@ -1964,13 +1984,29 @@ namespace llvm {
           total_size += curr_size;
 
           LLVM_DEBUG(dbgs() << "Splitting basic block at " << total_size << ": "
-                << MBB->getFullName());
+                << MBB->getNumber() << "\n");
 
           // the current instruction does not fit -- split the block.
           MachineBasicBlock *newBB = splitBlockAtStart(MBB);
 
+          LLVM_DEBUG(dbgs() << "New block:" << newBB->getNumber() << "\n");
+
           // copy instructions over from the original block.
           newBB->splice(newBB->instr_begin(), MBB, MBB->instr_begin(), i);
+
+          // If any branch instruction were moved, update edges
+          for(auto iter = newBB->instr_begin(); iter != newBB->instr_end(); iter++){
+            if(iter->isBranch()) {
+              auto* target = iter->getOperand(2).getMBB();
+              newBB->addSuccessorWithoutProb(target);
+
+              if(std::find_if(MBB->instr_begin(), MBB->instr_end(), [&](auto& i){
+                return i.isBranch() && (i.getOperand(2).getMBB() == target);
+              }) == MBB->instr_end()){
+                MBB->removeSuccessor(target);
+              }
+            }
+          }
 
           // update dominator and post-dominator trees for the new block
           MachineDomTreeNode *TN = MDT.getNode(MBB)->getIDom();
