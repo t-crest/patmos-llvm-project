@@ -70,18 +70,19 @@ add_custom_target(PatmosPackageTempDirs
 add_custom_command(
 	OUTPUT ${MOVED_BINARIES} "${PACKAGE_TEMP_DIR}/lib/clang" 
 	
-	COMMAND cp "bin/llc" "${PACKAGE_TEMP_DIR}/bin/patmos-llc"
-	COMMAND cp "bin/llvm-link" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-link"
-	COMMAND cp "bin/clang-12" "${PACKAGE_TEMP_DIR}/bin/patmos-clang-12"
-	COMMAND cp "bin/llvm-config" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-config"
-	COMMAND cp "bin/llvm-objdump" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-objdump"
-	COMMAND cp "bin/opt" "${PACKAGE_TEMP_DIR}/bin/patmos-opt"
-	COMMAND cp "bin/lld" "${PACKAGE_TEMP_DIR}/bin/patmos-lld"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/llc" "${PACKAGE_TEMP_DIR}/bin/patmos-llc"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/llvm-link" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-link"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/clang-12" "${PACKAGE_TEMP_DIR}/bin/patmos-clang-12"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/llvm-config" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-config"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/llvm-objdump" "${PACKAGE_TEMP_DIR}/bin/patmos-llvm-objdump"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/opt" "${PACKAGE_TEMP_DIR}/bin/patmos-opt"
+	COMMAND cp "${CMAKE_BINARY_DIR}/bin/lld" "${PACKAGE_TEMP_DIR}/bin/patmos-lld"
 
 	DEPENDS 
 		PatmosPackageTempDirs 
-		"bin/llc" "bin/llvm-link" "bin/clang-12" "bin/llvm-config" 
-		"bin/llvm-objdump" "bin/opt" "bin/lld" 
+		"${CMAKE_BINARY_DIR}/bin/llc" "${CMAKE_BINARY_DIR}/bin/llvm-link" "${CMAKE_BINARY_DIR}/bin/clang-12" 
+		"${CMAKE_BINARY_DIR}/bin/llvm-config" "${CMAKE_BINARY_DIR}/bin/llvm-objdump" "${CMAKE_BINARY_DIR}/bin/opt" 
+		"${CMAKE_BINARY_DIR}/bin/lld" 
 )
 add_custom_command(
 	OUTPUT ${PACKAGE_ITEMS_LIBS}
@@ -107,10 +108,10 @@ add_custom_command(
 add_custom_command(
 	OUTPUT "${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/stdint.h" 	# We need a target, but don't want to define all the files
 	
-	COMMAND rsync "lib/clang/12.0.1/include/*" "${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/"
+	COMMAND rsync "${CMAKE_BINARY_DIR}/lib/clang/12.0.1/include/*" "${PACKAGE_TEMP_DIR}/lib/clang/12.0.1/include/"
 	
 	DEPENDS 
-		PatmosPackageTempDirs "lib/clang/12.0.1/include/stdint.h"
+		PatmosPackageTempDirs "${CMAKE_BINARY_DIR}/lib/clang/12.0.1/include/stdint.h"
 )
 add_custom_command(
 	OUTPUT "${PACKAGE_TEMP_DIR}/${PATMOS_TRIPLE}/include/newlib.h" # We need a target, but don't want to define all the files
