@@ -1616,7 +1616,6 @@ namespace llvm {
       // skip artificial loop header.
       if (!sbb)
          return;
-      LLVM_DEBUG(dbgs() << "Rewrite edge '" << sbb->getNumber() << "' -> '" << dbb->getNumber() << "'\n");
 
       // destination is an artificial loop header, check all edges that lead 
       // to the real headers of the SCC
@@ -1627,6 +1626,8 @@ namespace llvm {
         }
       }
       else if (src->Region != dst->Region) {
+
+	    LLVM_DEBUG(dbgs() << "Rewrite edge '" << sbb->getNumber() << "' -> '" << dbb->getNumber() << "'\n");
         // the two blocks are not in the same region, rewrite the branch ...
 
         for(MachineBasicBlock::instr_iterator j(sbb->instr_begin()),

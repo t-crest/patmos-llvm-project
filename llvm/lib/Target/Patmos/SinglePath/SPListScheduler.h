@@ -171,7 +171,9 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     // True dependencies (read must follow last write)
     for(auto read_op : reads(instr)) {
       if(last_writes.count(read_op)) {
-        node->preds[last_writes[read_op]] |= true;
+    	// Calls don't actually read anything, so they have weak dependency
+    	// This doesn't work for indirect calls (which we don't have since we use single-path)
+        node->preds[last_writes[read_op]] |= instr->isCall()? false : true;
       }
     }
 
@@ -179,7 +181,11 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     for(auto write_op : writes(instr)) {
       if(last_reads.count(write_op)) {
         for(auto read_node: last_reads[write_op]) {
-          node->preds[read_node] |= false;
+          // Calls read in the called function, which runs after the call instruction
+          // executes. So can't let writes following the call be bundled with the call
+          // itself, as that would mean the writes execute before the function body.
+          node->preds[read_node] |=
+        		  std::next(instr_begin, read_node->idx)->isCall()? true : false;
         }
       }
     }
@@ -187,11 +193,14 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     // Output dependency (write must follow last write)
     for(auto write_op : writes(instr)) {
       if(last_writes.count(write_op)) {
-        node->preds[last_writes[write_op]] |= true;
+    	// Calls don't write immediately (their bodies do the writing)
+	    // meaning we just need to ensure the call doesn't happen before a preceding write
+        node->preds[last_writes[write_op]] |=
+        		std::next(instr_begin, node->idx)->isCall()? false : true;
       }
     }
 
-    // if branch, it depends on all previous nodes (until previous branch
+    // if branch, it depends on all previous nodes (until previous branch)
     if(conditional_branch(instr)) {
       for(auto prev_node: last_non_branch) {
         node->preds[prev_node] |= false;
@@ -272,7 +281,10 @@ Optional<std::shared_ptr<Node>> get_next_ready(
         for(auto entry: executing)  {
           if(entry.second.second.count(op)){
             // Operand is poisoned
-            return false;
+      		// For calls, Allow operands with 0 poison cycles left
+        	if(!instr->isCall() || entry.second.first != 0) {
+                return false;
+        	}
           }
         }
         return true;
@@ -477,7 +489,12 @@ std::map<unsigned, unsigned> list_schedule(
           return !scheduled.count(entry.first);
         } else {
           // Weak dependency, must be executing or finished
-          return !(executing.count(entry.first) || scheduled.count(entry.first));
+          // Except if this is a call, then executing may have only 0 cycles left
+          auto is_call = std::next(instr_begin, node->idx)->isCall();
+          return !(
+        	(executing.count(entry.first) && (!is_call || executing[entry.first].first==0)) ||
+			scheduled.count(entry.first)
+		  );
         }
 
       })){
@@ -541,6 +558,21 @@ std::map<unsigned, unsigned> list_schedule(
       }
     }
     update_executing();
+  }
+
+  // Various schedule validity checks
+
+  // Check long instruction aren't in second slot
+  // Check long instruction aren't bundled with another instruction
+  for(auto entry: result) {
+	  if(enable_dual_issue) {
+		  auto is_long = std::get<2>(*enable_dual_issue)(&*std::next(instr_begin, entry.second));
+		  if(entry.first%2 != 0) {
+			  assert(!is_long && "Long instruction in second issue slot");
+		  } else if(is_long) {
+			  assert(!result.count(entry.first+1) && "Long instruction is bundled with another instruction");
+		  }
+	  }
   }
 
   return result;

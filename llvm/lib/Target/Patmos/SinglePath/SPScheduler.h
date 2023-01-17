@@ -27,9 +27,7 @@ public:
 
   static char ID;
 
-  SPScheduler(const PatmosTargetMachine &tm):
-    MachineFunctionPass(ID), TM(tm)
-  {}
+  SPScheduler(const PatmosTargetMachine &tm);
 
   // Override MachineFunctionPass::runOnMachineFunction
   bool runOnMachineFunction(MachineFunction &MF) override;
