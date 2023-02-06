@@ -66,6 +66,20 @@
       }                                                                      \
     };
 
+#define YAML_IS_PTR_SEQUENCE_VECTOR_1(_type)                                   \
+    template<typename _member_type>                                                               \
+    struct SequenceTraits< std::vector<_type<_member_type>*> > {                           \
+      static size_t size(IO &io, std::vector<_type<_member_type>*> &seq) {                 \
+        return seq.size();                                                   \
+      }                                                                      \
+      static _type<_member_type>*& element(IO &io, std::vector<_type<_member_type>*> &seq, size_t index) \
+      {                                                                      \
+        if ( index >= seq.size() )                                           \
+          seq.resize(index+1);                                               \
+        return seq[index];                                                   \
+      }                                                                      \
+    };
+
 #define YAML_IS_SEQUENCE_VECTOR(_type)                                       \
     template<>                                                               \
     struct SequenceTraits< std::vector<_type> > {                            \
@@ -545,23 +559,23 @@ struct MappingTraits< ContextEntry* > {
 };
 YAML_IS_PTR_SEQUENCE_VECTOR(ContextEntry)
 
-
+template <typename NameT>
 struct Scope {
-  StringValue Function;
-  StringValue Loop;
+  NameT Function;
+  NameT Loop;
   std::vector<ContextEntry*> Context;
 
-  Scope(const StringValue& f) : Function(f) {}
+  Scope(const NameT& f) : Function(f) {}
   ~Scope() {
     DELETE_PTR_VEC(Context);
   }
 
-  Scope(const Scope& Src)
+  Scope(const Scope<NameT>& Src)
   : Function(Src.Function), Loop(Src.Loop)
   {
     COPY_PTR_VEC(Context, Src.Context, ContextEntry);
   }
-  Scope& operator=(Scope& Src) {
+  Scope<NameT>& operator=(Scope<NameT>& Src) {
     if (this == &Src) return *this;
     Function = Src.Function;
     Loop     = Src.Loop;
@@ -570,12 +584,12 @@ struct Scope {
     return *this;
   }
 };
-template <>
-struct MappingTraits< Scope* > {
-  static void mapping(IO &io, Scope *&S) {
-    if (!S) S = new Scope("");
+template <typename NameT>
+struct MappingTraits< Scope<NameT>* > {
+  static void mapping(IO &io, Scope<NameT> *&S) {
+    if (!S)  report_fatal_error("Cant't create Scope");
     io.mapRequired("function", S->Function);
-    io.mapOptional("loop",     S->Loop,    "");
+    io.mapOptional("loop",     S->Loop);
     io.mapOptional("context",  S->Context, std::vector<ContextEntry*>());
   }
 };
@@ -771,11 +785,12 @@ struct MappingTraits< Term > {
 
 YAML_IS_SEQUENCE_VECTOR(Term)
 
+template <typename NameT>
 struct FlowFact {
   StringValue      Origin;
   ReprLevel Level;
   StringValue      Classification;
-  Scope    *ScopeRef;
+  Scope<NameT>    *ScopeRef;
   std::vector<Term> TermsLHS;
   CmpOp     Comparison;
   UnsignedValue      RHS;
@@ -790,21 +805,21 @@ struct FlowFact {
     TermsLHS.push_back(Term(PP, Factor));
   }
 
-  void setLoopScope(const StringValue& Function, const StringValue& Loop) {
+  void setLoopScope(const NameT& Function, const NameT& Loop) {
     if (ScopeRef) delete ScopeRef;
-    ScopeRef = new Scope(Function);
+    ScopeRef = new Scope<NameT>(Function);
     ScopeRef->Loop = Loop;
   }
 
 private:
-  FlowFact(const FlowFact&);            // Disable copy constructor
-  FlowFact* operator=(const FlowFact&); // Disable assignment
+  FlowFact(const FlowFact<NameT>&);            // Disable copy constructor
+  FlowFact<NameT>* operator=(const FlowFact<NameT>&); // Disable assignment
 
 };
-template <>
-struct MappingTraits< FlowFact* > {
-  static void mapping(IO &io, FlowFact *&FF) {
-    if (!FF) FF = new FlowFact(level_bitcode);
+template <typename NameT>
+struct MappingTraits< FlowFact<NameT>* > {
+  static void mapping(IO &io, FlowFact<NameT> *&FF) {
+    if (!FF)  report_fatal_error("Cant't create FlowFact");
     io.mapRequired("scope",  FF->ScopeRef);
     io.mapRequired("lhs",    FF->TermsLHS);
     io.mapRequired("op",     FF->Comparison);
@@ -815,7 +830,7 @@ struct MappingTraits< FlowFact* > {
   }
 };
 
-YAML_IS_PTR_SEQUENCE_VECTOR(FlowFact)
+YAML_IS_PTR_SEQUENCE_VECTOR_1(FlowFact)
 
 // Timing
 //////////////////////////////////////////////////////////////////////////////
@@ -869,7 +884,7 @@ YAML_IS_PTR_SEQUENCE_VECTOR(ProfileEntry)
 struct Timing {
   StringValue Origin;
   ReprLevel Level;
-  Scope *ScopeRef;
+  Scope<StringValue> *ScopeRef;
   int64_t Cycles;
   std::vector<ProfileEntry*> Profile;
 
@@ -899,14 +914,14 @@ YAML_IS_PTR_SEQUENCE_VECTOR(Timing)
 // PML Documents
 //////////////////////////////////////////////////////////////////////////////
 
-template <typename FuncT>
+template <typename FuncT, typename NameT>
 struct PMLDoc {
   StringRef FormatVersion;
   StringRef TargetTriple;
   const char *FunctionLabel;
   std::vector<FuncT*> Functions;
   std::vector<RelationGraph*>   RelationGraphs;
-  std::vector<FlowFact*>  FlowFacts;
+  std::vector<FlowFact<NameT>*>  FlowFacts;
   std::vector<ValueFact*> ValueFacts;
   std::vector<Timing*>    Timings;
 
@@ -937,7 +952,7 @@ struct PMLDoc {
     ValueFacts.push_back(VF);
   }
   /// Add a flowfact, which is owned by the document afterwards
-  void addFlowFact(FlowFact* FF) {
+  void addFlowFact(FlowFact<NameT>* FF) {
     FlowFacts.push_back(FF);
   }
 
@@ -948,7 +963,7 @@ struct PMLDoc {
   }
 
   /// Merge another PML doc into this one, transferring ownership of all childs.
-  void mergePML(PMLDoc &Doc) {
+  void mergePML(PMLDoc<FuncT, NameT> &Doc) {
     // TODO check for duplicate keys, merge recursively?
 
     if (TargetTriple.empty()) TargetTriple = Doc.TargetTriple;
@@ -979,9 +994,9 @@ private:
   PMLDoc(const PMLDoc&);            // Disable copy constructor
   PMLDoc* operator=(const PMLDoc&); // Disable assignment
 };
-template <typename FuncT>
-struct MappingTraits< PMLDoc<FuncT>* > {
-  static void mapping(IO &io, PMLDoc<FuncT> *&doc) {
+template <typename FuncT, typename NameT>
+struct MappingTraits< PMLDoc<FuncT,NameT>* > {
+  static void mapping(IO &io, PMLDoc<FuncT,NameT> *&doc) {
     if (!doc) report_fatal_error("Cant't create PMLDoc");
     io.mapRequired("format",     doc->FormatVersion);
     io.mapRequired("triple",     doc->TargetTriple);
@@ -993,17 +1008,17 @@ struct MappingTraits< PMLDoc<FuncT>* > {
   }
 };
 
-template <typename FuncT>
+template <typename FuncT, typename NameT>
 struct PMLDocList {
 
-  std::vector<PMLDoc<FuncT>*> YDocs;
+  std::vector<PMLDoc<FuncT,NameT>*> YDocs;
 
   ~PMLDocList() {
     DELETE_PTR_VEC(YDocs);
   }
 
   /// Merge all documents into a single document and clear this list.
-  void mergeInto(PMLDoc<FuncT> &YDoc) {
+  void mergeInto(PMLDoc<FuncT,NameT> &YDoc) {
     for (auto i = YDocs.begin(), ie = YDocs.end(); i != ie; i++) {
       YDoc.mergePML(**i);
     }
@@ -1016,12 +1031,12 @@ struct PMLDocList {
 
 namespace llvm {
 namespace yaml {
-template <unsigned N, typename FuncT>
-struct DocumentListTraits<SmallVector<PMLDoc<FuncT>*, N>>
-    : public SequenceTraitsImpl<SmallVector<PMLDoc<FuncT>*, N>, false> {};
-template <typename FuncT>
-struct DocumentListTraits<std::vector<PMLDoc<FuncT>*>>
-    : public SequenceTraitsImpl<std::vector<PMLDoc<FuncT>*>, false> {};
+template <unsigned N, typename FuncT, typename NameT>
+struct DocumentListTraits<SmallVector<PMLDoc<FuncT,NameT>*, N>>
+    : public SequenceTraitsImpl<SmallVector<PMLDoc<FuncT,NameT>*, N>, false> {};
+template <typename FuncT, typename NameT>
+struct DocumentListTraits<std::vector<PMLDoc<FuncT,NameT>*>>
+    : public SequenceTraitsImpl<std::vector<PMLDoc<FuncT,NameT>*>, false> {};
 }
 }
 

@@ -14,7 +14,7 @@
 namespace llvm {
 
 /// Performs a modified dominator analysis, where the bounds of loops are taken into account.
-/// A loop dominates its successors only if it has constant bounds, i.e., its minum and maximum
+/// A loop dominates its successors only if it has constant bounds, i.e., its minimum and maximum
 /// iteration bounds are the same.
 ///
 /// Returns the dominators of the end blocks of the loop identified by the given header
@@ -187,8 +187,7 @@ boundedDominatorsAnalysis(
                LI->getLoopDepth(pred)>LI->getLoopDepth(mbb) ||
                // Exit from loop directly to the header of next loop
                (LI->getLoopDepth(pred) == LI->getLoopDepth(mbb) &&
-               LI->getLoopFor(pred) != LI->getLoopFor(mbb) //&&
-               //mbb != start_mbb
+               LI->getLoopFor(pred) != LI->getLoopFor(mbb)
                )
              ) &&
              !constantBounds(pred)

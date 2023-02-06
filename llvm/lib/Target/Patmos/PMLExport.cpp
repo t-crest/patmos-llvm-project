@@ -214,12 +214,12 @@ namespace {
 }
 
 
-yaml::FlowFact *PMLBitcodeExport::createLoopFact(const BasicBlock *BB,
+yaml::FlowFact<yaml::StringValue> *PMLBitcodeExport::createLoopFact(const BasicBlock *BB,
                                                  yaml::UnsignedValue RHS,
                                                  bool UserAnnot) const {
   const Function *Fn = BB->getParent();
 
-  yaml::FlowFact *FF = new yaml::FlowFact(yaml::level_bitcode);
+  auto *FF = new yaml::FlowFact<yaml::StringValue>(yaml::level_bitcode);
 
   FF->setLoopScope(Fn->getName().str(), BB->getName().str());
 

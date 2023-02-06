@@ -95,10 +95,10 @@ namespace llvm {
   class PMLBitcodeExport : public PMLExport {
   private:
 
-    yaml::PMLDoc<yaml::BitcodeFunction> YDoc;
+    yaml::PMLDoc<yaml::BitcodeFunction,yaml::StringValue> YDoc;
     Pass &P;
 
-    yaml::FlowFact *createLoopFact(const BasicBlock *BB, yaml::UnsignedValue RHS,
+    yaml::FlowFact<yaml::StringValue> *createLoopFact(const BasicBlock *BB, yaml::UnsignedValue RHS,
                                    bool UserAnnot = false) const;
 
   public:
@@ -120,7 +120,7 @@ namespace llvm {
       auto *DocPtr = &YDoc; *Output << DocPtr;
     }
 
-    yaml::PMLDoc<yaml::BitcodeFunction>& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::BitcodeFunction,yaml::StringValue>& getPMLDoc() { return YDoc; }
 
     virtual bool doExportInstruction(const Instruction* Instr) {
       return true;
@@ -136,7 +136,7 @@ namespace llvm {
 
   class PMLMachineExport : public PMLExport {
   private:
-    yaml::PMLDoc<yaml::PMLMachineFunction> YDoc;
+    yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue> YDoc;
 
     PMLInstrInfo *PII;
 
@@ -163,10 +163,11 @@ namespace llvm {
     virtual void serialize(MachineFunction &MF);
 
     virtual void writeOutput(yaml::Output *Output) {
-      auto *DocPtr = &YDoc; *Output << DocPtr;
+    	yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue> *DocPtr = &YDoc;
+    	*Output << DocPtr;
     }
 
-    yaml::PMLDoc<yaml::PMLMachineFunction>& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue>& getPMLDoc() { return YDoc; }
 
     virtual bool doExportInstruction(const MachineInstr *Instr) {
       return true;
@@ -195,14 +196,14 @@ namespace llvm {
     virtual void exportSubfunctions(MachineFunction &MF,
                                     yaml::PMLMachineFunction *PMF) { }
     virtual void exportLoopInfo(MachineFunction &MF,
-                                yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
+                                yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue> &YDoc,
                                 MachineLoop *Loop) { }
   };
 
   class PMLRelationGraphExport : public PMLExport {
   private:
 	// We use BitcodeFunction as placeholder since its not used
-    yaml::PMLDoc<yaml::BitcodeFunction> YDoc;
+    yaml::PMLDoc<yaml::BitcodeFunction,yaml::StringValue> YDoc;
     Pass &P;
 
   public:
@@ -219,7 +220,7 @@ namespace llvm {
     	auto *DocPtr = &YDoc; *Output << DocPtr;
     }
 
-    yaml::PMLDoc<yaml::BitcodeFunction>& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::BitcodeFunction,yaml::StringValue>& getPMLDoc() { return YDoc; }
 
   private:
 

@@ -173,7 +173,7 @@ namespace llvm {
                                         yaml::PMLMachineFunction *PMF) override;
 
     void exportLoopInfo(MachineFunction &MF,
-                                yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
+                                yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue> &YDoc,
                                 MachineLoop *Loop) override;
   };
 
@@ -465,7 +465,7 @@ namespace llvm {
     }
 
     void PatmosMachineExport::exportLoopInfo(MachineFunction &MF,
-                                             yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
+                                             yaml::PMLDoc<yaml::PMLMachineFunction,yaml::UnsignedValue> &YDoc,
                                              MachineLoop *Loop)
     {
       // Export user loop bounds for single-path functions since we
@@ -476,10 +476,10 @@ namespace llvm {
       MachineBasicBlock *Header = Loop->getHeader();
       auto LoopBound = getLoopBounds(Header);
       if (LoopBound) {
-        yaml::FlowFact *FF = new yaml::FlowFact(yaml::level_machinecode);
+        auto *FF = new yaml::FlowFact<yaml::UnsignedValue>(yaml::level_machinecode);
 
-        FF->setLoopScope(utostr(MF.getFunctionNumber()),
-                          utostr(Header->getNumber()));
+        FF->setLoopScope(MF.getFunctionNumber(),
+                          Header->getNumber());
 
         yaml::ProgramPoint *Block =
           yaml::ProgramPoint::CreateBlock(utostr(MF.getFunctionNumber()),
