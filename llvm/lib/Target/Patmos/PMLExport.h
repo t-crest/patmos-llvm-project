@@ -95,7 +95,7 @@ namespace llvm {
   class PMLBitcodeExport : public PMLExport {
   private:
 
-    yaml::PMLDoc YDoc;
+    yaml::PMLDoc<yaml::BitcodeFunction> YDoc;
     Pass &P;
 
     yaml::FlowFact *createLoopFact(const BasicBlock *BB, yaml::UnsignedValue RHS,
@@ -103,7 +103,7 @@ namespace llvm {
 
   public:
     PMLBitcodeExport(TargetMachine &TM, ModulePass &mp)
-    : YDoc(TM.getTargetTriple().getTriple()), P(mp) {}
+    : YDoc("bitcode-functions", TM.getTargetTriple().getTriple()), P(mp) {}
 
     virtual ~PMLBitcodeExport() { }
 
@@ -117,10 +117,10 @@ namespace llvm {
     virtual void finalize(const Module &M) { }
 
     virtual void writeOutput(yaml::Output *Output) {
-      yaml::PMLDoc *DocPtr = &YDoc; *Output << DocPtr;
+      auto *DocPtr = &YDoc; *Output << DocPtr;
     }
 
-    yaml::PMLDoc& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::BitcodeFunction>& getPMLDoc() { return YDoc; }
 
     virtual bool doExportInstruction(const Instruction* Instr) {
       return true;
@@ -136,7 +136,7 @@ namespace llvm {
 
   class PMLMachineExport : public PMLExport {
   private:
-    yaml::PMLDoc YDoc;
+    yaml::PMLDoc<yaml::PMLMachineFunction> YDoc;
 
     PMLInstrInfo *PII;
 
@@ -152,7 +152,7 @@ namespace llvm {
   public:
     PMLMachineExport(PatmosTargetMachine &tm, ModulePass &mp, const TargetInstrInfo *TII,
                      PMLInstrInfo *pii = 0)
-      : YDoc(tm.getTargetTriple().getTriple()), P(mp), TM(tm), TII(TII)
+      : YDoc("machine-functions", tm.getTargetTriple().getTriple()), P(mp), TM(tm), TII(TII)
     {
       // TODO needs to be deleted properly!
       PII = pii ? pii : new PMLInstrInfo();
@@ -163,10 +163,10 @@ namespace llvm {
     virtual void serialize(MachineFunction &MF);
 
     virtual void writeOutput(yaml::Output *Output) {
-      yaml::PMLDoc *DocPtr = &YDoc; *Output << DocPtr;
+      auto *DocPtr = &YDoc; *Output << DocPtr;
     }
 
-    yaml::PMLDoc& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::PMLMachineFunction>& getPMLDoc() { return YDoc; }
 
     virtual bool doExportInstruction(const MachineInstr *Instr) {
       return true;
@@ -195,18 +195,19 @@ namespace llvm {
     virtual void exportSubfunctions(MachineFunction &MF,
                                     yaml::PMLMachineFunction *PMF) { }
     virtual void exportLoopInfo(MachineFunction &MF,
-                                yaml::PMLDoc &YDoc,
+                                yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
                                 MachineLoop *Loop) { }
   };
 
   class PMLRelationGraphExport : public PMLExport {
   private:
-    yaml::PMLDoc YDoc;
+	// We use BitcodeFunction as placeholder since its not used
+    yaml::PMLDoc<yaml::BitcodeFunction> YDoc;
     Pass &P;
 
   public:
     PMLRelationGraphExport(TargetMachine &TM, ModulePass &mp)
-      : YDoc(TM.getTargetTriple().getTriple()), P(mp) {}
+      : YDoc("ERROR(PMLRelationGraphExport)", TM.getTargetTriple().getTriple()), P(mp) {}
 
     virtual ~PMLRelationGraphExport() {}
 
@@ -215,10 +216,10 @@ namespace llvm {
     virtual void serialize(MachineFunction &MF);
 
     virtual void writeOutput(yaml::Output *Output) {
-      yaml::PMLDoc *DocPtr = &YDoc; *Output << DocPtr;
+    	auto *DocPtr = &YDoc; *Output << DocPtr;
     }
 
-    yaml::PMLDoc& getPMLDoc() { return YDoc; }
+    yaml::PMLDoc<yaml::BitcodeFunction>& getPMLDoc() { return YDoc; }
 
   private:
 

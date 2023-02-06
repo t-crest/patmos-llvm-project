@@ -429,7 +429,7 @@ void PMLMachineExport::serialize(MachineFunction &MF)
 
   // TODO: we do not compute a hash yet
   PMF->Hash = 0;
-  YDoc.addMachineFunction(PMF);
+  YDoc.addFunction(PMF);
 }
 
 yaml::StringValue PMLMachineExport::getOpcode(const MachineInstr *Instr)

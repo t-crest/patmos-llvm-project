@@ -173,7 +173,7 @@ namespace llvm {
                                         yaml::PMLMachineFunction *PMF) override;
 
     void exportLoopInfo(MachineFunction &MF,
-                                yaml::PMLDoc &YDoc,
+                                yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
                                 MachineLoop *Loop) override;
   };
 
@@ -465,7 +465,7 @@ namespace llvm {
     }
 
     void PatmosMachineExport::exportLoopInfo(MachineFunction &MF,
-                                             yaml::PMLDoc &YDoc,
+                                             yaml::PMLDoc<yaml::PMLMachineFunction> &YDoc,
                                              MachineLoop *Loop)
     {
       // Export user loop bounds for single-path functions since we

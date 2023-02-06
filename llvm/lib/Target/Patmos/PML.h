@@ -899,38 +899,34 @@ YAML_IS_PTR_SEQUENCE_VECTOR(Timing)
 // PML Documents
 //////////////////////////////////////////////////////////////////////////////
 
+template <typename FuncT>
 struct PMLDoc {
   StringRef FormatVersion;
   StringRef TargetTriple;
-  std::vector<BitcodeFunction*> BitcodeFunctions;
-  std::vector<PMLMachineFunction*> MachineFunctions;
+  const char *FunctionLabel;
+  std::vector<FuncT*> Functions;
   std::vector<RelationGraph*>   RelationGraphs;
   std::vector<FlowFact*>  FlowFacts;
   std::vector<ValueFact*> ValueFacts;
   std::vector<Timing*>    Timings;
 
-  PMLDoc()
-    : FormatVersion("pml-0.1"), TargetTriple("") {}
+  PMLDoc(const char *FunctionLabel)
+    : FormatVersion("pml-0.1"), TargetTriple(""), FunctionLabel(FunctionLabel) {}
 
-  PMLDoc(StringRef TargetTriple)
+  PMLDoc(const char *FunctionLabel, StringRef TargetTriple)
     : FormatVersion("pml-0.1"),
-      TargetTriple(TargetTriple) {}
+      TargetTriple(TargetTriple), FunctionLabel(FunctionLabel) {}
 
   ~PMLDoc() {
-    DELETE_PTR_VEC(BitcodeFunctions);
-    DELETE_PTR_VEC(MachineFunctions);
+    DELETE_PTR_VEC(Functions);
     DELETE_PTR_VEC(RelationGraphs);
     DELETE_PTR_VEC(ValueFacts);
     DELETE_PTR_VEC(FlowFacts);
     DELETE_PTR_VEC(Timings);
   }
   /// Add a function, which is owned by the document afterwards
-  void addFunction(BitcodeFunction *F) {
-    BitcodeFunctions.push_back(F);
-  }
-  /// Add a machine function, which is owned by the document afterwards
-  void addMachineFunction(PMLMachineFunction* MF) {
-    MachineFunctions.push_back(MF);
+  void addFunction(FuncT *F) {
+    Functions.push_back(F);
   }
   /// Add a relation graph, which is owned by the document afterwards
   void addRelationGraph(RelationGraph* RG) {
@@ -946,7 +942,7 @@ struct PMLDoc {
   }
 
   bool empty() {
-    return BitcodeFunctions.empty() && MachineFunctions.empty() &&
+    return Functions.empty() &&
            RelationGraphs.empty() && ValueFacts.empty() &&
            FlowFacts.empty() && Timings.empty();
   }
@@ -957,14 +953,10 @@ struct PMLDoc {
 
     if (TargetTriple.empty()) TargetTriple = Doc.TargetTriple;
 
-    BitcodeFunctions.insert(BitcodeFunctions.end(),
-                            Doc.BitcodeFunctions.begin(),
-                            Doc.BitcodeFunctions.end());
-    Doc.BitcodeFunctions.clear();
-    MachineFunctions.insert(MachineFunctions.end(),
-                            Doc.MachineFunctions.begin(),
-                            Doc.MachineFunctions.end());
-    Doc.MachineFunctions.clear();
+    Functions.insert(Functions.end(),
+                            Doc.Functions.begin(),
+                            Doc.Functions.end());
+    Doc.Functions.clear();
     RelationGraphs.insert(RelationGraphs.end(),
                             Doc.RelationGraphs.begin(),
                             Doc.RelationGraphs.end());
@@ -987,14 +979,13 @@ private:
   PMLDoc(const PMLDoc&);            // Disable copy constructor
   PMLDoc* operator=(const PMLDoc&); // Disable assignment
 };
-template <>
-struct MappingTraits< PMLDoc* > {
-  static void mapping(IO &io, PMLDoc *&doc) {
-    if (!doc) doc = new PMLDoc();
+template <typename FuncT>
+struct MappingTraits< PMLDoc<FuncT>* > {
+  static void mapping(IO &io, PMLDoc<FuncT> *&doc) {
+    if (!doc) report_fatal_error("Cant't create PMLDoc");
     io.mapRequired("format",     doc->FormatVersion);
     io.mapRequired("triple",     doc->TargetTriple);
-    io.mapOptional("bitcode-functions",doc->BitcodeFunctions);
-    io.mapOptional("machine-functions",doc->MachineFunctions);
+    io.mapOptional(doc->FunctionLabel, doc->Functions);
     io.mapOptional("relation-graphs",doc->RelationGraphs);
     io.mapOptional("flowfacts",  doc->FlowFacts);
     io.mapOptional("valuefacts", doc->ValueFacts);
@@ -1002,19 +993,18 @@ struct MappingTraits< PMLDoc* > {
   }
 };
 
+template <typename FuncT>
 struct PMLDocList {
-  typedef std::vector<PMLDoc*>::iterator iterator;
-  typedef std::vector<PMLDoc*>::const_iterator const_iterator;
 
-  std::vector<PMLDoc*> YDocs;
+  std::vector<PMLDoc<FuncT>*> YDocs;
 
   ~PMLDocList() {
     DELETE_PTR_VEC(YDocs);
   }
 
   /// Merge all documents into a single document and clear this list.
-  void mergeInto(PMLDoc &YDoc) {
-    for (iterator i = YDocs.begin(), ie = YDocs.end(); i != ie; i++) {
+  void mergeInto(PMLDoc<FuncT> &YDoc) {
+    for (auto i = YDocs.begin(), ie = YDocs.end(); i != ie; i++) {
       YDoc.mergePML(**i);
     }
     DELETE_PTR_VEC(YDocs);
@@ -1024,7 +1014,16 @@ struct PMLDocList {
 } // end namespace yaml
 } // end namespace llvm
 
-LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(PMLDoc*)
+namespace llvm {
+namespace yaml {
+template <unsigned N, typename FuncT>
+struct DocumentListTraits<SmallVector<PMLDoc<FuncT>*, N>>
+    : public SequenceTraitsImpl<SmallVector<PMLDoc<FuncT>*, N>, false> {};
+template <typename FuncT>
+struct DocumentListTraits<std::vector<PMLDoc<FuncT>*>>
+    : public SequenceTraitsImpl<std::vector<PMLDoc<FuncT>*>, false> {};
+}
+}
 
 #undef DELETE_PTR_VEC
 #undef COPY_PTR_VEC
