@@ -55,14 +55,14 @@ bool OppositePredicateCompensation::runOnMachineFunction(MachineFunction &MF) {
 
 void OppositePredicateCompensation::compensate(MachineFunction &MF)
 {
-  auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;
+  auto &cldoms = getAnalysis<ConstantLoopDominators>().dominators;
 
   std::for_each(MF.begin(), MF.end(), [&](auto &BB){
     auto *block = PSPI->getRootScope()->findBlockOf(&BB);
     assert(block && "MBB is not associated with a PredicatedBlock");
 
     auto dominates = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot()  &&
-        bounded_doms.begin()->second.count(&BB);
+        cldoms.begin()->second.count(&BB);
 
     for(auto instr_iter = BB.begin(); instr_iter != BB.end(); ++instr_iter){
       if( !dominates && instr_iter->mayLoadOrStore() && PatmosInstrInfo::getMemType(*instr_iter) == PatmosII::MEM_M) {

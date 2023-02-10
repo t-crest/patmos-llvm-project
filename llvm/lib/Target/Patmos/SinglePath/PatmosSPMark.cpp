@@ -30,7 +30,7 @@
 
 #include "PatmosMachineFunctionInfo.h"
 #include "PatmosSinglePathInfo.h"
-#include "BoundedDominators.h"
+#include "ConstantLoopDominators.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/SmallSet.h"
@@ -213,9 +213,9 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
 
   MachineDominatorTree MDT(*MF);
   MachineLoopInfo LI(MDT);
-  BoundedDominators BD(*MF, LI);
+  ConstantLoopDominators CLD(*MF, LI);
 
-  auto &bounded_doms = BD.dominators;
+  auto &bounded_doms = CLD.dominators;
 
   for (MachineFunction::iterator MBB = MF->begin(), MBBE = MF->end();
                                  MBB != MBBE; ++MBB) {

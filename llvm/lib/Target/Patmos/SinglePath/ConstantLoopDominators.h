@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef _PATMOS_BOUNDEDDOMINATORS_H_
-#define _PATMOS_BOUNDEDDOMINATORS_H_
+#ifndef _PATMOS_CONSTANTLOOPDOMINATORS_H_
+#define _PATMOS_CONSTANTLOOPDOMINATORS_H_
 
 #include "PatmosTargetMachine.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -25,21 +25,21 @@
 namespace llvm {
 
 ///
-class BoundedDominators : public MachineFunctionPass {
+class ConstantLoopDominators : public MachineFunctionPass {
 public:
   std::map<const MachineBasicBlock*, std::set<const MachineBasicBlock*>> dominators;
   /// Pass ID
   static char ID;
 
-  BoundedDominators() : MachineFunctionPass(ID){};
+  ConstantLoopDominators() : MachineFunctionPass(ID){};
 
-  explicit BoundedDominators(MachineFunction &MF, MachineLoopInfo &LI)
+  explicit ConstantLoopDominators(MachineFunction &MF, MachineLoopInfo &LI)
         : MachineFunctionPass(ID) {
       calculate(MF, LI);
     }
 
-  BoundedDominators(const BoundedDominators &) = delete;
-  BoundedDominators &operator=(const BoundedDominators &) = delete;
+  ConstantLoopDominators(const ConstantLoopDominators &) = delete;
+  ConstantLoopDominators &operator=(const ConstantLoopDominators &) = delete;
 
   void calculate(MachineFunction &MF, MachineLoopInfo &LI);
 
@@ -51,10 +51,10 @@ public:
 
   /// getPassName - Return the pass' name.
   StringRef getPassName() const override{
-    return "Patmos Bounded Dominators";
+    return "Patmos Constant-Loop Dominators";
   }
 };
 
 } // End llvm namespace
 
-#endif // _PATMOS_BOUNDEDDOMINATORS_H_
+#endif // _PATMOS_CONSTANTLOOPDOMINATORS_H_

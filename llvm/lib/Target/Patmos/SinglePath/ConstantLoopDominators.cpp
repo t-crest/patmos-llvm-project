@@ -13,20 +13,20 @@
 
 #include "Patmos.h"
 #include "SinglePath/PatmosSinglePathInfo.h"
-#include "BoundedDominatorAnalysis.h"
-#include "BoundedDominators.h"
+#include "ConstantLoopDominatorAnalysis.h"
+#include "ConstantLoopDominators.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
 
 using namespace llvm;
 
 
-char BoundedDominators::ID = 0;
+char ConstantLoopDominators::ID = 0;
 
 /// createDataCacheAccessEliminationPass - Returns a new DataCacheAccessElimination
 /// \see DataCacheAccessElimination
 FunctionPass *llvm::createPatmosBoundedDominatorsPass() {
-  return new BoundedDominators();
+  return new ConstantLoopDominators();
 }
 
 static bool constantBounds(const MachineBasicBlock *mbb) {
@@ -36,18 +36,19 @@ static bool constantBounds(const MachineBasicBlock *mbb) {
   return false;
 }
 
-void BoundedDominators::calculate(MachineFunction &MF, MachineLoopInfo &LI) {
+void ConstantLoopDominators::calculate(MachineFunction &MF, MachineLoopInfo &LI) {
   if(PatmosSinglePathInfo::isEnabled(MF)) {
-    dominators = boundedDominatorsAnalysis(MF.getBlockNumbered(0), &LI, constantBounds);
+    dominators = constantLoopDominatorsAnalysis(MF.getBlockNumbered(0), &LI, constantBounds);
+    assert(dominators.size() == 1 && "Single-path code must have only 1 end block");
   }
 }
 
-bool BoundedDominators::runOnMachineFunction(MachineFunction &MF) {
+bool ConstantLoopDominators::runOnMachineFunction(MachineFunction &MF) {
   calculate(MF, getAnalysis<MachineLoopInfo>());
   return false;
 }
 
-void BoundedDominators::getAnalysisUsage(AnalysisUsage &AU) const {
+void ConstantLoopDominators::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<MachineLoopInfo>();
   AU.setPreservesAll();
   MachineFunctionPass::getAnalysisUsage(AU);

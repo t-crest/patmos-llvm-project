@@ -4,7 +4,7 @@
 #include "Patmos.h"
 #include "PatmosTargetMachine.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
-#include "BoundedDominators.h"
+#include "ConstantLoopDominators.h"
 
 #define DEBUG_TYPE "patmos-const-exec"
 
@@ -49,8 +49,8 @@ public:
   /// getAnalysisUsage - Specify which passes this pass depends on
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<MachineLoopInfo>();
-    AU.addRequired<BoundedDominators>();
-    AU.addPreserved<BoundedDominators>();
+    AU.addRequired<ConstantLoopDominators>();
+    AU.addPreserved<ConstantLoopDominators>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 

@@ -3,7 +3,7 @@
 
 #include "Patmos.h"
 #include "PatmosSinglePathInfo.h"
-#include "BoundedDominators.h"
+#include "ConstantLoopDominators.h"
 #include "llvm/IR/Metadata.h"
 
 namespace llvm {
@@ -37,8 +37,8 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<PatmosSinglePathInfo>();
     AU.addPreserved<PatmosSinglePathInfo>();
-    AU.addRequired<BoundedDominators>();
-    AU.addPreserved<BoundedDominators>();
+    AU.addRequired<ConstantLoopDominators>();
+    AU.addPreserved<ConstantLoopDominators>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 

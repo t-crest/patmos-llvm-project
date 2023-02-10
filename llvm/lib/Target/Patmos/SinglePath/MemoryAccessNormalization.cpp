@@ -151,10 +151,10 @@ bool MemoryAccessNormalization::runOnMachineFunction(MachineFunction &MF) {
         // Get the number of instructions the opposite predicate compensation algorithm
         // would add to the function
         auto isPseudoRoot = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot();
-        auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;
+        auto &cldoms = getAnalysis<ConstantLoopDominators>().dominators;
         auto opposite_algo_instr_need = 0;
         std::for_each(MF.begin(), MF.end(), [&](auto &BB){
-          if(!isPseudoRoot || !bounded_doms.begin()->second.count(&BB)){
+          if(!isPseudoRoot || !cldoms.begin()->second.count(&BB)){
             opposite_algo_instr_need += countAccesses(&BB);
           }
         });
@@ -221,8 +221,8 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
   DebugLoc DL;
 
   auto compensation = memoryAccessCompensation(MF.getBlockNumbered(0), &LI, countAccesses);
-  auto &bounded_doms = getAnalysis<BoundedDominators>().dominators;;
-  assert(bounded_doms.size() == 1 && "Bounded Dominator Analysis didn't find a unique end block.");
+  auto &cldoms = getAnalysis<ConstantLoopDominators>().dominators;;
+  assert(cldoms.size() == 1 && "Constant-Loop Dominator Analysis didn't find a unique end block.");
 
   LLVM_DEBUG(
     dbgs() << "\nMemory Access Compensation Results:\n";
@@ -265,7 +265,7 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
 
       if( compensation.count({pred, current}) &&
           // current doesn't dominate
-          (!isPseudoRoot || !bounded_doms.begin()->second.count(current))
+          (!isPseudoRoot || !cldoms.begin()->second.count(current))
       ) {
         // Need to decrement counter.
         auto decremented_reg = new_vreg(MF);

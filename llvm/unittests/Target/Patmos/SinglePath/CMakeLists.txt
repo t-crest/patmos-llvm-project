@@ -5,7 +5,7 @@ set(LLVM_LINK_COMPONENTS
 set(PatmosSource
   PredicatedBlockTest.cpp
   MemoryAccessAnalysisTest.cpp
-  BoundedDominatorAnalysisTest.cpp
+  ConstantLoopDominatorAnalysisTest.cpp
   ListSchedulerTest.cpp
   )
 
