@@ -1,55 +1,55 @@
 // RUN: INPUT=100; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN1XX,IN100"
 // RUN: INPUT=101; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN1XX,IN101"
 
 // RUN: INPUT=300; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN3XX,IN300"
 // RUN: INPUT=301; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN3XX,IN301"
 // RUN: INPUT=302; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN3XX,IN302"
 // RUN: INPUT=303; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN3XX,IN303"
 
 // RUN: INPUT=400; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN4XX,IN400"
 // RUN: INPUT=401; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN4XX,IN401"
 // RUN: INPUT=402; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN4XX,IN402"
 // RUN: INPUT=403; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN4XX,IN403"
 // RUN: INPUT=404; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN4XX,IN404"
 
 // RUN: INPUT=500; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN5XX,IN500"
 // RUN: INPUT=501; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN5XX,IN501"
 // RUN: INPUT=502; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN5XX,IN502"
 // RUN: INPUT=505; \
-// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4 2>&1 | \
+// RUN: %test-patmos-input-librt --print-stats __patmos_main_mem_access_compensation4_di 2>&1 | \
 // RUN: FileCheck %s --check-prefixes "CHECK,IN5XX,IN505"
 // END.
 
 
-extern void __patmos_main_mem_access_compensation4(unsigned max, unsigned remaining);        
+extern void __patmos_main_mem_access_compensation4_di(unsigned max, unsigned remaining);        
 
 int main(int input)
 {	
@@ -58,7 +58,7 @@ int main(int input)
 	unsigned remaining = input%100;
 	unsigned max = input/100;
 	
-	__patmos_main_mem_access_compensation4(max, remaining);
+	__patmos_main_mem_access_compensation4_di(max, remaining);
 	
 	return 0;
 }

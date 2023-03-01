@@ -25,7 +25,8 @@
 
 #include "../int_lib.h"
 
-void __patmos_main_mem_access_compensation(void) __attribute__((alias("__patmos_main_mem_access_compensation2")));
+void __patmos_main_mem_access_compensation(void) __attribute__((alias("__patmos_main_mem_access_compensation4")));
+void __patmos_main_mem_access_compensation_di(void) __attribute__((alias("__patmos_main_mem_access_compensation4_di")));
 
 void
 __patmos_main_mem_access_compensation1(unsigned, unsigned) __attribute__((naked,noinline));
@@ -100,7 +101,6 @@ __patmos_main_mem_access_compensation4(unsigned max, unsigned remaining)
 		"sub ($p3) $r4 =  $r4, 1;"
 		"lwm ($p3) $r0 = [$r0];"
 		"cmpult $p3 = $r0, $r4;"
-		"sub ($p3) $r4 =  $r4, 1;"
 		"lwm ($p3) $r0 = [$r0];"
 		"mts $s0 = $r5;"
 		"retnd;"
@@ -148,6 +148,34 @@ __patmos_main_mem_access_compensation8(unsigned max, unsigned remaining)
 		"lwm ($p3) $r0 = [$r0];"
 		"mts $s0 = $r5;"
 		"retnd;"
+		:
+		: 
+		: "r3", "r4", "r5", "r6"
+	);
+}
+
+void
+__patmos_main_mem_access_compensation4_di(unsigned, unsigned) __attribute__((naked,noinline));
+void
+__patmos_main_mem_access_compensation4_di(unsigned max, unsigned remaining)
+{
+    __asm__ volatile (
+		"{ mfs $r5 = $s0 ; li  $r6 = 4};"
+		"__patmos_main_mem_access_compensation4_di_loop:;"
+		"{ cmpule $p2 = $r6, $r3; cmpule $p3 = $r6, $r4 };"
+		"lwm ($p3) $r0 = [$r0];"
+		"lwm ($p3) $r0 = [$r0];"
+		"br ($p2) __patmos_main_mem_access_compensation4_di_loop; "
+		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 = $r4, $r6 };"
+		"{ lwm ($p3) $r0 = [$r0]; sub $r3 = $r3, $r6 };"
+		
+		"cmpult $p3 = $r0, $r4;"
+		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 =  $r4, 1 };"
+		"cmpult $p3 = $r0, $r4;"
+		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 =  $r4, 1 };"
+		"cmpult $p3 = $r0, $r4;"
+		"lwm ($p3) $r0 = [$r0];"
+		"{ retnd; mts $s0 = $r5 };"
 		:
 		: 
 		: "r3", "r4", "r5", "r6"

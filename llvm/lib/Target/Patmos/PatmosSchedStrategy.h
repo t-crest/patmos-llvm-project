@@ -124,7 +124,7 @@ namespace llvm {
     {
       const PatmosSubtarget &PST = *PTM.getSubtargetImpl();
 
-      IssueWidth = PST.enableBundling(PTM.getOptLevel()) ?
+      IssueWidth = PatmosSubtarget::enableBundling() ?
                    PST.getSchedModel().IssueWidth : 1;
     }
 

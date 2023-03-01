@@ -329,7 +329,7 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     bool (*)(const MachineInstr *)
   >> enable_dual_issue;
 
-  if(TM.getSubtargetImpl()->enableBundling(TM.getOptLevel())) {
+  if(PatmosSubtarget::enableBundling()) {
     // Enable dual-issue
     enable_dual_issue = std::make_tuple(TM.getSubtargetImpl()->getInstrInfo(), may_second_slot, is_long);
   } else {

@@ -74,7 +74,7 @@ public:
   bool enablePostRAScheduler() const override;
 
   /// return true if bundles should be emitted.
-  bool enableBundling(CodeGenOpt::Level OptLevel) const;
+  static bool enableBundling();
 
   /// return true if any Post-RA scheduler should be used.
   bool hasPostRAScheduler(CodeGenOpt::Level OptLevel) const;

@@ -37,7 +37,7 @@ bool PatmosSPBundling::runOnMachineFunction(MachineFunction &MF) {
   PostDom = &getAnalysis<MachinePostDominatorTree>();
     
   // only convert function if marked
-  if ( PSPI->isConverting(MF) && STC.enableBundling(TM.getOptLevel())
+  if ( PSPI->isConverting(MF) && PatmosSubtarget::enableBundling()
   ) {
     SPBlocks += MF.size();
 //	doBundlingFunction(PSPI->getRootScope());

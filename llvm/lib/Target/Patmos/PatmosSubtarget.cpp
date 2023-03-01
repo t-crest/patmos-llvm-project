@@ -113,7 +113,7 @@ bool PatmosSubtarget::enablePostRAScheduler() const {
   return hasPostRAScheduler(OptLevel);
 }
 
-bool PatmosSubtarget::enableBundling(CodeGenOpt::Level OptLevel) const {
+bool PatmosSubtarget::enableBundling() {
   return !DisableVLIW;
 }
 

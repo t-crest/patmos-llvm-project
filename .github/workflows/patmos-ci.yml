@@ -75,9 +75,6 @@ jobs:
           - platform: macos-12
             cc: clang
             cxx: clang++
-          - platform: macOS-11
-            cc: clang
-            cxx: clang++
           
     env:
       CC: ${{matrix.cc}}
@@ -114,9 +111,6 @@ jobs:
           - platform: macos-12
             cc: clang
             cxx: clang++
-          - platform: macOS-11
-            cc: clang
-            cxx: clang++
     needs: [package-patmos]     
     env:
       CC: ${{matrix.cc}}
@@ -141,7 +135,7 @@ jobs:
           - platform: ubuntu-20.04
             cc: gcc
             cxx: g++
-          - platform: macos-11
+          - platform: macos-12
             cc: clang
             cxx: clang++
     # Run after the test jobs finish      

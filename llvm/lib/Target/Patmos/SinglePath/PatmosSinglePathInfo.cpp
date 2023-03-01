@@ -74,7 +74,7 @@ static cl::opt<bool> DisablePseudoRoots(
 
 static cl::opt<std::string> CetCompFun(
     "mpatmos-cet-compensation-function",
-    cl::init("__patmos_main_mem_access_compensation"),
+    cl::init(""),
     cl::desc("Which compensation function to use with 'counter' constant execution time compensation"),
     cl::Hidden);
 
@@ -109,7 +109,16 @@ CompensationAlgo PatmosSinglePathInfo::getCETCompAlgo() {
 }
 
 const char* PatmosSinglePathInfo::getCompensationFunction() {
-  return CetCompFun.c_str();
+  if(CetCompFun.length() == 0) {
+	  if(PatmosSubtarget::enableBundling()) {
+		  return "__patmos_main_mem_access_compensation_di";
+	  }else {
+		  return "__patmos_main_mem_access_compensation";
+	  }
+  } else {
+	  return CetCompFun.c_str();
+  }
+
 }
 
 bool PatmosSinglePathInfo::isConverting(const MachineFunction &MF) {
