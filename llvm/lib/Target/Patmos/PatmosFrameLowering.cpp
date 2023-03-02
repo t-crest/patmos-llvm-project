@@ -415,6 +415,49 @@ void PatmosFrameLowering::determineCalleeSaves(MachineFunction &MF,
   }
 }
 
+/// Gets the general-purpose register that should be used to spill/restore
+/// the given special-purpose register.
+static Register get_special_spill_restore_reg(Register Reg)
+{
+	assert(Patmos::SRegsRegClass.contains(Reg));
+	switch (Reg) {
+	case Patmos::S0:
+		return Patmos::R9;
+	case Patmos::S1:
+		return Patmos::R10;
+	case Patmos::SL:
+		return Patmos::R11;
+	case Patmos::SH:
+		return Patmos::R12;
+	case Patmos::S4:
+		return Patmos::R13;
+	case Patmos::SS:
+		return Patmos::R14;
+	case Patmos::ST:
+		return Patmos::R15;
+	case Patmos::SRB:
+		return Patmos::R16;
+	case Patmos::SRO:
+		return Patmos::R17;
+	case Patmos::SXB:
+		return Patmos::R18;
+	case Patmos::SXO:
+		return Patmos::R19;
+	case Patmos::S11:
+		return Patmos::R20;
+	case Patmos::S12:
+		return Patmos::R19; // We have run out of scratch registers so we reuse
+	case Patmos::S13:
+		return Patmos::R18;
+	case Patmos::S14:
+		return Patmos::R17;
+	case Patmos::S15:
+		return Patmos::R16;
+	default:
+		assert(false && "Unknown special-purpose register");
+	}
+}
+
 bool
 PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                                MachineBasicBlock::iterator MI,
@@ -445,9 +488,13 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 
     // copy to R register first, then spill
     if (Patmos::SRegsRegClass.contains(Reg)) {
-      TII.copyPhysReg(MBB, MI, DL, Patmos::R9, Reg, true);
+
+      // In prolohue we know none of the scratch registers can be in use (since the function hasn't started yet)
+      // so we try to use them all so that scheduling is as free as possible
+      auto tmpReg = get_special_spill_restore_reg(Reg);
+      TII.copyPhysReg(MBB, MI, DL, tmpReg, Reg, true);
       std::prev(MI)->setFlag(MachineInstr::FrameSetup);
-      Reg = Patmos::R9;
+      Reg = tmpReg;
     }
 
     // spill
@@ -468,7 +515,6 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                                         MachineBasicBlock::iterator MI,
                                         MutableArrayRef<CalleeSavedInfo> CSI,
                                         const TargetRegisterInfo *TRI) const {
-
   if (CSI.empty())
     return false;
 
@@ -488,20 +534,23 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
 
   // restore the callee saved registers
   for (unsigned i = CSI.size(); i != 0; --i) {
-    unsigned Reg = CSI[i-1].getReg();
-    unsigned tmpReg = Reg;
+    Register Reg = CSI[i-1].getReg();
+    auto tmpReg = Reg;
 
     // SZ is aliased with PRegs
     if (Patmos::PRegsRegClass.contains(Reg))
         continue;
 
     // copy to special register after reloading
-    if (Patmos::SRegsRegClass.contains(Reg))
-      tmpReg = Patmos::R9;
+    if (Patmos::SRegsRegClass.contains(Reg)){
+    	// In epilogue we know none of the scratch registers can be in use (since the function is done)
+    	// so we try to use them all so that scheduling is as free as possible
+    	tmpReg = get_special_spill_restore_reg(Reg);
+    }
+
 
     // load
-    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(tmpReg);
-    TII.loadRegFromStackSlot(MBB, MI, tmpReg, CSI[i-1].getFrameIdx(), RC, TRI);
+    TII.loadRegFromStackSlot(MBB, MI, tmpReg, CSI[i-1].getFrameIdx(), &Patmos::RRegsRegClass, TRI);
     std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
     // copy, if needed

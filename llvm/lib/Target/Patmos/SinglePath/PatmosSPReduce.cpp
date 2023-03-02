@@ -955,31 +955,17 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
       auto instrPredNeg = instrPreds[&(*MI)].second ? 1 : 0;
       auto predReg = predRegs.count(instrPred) ? predRegs[instrPred] : Patmos::P0;
       DEBUG_TRACE( dbgs() << "Predicate (" << instrPred << ") set to register: (" << predReg << ")\n");
-      if (MI->isCall() && !PatmosSinglePathInfo::isPseudoRoot(*getCallTargetMF(&*MI)) &&
-        std::any_of(MI->operands_begin(), MI->operands_end(), [](auto op){
-          return op.isReg() && (op.getReg() == Patmos::R9);
-        })
-      ) {
+      if (MI->isCall() && !PatmosSinglePathInfo::isPseudoRoot(*getCallTargetMF(&*MI))) {
           DEBUG_TRACE( dbgs() << "    call: " << *MI );
           assert(!TII->isPredicated(*MI) && "call predicated");
           DebugLoc DL = MI->getDebugLoc();
           // copy actual preg to temporary preg
+          // (this is the predicate call argument which enables/disabled the whole function)
           AddDefaultPred(BuildMI(*MBB, MI, DL,
                 TII->get(Patmos::PMOV), PRTmp))
             .addReg(predReg).addImm(instrPredNeg);
 
-          // store/restore caller saved R9 (gets dirty during frame setup)
-          int fi = PMFI->getSinglePathCallSpillFI();
-          // store to stack slot
-          AddDefaultPred(BuildMI(*MBB, MI, DL, TII->get(Patmos::SWC)))
-            .addFrameIndex(fi).addImm(0) // address
-            .addReg(Patmos::R9, RegState::Kill);
-          // restore from stack slot (after the call MI)
-          AddDefaultPred(BuildMI(*MBB, std::next(MI), DL,
-                TII->get(Patmos::LWC), Patmos::R9))
-            .addFrameIndex(fi).addImm(0); // address
-          ++MI; // skip the load operation
-          InsertedInstrs += 3; // STATISTIC
+          InsertedInstrs++; // STATISTIC
           continue;
       }
 
