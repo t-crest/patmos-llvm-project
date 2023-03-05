@@ -51,6 +51,9 @@ static cl::opt<unsigned> SPSchedulerInstructionsToSchedule(
     cl::Hidden);
 
 STATISTIC(SPInstructions,     "Number of instruction bundles in single-path code (both single and double)");
+STATISTIC(SPLongInstructions,     "Number of instruction in single-path code that are long");
+STATISTIC(SPFirstSlotInstructions,     "Number of instruction in single-path code that can only use the first issue slot (counted before scheduling)");
+STATISTIC(SPUnscheduledSlots,     "Number of instruction bundles the single-path scheduler assigned no instructions (used a nop instead)");
 
 char SPScheduler::ID = 0;
 
@@ -58,85 +61,6 @@ FunctionPass *llvm::createSPSchedulerPass(const PatmosTargetMachine &tm) {
   return new SPScheduler(tm);
 }
 
-SPScheduler::SPScheduler(const PatmosTargetMachine &tm):
-    MachineFunctionPass(ID), TM(tm)
-{
-  auto warning = "Warning: '--";
-  auto post_msg = "' flag is meant for internal compiler development only and shouldn't be used otherwise.\n";
-  if(DisableSPScheduler) {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler" << post_msg;
-  }
-  if(DisableSPSchedulerFun != "") {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler-function" << post_msg;
-  }
-  if(DisableSPSchedulerFunBlock != -1) {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler-function-block" << post_msg;
-  }
-  if(SPSchedulerIgnoreFirstInstructions != 0) {
-	errs() << warning << "mpatmos-singlepath-scheduler-ignore-first-instructions" << post_msg;
-  }
-  if(SPSchedulerInstructionsToSchedule != 0) {
-	errs() << warning << "mpatmos-singlepath-scheduler-instruction-to-schedule" << post_msg;
-  }
-}
-
-bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
-
-
-  // Only schedule single-path function
-  if(! mf.getInfo<PatmosMachineFunctionInfo>()->isSinglePath() ){
-    return false;
-  }
-
-  LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
-
-  auto reduceAnalysis = &getAnalysis<PatmosSPReduce>();
-  auto rootScope = reduceAnalysis->RootScope;
-
-  for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; ++mbbIter){
-    auto mbb = mbbIter;
-    LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb->dump());
-
-    bool disable = DisableSPScheduler
-        ||
-        (DisableSPSchedulerFun != "" && DisableSPSchedulerFun == mf.getName() &&
-            (DisableSPSchedulerFunBlock == -1 || DisableSPSchedulerFunBlock == mbb->getNumber()))
-            ;
-
-    if(!disable) {
-      runListSchedule(&*mbb);
-    } else {
-      LLVM_DEBUG( dbgs() << "Disabled SPScheduler for '" << mf.getName() << "' block: " << mbb->getNumber() << "\n");
-    }
-
-    for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
-        instrIter != instrEnd; )
-    {
-      SPInstructions++;
-      auto latency = calculateLatency(instrIter, disable);
-	  for(auto i = 0; i<latency; i++){
-	    TM.getInstrInfo()->insertNoop(*mbb, std::next(instrIter));
-	  }
-	  instrIter = std::next(instrIter, 1+latency); // Make sure to skip the newly added noops
-    }
-  }
-
-  return true;
-}
-
-unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr, bool branches_only) const{
-  if((instr->isBranch() || instr->isCall() || instr->isReturn()) && instr->hasDelaySlot()){
-    // We simply add 3 nops after any branch, call or return, as its
-    // the highest possible delay.
-    return 3;
-  } else if (branches_only &&
-      (instr->mayLoad() || (instr->getOpcode() == Patmos::MUL) || (instr->getOpcode() == Patmos::MULU))
-  ){
-    return 1;
-  } else {
-    return 0;
-  }
-}
 
 /////////////////////////////////////////////
 // Functions for use with the list scheduler
@@ -276,6 +200,94 @@ bool may_second_slot(const PatmosInstrInfo *TII, const MachineInstr *instr) {
 // End of functions for use with the list scheduler
 /////////////////////////////////////////////
 
+SPScheduler::SPScheduler(const PatmosTargetMachine &tm):
+    MachineFunctionPass(ID), TM(tm)
+{
+  auto warning = "Warning: '--";
+  auto post_msg = "' flag is meant for internal compiler development only and shouldn't be used otherwise.\n";
+  if(DisableSPScheduler) {
+	errs() << warning << "mpatmos-disable-singlepath-scheduler" << post_msg;
+  }
+  if(DisableSPSchedulerFun != "") {
+	errs() << warning << "mpatmos-disable-singlepath-scheduler-function" << post_msg;
+  }
+  if(DisableSPSchedulerFunBlock != -1) {
+	errs() << warning << "mpatmos-disable-singlepath-scheduler-function-block" << post_msg;
+  }
+  if(SPSchedulerIgnoreFirstInstructions != 0) {
+	errs() << warning << "mpatmos-singlepath-scheduler-ignore-first-instructions" << post_msg;
+  }
+  if(SPSchedulerInstructionsToSchedule != 0) {
+	errs() << warning << "mpatmos-singlepath-scheduler-instruction-to-schedule" << post_msg;
+  }
+}
+
+bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
+
+
+  // Only schedule single-path function
+  if(! mf.getInfo<PatmosMachineFunctionInfo>()->isSinglePath() ){
+    return false;
+  }
+
+  LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
+
+  auto reduceAnalysis = &getAnalysis<PatmosSPReduce>();
+  auto rootScope = reduceAnalysis->RootScope;
+
+  for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; ++mbbIter){
+    auto mbb = mbbIter;
+    LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb->dump());
+
+    // Statistics
+    for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
+            instrIter != instrEnd; instrIter++)
+	{
+    	if(is_long(&*instrIter)) SPLongInstructions++;
+    	if(!(instrIter->isInlineAsm() || instrIter->isPseudo()) && !may_second_slot(TM.getSubtargetImpl()->getInstrInfo(), &*instrIter)) SPFirstSlotInstructions++;
+	}
+
+    bool disable = DisableSPScheduler
+        ||
+        (DisableSPSchedulerFun != "" && DisableSPSchedulerFun == mf.getName() &&
+            (DisableSPSchedulerFunBlock == -1 || DisableSPSchedulerFunBlock == mbb->getNumber()))
+            ;
+
+    if(!disable) {
+      runListSchedule(&*mbb);
+    } else {
+      LLVM_DEBUG( dbgs() << "Disabled SPScheduler for '" << mf.getName() << "' block: " << mbb->getNumber() << "\n");
+    }
+
+    for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
+        instrIter != instrEnd; )
+    {
+      SPInstructions++;
+      auto latency = calculateLatency(instrIter, disable);
+	  for(auto i = 0; i<latency; i++){
+	    TM.getInstrInfo()->insertNoop(*mbb, std::next(instrIter));
+	  }
+	  instrIter = std::next(instrIter, 1+latency); // Make sure to skip the newly added noops
+    }
+  }
+
+  return true;
+}
+
+unsigned SPScheduler::calculateLatency(MachineBasicBlock::iterator instr, bool branches_only) const{
+  if((instr->isBranch() || instr->isCall() || instr->isReturn()) && instr->hasDelaySlot()){
+    // We simply add 3 nops after any branch, call or return, as its
+    // the highest possible delay.
+    return 3;
+  } else if (branches_only &&
+      (instr->mayLoad() || (instr->getOpcode() == Patmos::MUL) || (instr->getOpcode() == Patmos::MULU))
+  ){
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
   // Scheduler cannot handle the PSEUDO_LOOPBOUND pseudo-instruction,
   // so if it's there, move it to the end of the instruction list
@@ -372,6 +384,7 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     }else{
       // Nop is needed in at this index (first issue slot)
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
+      SPUnscheduledSlots++;
     }
   }
 
