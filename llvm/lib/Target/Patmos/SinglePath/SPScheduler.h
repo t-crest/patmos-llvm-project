@@ -39,7 +39,6 @@ public:
 
   /// getAnalysisUsage - Specify which passes this pass depends on
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<PatmosSPReduce>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 

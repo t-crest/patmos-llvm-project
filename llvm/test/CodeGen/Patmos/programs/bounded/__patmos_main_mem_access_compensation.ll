@@ -8,25 +8,24 @@
 ; loads to main memory.
 ;
 ; __patmos_main_mem_access_compensation has a custom calling convention:
-; it can only clobber r3(max),r4(remaining),r5, and r6. 
-; It must remember to save s0 before using predicates.
-@__patmos_main_mem_access_compensation = alias void (i32,i32), void (i32,i32)* @__patmos_comp_fun_for_testing
+; it can only clobber r23(max),r24(remaining). Any predicates that are clobbered must
+; be cleared by the end (not set).
+@__patmos_main_mem_access_compensation = alias void (), void ()* @__patmos_comp_fun_for_testing
 
-define void @__patmos_comp_fun_for_testing(i32 %max, i32 %remaining) {  
+define void @__patmos_comp_fun_for_testing() #0 {  
 entry:
   call void asm sideeffect "
-		mfs $$r5 = $$s0
 		__patmos_comp_fun_for_testing_loop:
-		cmpult			$$p2 = $$r0, $$r3
-		cmpult			$$p3 = $$r0, $$r4
-		lwm		($$p3)	$$r0 = [$$r0]
-		br 		($$p2) 	__patmos_comp_fun_for_testing_loop
-		sub 	($$p3) 	$$r4 = $$r4, 1
-		sub 			$$r3 = $$r3, 1
-		mts $$s0 = $$r5
+		cmpult			$$p1 = $$r0, $$r23
+		cmpult			$$p2 = $$r0, $$r24
+		lwm		($$p2)	$$r0 = [$$r0]
+		br 		($$p1) 	__patmos_comp_fun_for_testing_loop
+		sub 	($$p2) 	$$r24 = $$r24, 1
+		sub 			$$r23 = $$r23, 1
 		retnd
-	", "~{r3},~{r4},~{r5}"
+	", ""
 	()
   unreachable
 }
+attributes #0 = { naked noinline }
 

@@ -9,6 +9,8 @@
  *
  * Function that can compensate for the variability in main memory accesses.
  *
+ * Are are given in r23 (max) and r24 (remaining).
+ *
  * "max" is the maximum number of extra enabled accesses a function can need
  * "remaining" is the number of enabled accesses a given call to the function
  * is missing.
@@ -17,167 +19,163 @@
  * loads to main memory.
  *
  * __patmos_main_mem_access_compensation has a custom calling convention:
- * it can only clobber r3,r4,r5, and r6. It must remember to save s0 before using
- * predicates.
+ * It can only clobber r23,r24. Any predicates that are clobbered must
+ * be cleared by the end (not set).
  *
  * ===----------------------------------------------------------------------===
  */
 
 #include "../int_lib.h"
 
-void __patmos_main_mem_access_compensation(void) __attribute__((alias("__patmos_main_mem_access_compensation4")));
-void __patmos_main_mem_access_compensation_di(void) __attribute__((alias("__patmos_main_mem_access_compensation4_di")));
+void __patmos_main_mem_access_compensation() __attribute__((alias("__patmos_main_mem_access_compensation4")));
+void __patmos_main_mem_access_compensation_di() __attribute__((alias("__patmos_main_mem_access_compensation4_di")));
 
 void
-__patmos_main_mem_access_compensation1(unsigned, unsigned) __attribute__((naked,noinline));
+__patmos_main_mem_access_compensation1() __attribute__((naked,noinline));
 void
-__patmos_main_mem_access_compensation1(unsigned max, unsigned remaining)
+__patmos_main_mem_access_compensation1()
 {
     __asm__ volatile (
-		"mfs $r5 = $s0;"
 		"__patmos_main_mem_access_compensation_loop:;"
-		"cmpneq $p2 = $r3, 1;"
-		"cmpneq $p3 = $r4, 0;"
-		"lwm ($p3) $r0 = [$r0];"
-		"br ($p2) __patmos_main_mem_access_compensation_loop; "
-		"sub ($p3) $r4 = $r4, 1;"
-		"sub ($p2) $r3 = $r3, 1;"
-		"mts $s0 = $r5;"
+		"cmpneq $p1 = $r23, 1;"
+		"cmpneq $p2 = $r24, 0;"
+		"lwm ($p2) $r0 = [$r0];"
+		"br ($p1) __patmos_main_mem_access_compensation_loop; "
+		"sub ($p2) $r24 = $r24, 1;"
+		"sub ($p1) $r23 = $r23, 1;"
+		// Don't have to clear since both predicates are false now.
 		"retnd;"
 		:
 		: 
-		: "r3", "r4", "r5"
+		: "r23", "r24"
 	);
 }
 
 void
-__patmos_main_mem_access_compensation2(unsigned, unsigned) __attribute__((naked,noinline));
+__patmos_main_mem_access_compensation2() __attribute__((naked,noinline));
 void
-__patmos_main_mem_access_compensation2(unsigned max, unsigned remaining)
+__patmos_main_mem_access_compensation2()
 {
     __asm__ volatile (
-		"mfs $r5 = $s0;"
-		"li  $r6 = 2;"
 		"__patmos_main_mem_access_compensation2_loop:;"
-		"cmpule $p2 = $r6, $r3;"
-		"cmpule $p3 = $r6, $r4;"
+		"cmpult $p2 = $r23, 2;" // We want r3 >= 2, so negate p2 use
+		"cmpult $p3 = $r24, 2;" // We want r4 >= 2, so negate p3 use
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"br (!$p2) __patmos_main_mem_access_compensation2_loop; "
+		"sub (!$p3) $r24 = $r24, 2;"
+		"sub (!$p2) $r23 = $r23, 2;"
+		"cmpult $p3 = $r0, $r24;"
 		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"br ($p2) __patmos_main_mem_access_compensation2_loop; "
-		"sub ($p3) $r4 = $r4, $r6;"
-		"sub ($p2) $r3 = $r3, $r6;"
-		"cmpult $p3 = $r0, $r4;"
-		"lwm ($p3) $r0 = [$r0];"
-		"mts $s0 = $r5;"
+		"pclr $p2;" // Have to clear since they might be true
+		"pclr $p3;"
 		"retnd;"
 		:
 		: 
-		: "r3", "r4", "r5", "r6"
+		: "r23", "r24"
 	);
 }
 
 void
-__patmos_main_mem_access_compensation4(unsigned, unsigned) __attribute__((naked,noinline));
+__patmos_main_mem_access_compensation4() __attribute__((naked,noinline));
 void
-__patmos_main_mem_access_compensation4(unsigned max, unsigned remaining)
+__patmos_main_mem_access_compensation4()
 {
     __asm__ volatile (
-		"mfs $r5 = $s0;"
-		"li  $r6 = 4;"
 		"__patmos_main_mem_access_compensation4_loop:;"
-		"cmpule $p2 = $r6, $r3;"
-		"cmpule $p3 = $r6, $r4;"
+		"cmpult $p2 = $r23, 4;" // We want r3 >= 4, so negate p2 use
+		"cmpult $p3 = $r24, 4;" // We want r4 >= 4, so negate p3 use
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"br (!$p2) __patmos_main_mem_access_compensation4_loop; "
+		"sub (!$p3) $r24 = $r24, 4;"
+		"sub $r23 = $r23, 4;"
+		"cmpult $p3 = $r0, $r24;"
+		"sub ($p3) $r24 =  $r24, 1;"
 		"lwm ($p3) $r0 = [$r0];"
+		"cmpult $p3 = $r0, $r24;"
+		"sub ($p3) $r24 =  $r24, 1;"
 		"lwm ($p3) $r0 = [$r0];"
+		"cmpult $p3 = $r0, $r24;"
 		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"br ($p2) __patmos_main_mem_access_compensation4_loop; "
-		"sub ($p3) $r4 = $r4, $r6;"
-		"sub $r3 = $r3, $r6;"
-		"cmpult $p3 = $r0, $r4;"
-		"sub ($p3) $r4 =  $r4, 1;"
-		"lwm ($p3) $r0 = [$r0];"
-		"cmpult $p3 = $r0, $r4;"
-		"sub ($p3) $r4 =  $r4, 1;"
-		"lwm ($p3) $r0 = [$r0];"
-		"cmpult $p3 = $r0, $r4;"
-		"lwm ($p3) $r0 = [$r0];"
-		"mts $s0 = $r5;"
+		"pclr $p2;" // Have to clear since they might be true
+		"pclr $p3;"
 		"retnd;"
 		:
 		: 
-		: "r3", "r4", "r5", "r6"
+		: "r23", "r24"
 	);
 }
 
 void
-__patmos_main_mem_access_compensation8(unsigned, unsigned) __attribute__((naked,noinline));
+__patmos_main_mem_access_compensation8() __attribute__((naked,noinline));
 void
-__patmos_main_mem_access_compensation8(unsigned max, unsigned remaining)
+__patmos_main_mem_access_compensation8()
 {
     __asm__ volatile (
-		"br __patmos_main_mem_access_compensation8_cond; "
-		"mfs $r5 = $s0;"
-		"li  $r6 = 8;"
+		"brnd __patmos_main_mem_access_compensation8_cond; "
 		"__patmos_main_mem_access_compensation8_loop:;"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
 		"__patmos_main_mem_access_compensation8_cond:;"
-		"cmpule $p2 = $r6, $r3;"
-		"cmpule $p3 = $r6, $r4;"
-		"br ($p2) __patmos_main_mem_access_compensation8_loop; "
-		"sub ($p2) $r3 = $r3, $r6;"
-		"sub ($p3) $r4 = $r4, $r6;"
-		"li  $r6 = 2;"
-		"li  $r3 = 7;"
+		"cmpult $p2 = $r23, 8;"
+		"cmpult $p3 = $r24, 8;"
+		"br (!$p2) __patmos_main_mem_access_compensation8_loop; "
+		"sub (!$p2) $r23 = $r23, 8;"
+		"sub (!$p3) $r24 = $r24, 8;"
+		// We might have decremented r3 to less than r4 (which is <8). 
+		// Therefore reset to max possible for r4
+		"li  $r23 = 7;" 
 		"__patmos_main_mem_access_compensation82_loop:;"
-		"cmpule $p2 = $r6, $r3;"
-		"cmpule $p3 = $r6, $r4;"
+		"cmpult $p2 = $r23, 2;" // We want r3 >= 2, so negate p2 use
+		"cmpult $p3 = $r24, 2;" // We want r4 >= 2, so negate p3 use
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"br (!$p2) __patmos_main_mem_access_compensation82_loop; "
+		"sub (!$p3) $r24 = $r24, 2;"
+		"sub (!$p2) $r23 = $r23, 2;"
+		"cmpult $p3 = $r0, $r24;"
 		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"br ($p2) __patmos_main_mem_access_compensation82_loop; "
-		"sub ($p3) $r4 = $r4, $r6;"
-		"sub ($p2) $r3 = $r3, $r6;"
-		"cmpult $p3 = $r0, $r4;"
-		"lwm ($p3) $r0 = [$r0];"
-		"mts $s0 = $r5;"
+		"pclr $p2;" // Have to clear since they might be true
+		"pclr $p3;"
 		"retnd;"
 		:
 		: 
-		: "r3", "r4", "r5", "r6"
+		: "r23", "r24"
 	);
 }
 
 void
-__patmos_main_mem_access_compensation4_di(unsigned, unsigned) __attribute__((naked,noinline));
+__patmos_main_mem_access_compensation4_di() __attribute__((naked,noinline));
 void
-__patmos_main_mem_access_compensation4_di(unsigned max, unsigned remaining)
+__patmos_main_mem_access_compensation4_di()
 {
     __asm__ volatile (
-		"{ mfs $r5 = $s0 ; li  $r6 = 4};"
 		"__patmos_main_mem_access_compensation4_di_loop:;"
-		"{ cmpule $p2 = $r6, $r3; cmpule $p3 = $r6, $r4 };"
-		"lwm ($p3) $r0 = [$r0];"
-		"lwm ($p3) $r0 = [$r0];"
-		"br ($p2) __patmos_main_mem_access_compensation4_di_loop; "
-		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 = $r4, $r6 };"
-		"{ lwm ($p3) $r0 = [$r0]; sub $r3 = $r3, $r6 };"
+		"{ cmpult $p2 = $r23, 4; cmpult $p3 = $r24, 4 };"
+		"lwm (!$p3) $r0 = [$r0];"
+		"lwm (!$p3) $r0 = [$r0];"
+		"br (!$p2) __patmos_main_mem_access_compensation4_di_loop; "
+		"{ lwm (!$p3) $r0 = [$r0]; sub (!$p3) $r24 = $r24, 4 };"
+		"{ lwm (!$p3) $r0 = [$r0]; sub $r23 = $r23, 4 };"
 		
-		"cmpult $p3 = $r0, $r4;"
-		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 =  $r4, 1 };"
-		"cmpult $p3 = $r0, $r4;"
-		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r4 =  $r4, 1 };"
-		"cmpult $p3 = $r0, $r4;"
-		"lwm ($p3) $r0 = [$r0];"
-		"{ retnd; mts $s0 = $r5 };"
+		"cmpult $p3 = $r0, $r24;"
+		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r24 =  $r24, 1 };"
+		"cmpult $p3 = $r0, $r24;"
+		"{ lwm ($p3) $r0 = [$r0]; sub ($p3) $r24 =  $r24, 1 };"
+		"cmpult $p3 = $r0, $r24;"
+		"{lwm ($p3) $r0 = [$r0]; pclr $p2};"// Have to clear since they might be true
+		"{ retnd; pclr $p3 };"
 		:
 		: 
-		: "r3", "r4", "r5", "r6"
+		: "r23", "r24"
 	);
 }

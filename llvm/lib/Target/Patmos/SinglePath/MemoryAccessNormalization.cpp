@@ -25,6 +25,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 
 #include <deque>
 #include <set>
@@ -298,6 +299,7 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
   }
 
   insert_count += compensateEnd(MF, block_regs, max_compensation, should_insert);
+
   return insert_count;
 }
 
@@ -309,17 +311,16 @@ std::pair<unsigned, Register> MemoryAccessNormalization::compensateEntryBlock(
 ) {
   DebugLoc DL;
 
-  // If function only has one block, just use r4 directly for the counter
-  auto init_reg = MF.size() == 1? Patmos::R4 : new_vreg(MF);
+  // If function only has one block, just use r24 directly for the counter
+  auto init_reg = MF.size() == 1? Patmos::R24 : new_vreg(MF);
 
   auto insert_count = 1;
   if(should_insert){
     auto count_opcode = max_end_accesses > 4095? Patmos::LIl : Patmos::LIi;
     BuildMI(*entry, entry->getFirstTerminator(), DL, TII->get(count_opcode),
       init_reg)
-      .addReg(Patmos::NoRegister).addImm(0) // Not predicated
-      .addImm(max_end_accesses)
-      .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
+      .addReg(Patmos::NoRegister).addImm(0) // May be predicated
+      .addImm(max_end_accesses);
 
     LLVM_DEBUG(
       dbgs() << "Inserted counter initializer in '" << entry->getName() << "': "
@@ -500,58 +501,59 @@ unsigned MemoryAccessNormalization::compensateEnd(
   bool found_end = false;
   DebugLoc DL;
 
-  for (auto BB_iter = MF.begin(); BB_iter != MF.end(); BB_iter++) {
-    auto *BB = &*BB_iter;
-    if (BB->succ_size() == 0 && !found_end) {
-      found_end = true;
+  assert(std::count_if(MF.begin(), MF.end(), [](auto &mbb){return mbb.succ_size() == 0;}) <= 1
+		  && "Function has multiple return blocks");
 
-      if (should_insert) {
-        // Put the max possible into r3 as input
-        auto max_opcode = max_end_accesses > 4095 ? Patmos::LIl : Patmos::LIi;
-        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
-          Patmos::R3)
-          .addReg(Patmos::NoRegister).addImm(0)
-          .addImm(max_end_accesses)
-          .setMIFlags(MachineInstr::FrameSetup);
+  auto end = std::find_if(MF.begin(), MF.end(), [](auto &mbb){return mbb.succ_size() == 0;});
+  assert(end != MF.end() && "Couldn't find end block");
+  auto *BB = &*end;
 
-        assert(block_regs.count(BB) && "End block doesn't have a counter register");
+  if (should_insert) {
 
-        // Replace counter virtual register with r4, so that it becomes the second input
-        BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(Patmos::COPY),
-          Patmos::R4)
-          .addReg(block_regs[BB]);
-        if (!PatmosSinglePathInfo::isRootLike(MF)) {
-          // Put the max possible into r4 in case the whole function is disabled
-          // forcing the maximum compensation.
-          // We negate the default predicate, such that the maximum compensation is only
-          // used when the whole function is disabled.
-          BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
-            Patmos::R4)
-            .addReg(Patmos::NoRegister).addImm(1)
-            .addImm(max_end_accesses);
-        }
+	// Put the max possible into r23 as input
+	auto max_opcode = max_end_accesses > 4095 ? Patmos::LIl : Patmos::LIi;
+	BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+	  Patmos::R23)
+	  .addReg(Patmos::NoRegister).addImm(0)
+	  .addImm(max_end_accesses)
+	  .setMIFlags(MachineInstr::FrameSetup);
 
-        // Insert call. Since the compensation function doesn't follow usual calling convention,
-        // manually set use definitions
-        auto *call_instr = MF.CreateMachineInstr(TII->get(Patmos::CALLND), DL,true);
-        auto call_instr_builder = MachineInstrBuilder(MF, call_instr)
-          .addReg(Patmos::NoRegister).addImm(0)
-          .addExternalSymbol(PatmosSinglePathInfo::getCompensationFunction())
-          .addReg(Patmos::R3, RegState::ImplicitKill)
-          .addReg(Patmos::R4, RegState::ImplicitKill)
-          .addReg(Patmos::R5, RegState::ImplicitDefine)
-          .addReg(Patmos::R6, RegState::ImplicitDefine)
-          .addReg(Patmos::SRB, RegState::ImplicitDefine)
-          .addReg(Patmos::SRO,  RegState::ImplicitDefine)
-          .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
-        BB->insert(BB->getFirstTerminator(), call_instr);
-        LLVM_DEBUG(
-          dbgs() << "\nInserted call to __patmos_main_mem_access_compensation in '" << BB->getName() << "'\n");
-      }
-    } else if (BB->succ_size() == 0) {
-      report_fatal_error("Can't handle functions with multiple return blocks");
-    }
+	assert(block_regs.count(BB) && "End block doesn't have a counter register");
+
+	// Replace counter virtual register with r24, so that it becomes the second input
+	BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(Patmos::COPY),
+	  Patmos::R24)
+	  .addReg(block_regs[BB]);
+	if (!PatmosSinglePathInfo::isRootLike(MF)) {
+	  // Put the max possible into r24 in case the whole function is disabled
+	  // forcing the maximum compensation.
+	  // We negate the default predicate, such that the maximum compensation is only
+	  // used when the whole function is disabled.
+	  BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
+		Patmos::R24)
+		.addReg(Patmos::NoRegister).addImm(1)
+		.addImm(max_end_accesses);
+	}
+
+	// Insert call. Since the compensation function doesn't follow usual calling convention,
+	// manually set use definitions
+	// We use r23 and r24 for input to ensure the prologue/epilogue will ensure they aren't
+	// changed, even if the function is disabled. Had we used r3/r4, calling the function disabled
+	// would still need to change them without the prologue/epilogue automatically spilling/reloading them
+	auto *call_instr = MF.CreateMachineInstr(TII->get(Patmos::CALLND), DL,true);
+	auto call_instr_builder = MachineInstrBuilder(MF, call_instr)
+	  .addReg(Patmos::NoRegister).addImm(0)
+	  .addExternalSymbol(PatmosSinglePathInfo::getCompensationFunction())
+	  .addReg(Patmos::R23, RegState::ImplicitKill)
+	  .addReg(Patmos::R24, RegState::ImplicitKill)
+	  .addReg(Patmos::SRB, RegState::ImplicitDefine)
+	  .addReg(Patmos::SRO,  RegState::ImplicitDefine)
+	  .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
+	BB->insert(BB->getFirstTerminator(), call_instr);
+
+	LLVM_DEBUG(
+	  dbgs() << "\nInserted call to __patmos_main_mem_access_compensation in '" << BB->getName() << "'\n");
   }
+
   return 3;
-//  return 2 + (PatmosSinglePathInfo::isRootLike(MF)?0:1);
 }

@@ -151,30 +151,20 @@
 
 // END.
 
+extern void __patmos_main_mem_access_compensation8();   
+#define COMPENSATION_FN_ALIAS __patmos_main_mem_access_compensation8
 
-extern void __patmos_main_mem_access_compensation8(unsigned max, unsigned remaining);        
-
-int main(int input)
-{	
-	// We treat the first 2 decimals as the remainder,
-	// and the rest as the max
-	unsigned remaining = input%100;
-	unsigned max = input/100;
-	
-	__patmos_main_mem_access_compensation8(max, remaining);
-	
-	return 0;
-}
+#include "__patmos_main_mem_access_compensation_main.h"
 
 // Ensure that regardless of how many accesses need to be compensated,
 // the same number of instructions are executed (ensure is single-path)
-// IN1XX: Operations: 43
-// IN3XX: Operations: 43
-// IN4XX: Operations: 43
-// IN5XX: Operations: 43
-// IN15XX: Operations: 56
-// IN16XX: Operations: 69
-// IN17XX: Operations: 69
+// IN1XX: Operations: 46
+// IN3XX: Operations: 46
+// IN4XX: Operations: 46
+// IN5XX: Operations: 46
+// IN15XX: Operations: 59
+// IN16XX: Operations: 72
+// IN17XX: Operations: 72
 // CHECK-LABEL: Instruction Cache Statistics:
 // CHECK-LABEL: Data Cache Statistics:
 // CHECK-LABEL: Stack Cache Statistics:

@@ -25,7 +25,7 @@ namespace llvm {
 
 /// Definition of a singlepath predicate, i.e. a calculation of its
 /// boolean value prior to being used as a guard for some instructions.
-/// A predicate's value is is derived from some condition and is guarded
+/// A predicate's value is derived from some condition and is guarded
 /// by some other guard predicate.
 ///
 /// There are two kinds of definitions:

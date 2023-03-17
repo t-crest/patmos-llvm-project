@@ -25,7 +25,7 @@ char ConstantLoopDominators::ID = 0;
 
 /// createDataCacheAccessEliminationPass - Returns a new DataCacheAccessElimination
 /// \see DataCacheAccessElimination
-FunctionPass *llvm::createPatmosBoundedDominatorsPass() {
+FunctionPass *llvm::createPatmosConstantLoopDominatorsPass() {
   return new ConstantLoopDominators();
 }
 

@@ -974,7 +974,7 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
           int i = instr->findFirstPredOperandIdx();
           if (i != -1) {
             unsigned preg = instr->getOperand(i).getReg();
-            return (preg!=Patmos::NoRegister && (preg!=Patmos::P0 || instrPredNeg));
+            return (preg!=Patmos::NoRegister && (preg!=Patmos::P0));
           }
           // no predicates at all
           return false;
@@ -1040,6 +1040,8 @@ void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
       AddDefaultPred(BuildMI(*MBB, MI, MI->getDebugLoc(),
             TII->get(Patmos::PMOV), predReg))
         .addReg(PRTmp).addImm(0);
+
+      InsertedInstrs++; // STATISTIC
     }
   }
 }

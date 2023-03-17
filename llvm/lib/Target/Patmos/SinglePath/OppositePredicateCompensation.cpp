@@ -42,11 +42,19 @@ FunctionPass *llvm::createOppositePredicateCompensationPass(const PatmosTargetMa
 }
 
 bool OppositePredicateCompensation::runOnMachineFunction(MachineFunction &MF) {
-  PSPI = &getAnalysis<PatmosSinglePathInfo>();
-    
   if (PatmosSinglePathInfo::isConverting(MF) && MF.getFunction().hasFnAttribute(ENABLE_OPC_ATTR))
   {
+    LLVM_DEBUG(
+	  dbgs() << "[Single-Path] Opposite Predicate Compensation " << MF.getFunction().getName() << "\n" ;
+	  MF.dump();
+	);
+
     compensate(MF);
+
+    LLVM_DEBUG(
+	  dbgs() << "[Single-Path] Opposite Predicate Compensation end " << MF.getFunction().getName() << "\n" ;
+	  MF.dump();
+	);
     return true;
   }
 
@@ -58,29 +66,36 @@ void OppositePredicateCompensation::compensate(MachineFunction &MF)
   auto &cldoms = getAnalysis<ConstantLoopDominators>().dominators;
 
   std::for_each(MF.begin(), MF.end(), [&](auto &BB){
-    auto *block = PSPI->getRootScope()->findBlockOf(&BB);
-    assert(block && "MBB is not associated with a PredicatedBlock");
-
-    auto dominates = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot()  &&
+    auto dominates = PatmosSinglePathInfo::isRootLike(MF)  &&
         cldoms.begin()->second.count(&BB);
 
     for(auto instr_iter = BB.begin(); instr_iter != BB.end(); ++instr_iter){
-      if( !dominates && instr_iter->mayLoadOrStore() && PatmosInstrInfo::getMemType(*instr_iter) == PatmosII::MEM_M) {
-        auto old_pred = block->getInstructionPredicates()[&*instr_iter];
+      if( !dominates &&
+    		  instr_iter->mayLoadOrStore() &&
+			  PatmosInstrInfo::getMemType(*instr_iter) == PatmosII::MEM_M
+	  ) {
+	    // Always load into r0 such that you never overwrite a used register
+	    auto new_instr_builder = BuildMI(BB, *instr_iter, DebugLoc(), TII->get(Patmos::LWM), Patmos::R0);
+        Register pred;
+        unsigned neg_flag;
+        if(PatmosSinglePathInfo::useNewSinglePathTransform()) {
+        	// Simply negate the assigned predicate
+        	new_instr_builder.addReg(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()).getReg())
+        			.addImm(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()+1).getImm()==0? 1: 0);
+        } else {
+            auto *block = getAnalysis<PatmosSinglePathInfo>().getRootScope()->findBlockOf(&BB);
+            assert(block && "MBB is not associated with a PredicatedBlock");
+            auto old_pred = block->getInstructionPredicates()[&*instr_iter];
 
-        DebugLoc DL;
-        auto new_instr_builder = BuildMI(BB, *instr_iter, DL, TII->get(Patmos::LWM),
-            // Always load into r0 such that you never overwrite a used register
-            Patmos::R0)
-            // Predicate
-            .addReg(Patmos::NoRegister)
-            // Predicate negation flag
-            .addImm(0)
-            // We create a load using address 0 (r0), which is always a valid address.
-            .addReg(Patmos::R0);
+        	// Predicates have yet to be to the instructions
+        	new_instr_builder.addReg(Patmos::NoRegister).addImm(0);
 
-        // Set the new instruction to use the negated predicate
-        block->setPredicateFor(new_instr_builder.getInstr(), old_pred.first, !old_pred.second);
+            // Set the new instruction to use the negated predicate
+            block->setPredicateFor(new_instr_builder.getInstr(), old_pred.first, !old_pred.second);
+        }
+
+        // We create a load using address 0 (r0), which is always a valid address.
+        new_instr_builder.addReg(Patmos::R0).addImm(0);
 
         CompLoads++;
       }

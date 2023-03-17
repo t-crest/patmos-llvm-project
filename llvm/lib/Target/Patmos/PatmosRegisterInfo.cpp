@@ -116,9 +116,12 @@ BitVector PatmosRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   if (PatmosSinglePathInfo::isEnabled(MF)) {
     // Additionally reserved for single-path support
     Reserved.set(Patmos::R26);
-    // guarantee two available predicate registers
-    Reserved.set(Patmos::P6);
-    Reserved.set(Patmos::P7);
+
+    if(!PatmosSinglePathInfo::useNewSinglePathTransform()) {
+      // guarantee two available predicate registers
+      Reserved.set(Patmos::P6);
+      Reserved.set(Patmos::P7);
+    }
   }
 
   return Reserved;

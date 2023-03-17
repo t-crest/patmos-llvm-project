@@ -43,6 +43,10 @@ namespace llvm {
   FunctionPass *createDataCacheAccessEliminationPass(const PatmosTargetMachine &tm);
   FunctionPass *createMemoryAccessNormalizationPass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPReducePass(const PatmosTargetMachine &tm);
+  FunctionPass *createPreRegallocReduce(const PatmosTargetMachine &tm);
+  FunctionPass *createLoopCountInsert(const PatmosTargetMachine &tm);
+  FunctionPass *createVirtualizePredicates(const PatmosTargetMachine &tm);
+  FunctionPass *createSinglePathLinearizer(const PatmosTargetMachine &tm);
   FunctionPass *createSPSchedulerPass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosDelaySlotFillerPass(const PatmosTargetMachine &tm,
                                                 bool ForceDisable);
@@ -50,7 +54,8 @@ namespace llvm {
   FunctionPass *createPatmosDelaySlotKillerPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosEnsureAlignmentPass(PatmosTargetMachine &tm);
   FunctionPass *createPatmosIntrinsicEliminationPass();
-  FunctionPass *createPatmosBoundedDominatorsPass();
+  FunctionPass *createPatmosConstantLoopDominatorsPass();
+  FunctionPass *createEquivalenceClassesPass();
   ModulePass *createPatmosCallGraphBuilder();
   ModulePass *createPatmosStackCacheAnalysis(const PatmosTargetMachine &tm);
   ModulePass *createPatmosStackCacheAnalysisInfo(const PatmosTargetMachine &tm);

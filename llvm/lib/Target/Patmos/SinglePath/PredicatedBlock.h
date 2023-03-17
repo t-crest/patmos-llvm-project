@@ -83,6 +83,12 @@ namespace llvm {
       return result;
     }
 
+    unsigned getUniquePredicate() const {
+    	auto preds = getBlockPredicates();
+    	assert(preds.size() == 1);
+    	return *preds.begin();
+    }
+
     /// Sets all of the MBB's instructions to be predicated by the given predicate.
     /// Should be used with care.
     void setPredicate(unsigned pred)
@@ -271,7 +277,8 @@ namespace llvm {
     }
 
     /// Gets all successors to this block with which predicates
-    /// that dictate whether their respective branches are taken.
+    /// that dictate whether their respective branches are taken
+    /// (i.e. the guard of the current block).
     std::map<const PredicatedBlock*, unsigned> getSuccessors() const 
     {
       return std::map<const PredicatedBlock*, unsigned>(Successors.begin(), Successors.end());

@@ -1,45 +1,39 @@
-; RUN: EXEC_ARGS="2=4 3=3"; \
+; RUN: EXEC_ARGS="0=5 1=1 2=7 3=3 4=9"; \
 ; RUN: %test_execution
 ; END.
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 ; 
-; Tests that sinle-path functions that are not part of the root set are supported 
-; and that a false branch still calls functions.
-; 
-; The following is the equivalent C code:
-; 
-; volatile int _2 = 2;
-; 
-; int non_root(int x){
-; 	return x + _2;
-; }
-; 
-; int main(int x){
-; 	return x%2? x : non_root(x);
-; }
-; 
+; Tests that a function that is only sometimes called can call another function (always)
+;
 ;//////////////////////////////////////////////////////////////////////////////////////////////////
 
 @_2 = global i32 2
 
-define i32 @non_root(i32 %x)  {
+define i32 @always_called(i32 %x)  {
+entry:
+  %add = add nsw i32 %x, 3
+  ret i32 %add
+}
+
+define i32 @maybe_called(i32 %x)  {
 entry:
   %0 = load volatile i32, i32* @_2
   %add = add nsw i32 %0, %x
-  ret i32 %add
+  %1 = call i32 @always_called(i32 %add)
+  ret i32 %1
 }
 
 define i32 @main(i32 %x)  {
 entry:
-  %rem3 = and i32 %x, 1
-  %tobool = icmp eq i32 %rem3, 0
-  br i1 %tobool, label %cond.false, label %cond.true
+  %first_bit = and i32 %x, 1
+  %is_even = icmp eq i32 %first_bit, 0
+  br i1 %is_even, label %cond.false, label %cond.true
 
 cond.true:                                        ; preds = %entry
   br label %cond.end
 
 cond.false:                                       ; preds = %entry
-  %call = call i32 @non_root(i32 %x)
+  %call = call i32 @maybe_called(i32 %x)
   br label %cond.end
 
 cond.end:                                         ; preds = %cond.false, %cond.true

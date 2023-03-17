@@ -14,8 +14,6 @@ private:
 
   const PatmosInstrInfo *TII;
 
-  PatmosSinglePathInfo *PSPI;
-
 public:
   static char ID;
 
@@ -30,13 +28,15 @@ public:
 
   /// getPassName - Return the pass' name.
   StringRef getPassName() const override {
-    return "Patmos Single-Path Instruction-Level Constant Execution-Time (machine code)";
+    return "Patmos Single-Path Opposite Predicate Compensation";
   }
 
   /// getAnalysisUsage - Specify which passes this pass depends on
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<PatmosSinglePathInfo>();
-    AU.addPreserved<PatmosSinglePathInfo>();
+	if(!PatmosSinglePathInfo::useNewSinglePathTransform()) {
+	    AU.addRequired<PatmosSinglePathInfo>();
+	}
+	AU.addPreserved<PatmosSinglePathInfo>();
     AU.addRequired<ConstantLoopDominators>();
     AU.addPreserved<ConstantLoopDominators>();
     MachineFunctionPass::getAnalysisUsage(AU);

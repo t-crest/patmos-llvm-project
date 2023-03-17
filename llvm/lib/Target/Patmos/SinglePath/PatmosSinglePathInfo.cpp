@@ -78,6 +78,12 @@ static cl::opt<std::string> CetCompFun(
     cl::desc("Which compensation function to use with 'counter' constant execution time compensation"),
     cl::Hidden);
 
+static cl::opt<bool> EnableOldSinglePathTransform(
+    "mpatmos-enable-old-singlepath",
+    cl::init(false),
+    cl::desc("Enables the old version of the single-path transformation."),
+    cl::Hidden);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 char PatmosSinglePathInfo::ID = 0;
@@ -165,6 +171,10 @@ bool PatmosSinglePathInfo::isRootLike(const MachineFunction &MF) {
 void PatmosSinglePathInfo::getRootNames(std::set<StringRef> &S) {
   S.insert( SPRootList.begin(), SPRootList.end() );
   S.erase("");
+}
+
+bool PatmosSinglePathInfo::useNewSinglePathTransform(){
+	return !EnableOldSinglePathTransform;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

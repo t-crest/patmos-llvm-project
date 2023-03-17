@@ -27,22 +27,22 @@ define i32 @main(i32 %x) {
 entry:
   br label %while.cond
 
-while.cond:                                       ; preds = %if.end, %entry
+while.cond:
   %x.addr.0 = phi i32 [ %x, %entry ], [ %dec, %if.end ]
   %cmp = icmp sgt i32 %x.addr.0, 0
   call void @llvm.loop.bound(i32 0, i32 5)
   br i1 %cmp, label %while.body, label %while.end
 
-while.body:                                       ; preds = %while.cond
+while.body:
   %0 = load volatile i32, i32* @_7
   %cmp1 = icmp eq i32 %x.addr.0, %0
   br i1 %cmp1, label %while.end, label %if.end
 
-if.end:                                           ; preds = %while.body
+if.end:
   %dec = add nsw i32 %x.addr.0, -1
   br label %while.cond
 
-while.end:                                        ; preds = %while.body, %while.cond
+while.end:
   %add = add nsw i32 %x.addr.0, 10
   ret i32 %add
 }

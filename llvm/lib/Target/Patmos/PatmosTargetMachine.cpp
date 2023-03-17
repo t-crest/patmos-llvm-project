@@ -72,6 +72,9 @@ namespace {
      cl::CommaSeparated);
 
 
+
+
+
   /// Patmos Code Generator Pass Configuration Options.
   class PatmosPassConfig : public TargetPassConfig {
   private:
@@ -157,23 +160,94 @@ namespace {
       }
       if (PatmosSinglePathInfo::isEnabled()) {
         addPass(createPatmosSPMarkPass(getPatmosTargetMachine()));
-        addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
-        addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
+        if(!PatmosSinglePathInfo::useNewSinglePathTransform()) {
+            addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
+        	addPass(createPatmosSPPreparePass(getPatmosTargetMachine()));
+        }
         if (PatmosSinglePathInfo::isConstant()) {
-          addPass(createPatmosBoundedDominatorsPass());
+          addPass(createPatmosConstantLoopDominatorsPass());
           addPass(createMemoryAccessNormalizationPass(getPatmosTargetMachine()));
+        }
+        if(PatmosSinglePathInfo::useNewSinglePathTransform()) {
+        	addPass(createLoopCountInsert(getPatmosTargetMachine()));
         }
       }
     }
 
-    /// addPostRegAlloc - This method may be implemented by targets that want to
-    /// run passes after register allocation pass pipeline but before
-    /// prolog-epilog insertion.  This should return true if -print-machineinstrs
-    /// should print after these passes.
-    void addPostRegAlloc() override {
+	/// This method may be implemented by targets that want to run passes after
+	/// register allocation pass pipeline but before prolog-epilog insertion.
+	void addPostRegAlloc() override {
+		if(PatmosSinglePathInfo::isEnabled() && PatmosSinglePathInfo::useNewSinglePathTransform()) {
+			// The previous register allocation allocated the predicate registers too.
+			// We returns those predicate registers to virtual registers so that they
+			// play nice with the rest of the predicates from the single-path management.
+			addPass(createVirtualizePredicates(getPatmosTargetMachine()));
 
-    }
+			// At this point there are still register copies that haven't been converted to patmos instructions.
+			// (in addition to the ones added by VirtualizePredicates).
+			// So, Optimize as many of them away as possible and
+			// convert them to patmos instruction such that they can be predicated.
+			// (COPY is a pseudo-instruction and can't be predicated)
+			addPass(&RegisterCoalescerID); // Optimize copies
+			addPass(&ExpandPostRAPseudosID); // Convert to patmos instructions
 
+			// Calculate equivalence classes and assign abstract predicates to each
+			addPass(createEquivalenceClassesPass());
+
+			// Assign predicates to instructions and initialize predicate definitions
+        	addPass(createPreRegallocReduce(getPatmosTargetMachine()));
+
+			addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
+			if (PatmosSinglePathInfo::isConstant()) {
+			  addPass(createPatmosConstantLoopDominatorsPass());
+			  addPass(createOppositePredicateCompensationPass(getPatmosTargetMachine()));
+			}
+
+			// Linearize block order and control flow and merge blocks
+        	addPass(createSinglePathLinearizer(getPatmosTargetMachine()));
+
+			///////////////
+			// The following is copied from TargetPassConfig::addOptimizedRegAlloc()
+			// with unneeded parts commented out
+
+			addPass(&MachineLoopInfoID, false);
+//			addPass(&PHIEliminationID, false);
+
+//			addPass(&TwoAddressInstructionPassID, false);
+			addPass(&RegisterCoalescerID);
+
+			// The machine scheduler may accidentally create disconnected components
+			// when moving subregister definitions around, avoid this by splitting them to
+			// separate vregs before. Splitting can also improve reg. allocation quality.
+//			addPass(&RenameIndependentSubregsID);
+
+			// PreRA instruction scheduling.
+//			addPass(&MachineSchedulerID);
+
+			if (addRegAssignAndRewriteOptimized()) {
+				// Perform stack slot coloring and post-ra machine LICM.
+				//
+				// FIXME: Re-enable coloring with register when it's capable of adding
+				// kill markers.
+				addPass(&StackSlotColoringID);
+
+				// Allow targets to expand pseudo instructions depending on the choice of
+				// registers before MachineCopyPropagation.
+//				addPostRewrite();
+
+				// Copy propagate to forward register uses and try to eliminate COPYs that
+				// were not coalesced.
+				addPass(&MachineCopyPropagationID);
+
+				// Run post-ra machine LICM to hoist reloads / remats.
+				//
+				// FIXME: can this move into MachineLateOptimization?
+				addPass(&MachineLICMID);
+			}
+			// End of copy from TargetPassConfig::addOptimizedRegAlloc()
+			///////////////
+		}
+	}
 
     /// addPreSched2 - This method may be implemented by targets that want to
     /// run passes after prolog-epilog insertion and before the second instruction
@@ -182,13 +256,15 @@ namespace {
     void addPreSched2() override {
 
       if (PatmosSinglePathInfo::isEnabled()) {
-        addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
-        if (PatmosSinglePathInfo::isConstant()) {
-          addPass(createPatmosBoundedDominatorsPass());
-          addPass(createOppositePredicateCompensationPass(getPatmosTargetMachine()));
+        if(!PatmosSinglePathInfo::useNewSinglePathTransform()) {
+        	addPass(createPatmosSinglePathInfoPass(getPatmosTargetMachine()));
+            if (PatmosSinglePathInfo::isConstant()) {
+              addPass(createPatmosConstantLoopDominatorsPass());
+              addPass(createOppositePredicateCompensationPass(getPatmosTargetMachine()));
+            }
+			addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));
+			addPass(createPatmosSPReducePass(getPatmosTargetMachine()));
         }
-        addPass(createPatmosSPBundlingPass(getPatmosTargetMachine()));
-        addPass(createPatmosSPReducePass(getPatmosTargetMachine()));
         addPass(createSPSchedulerPass(getPatmosTargetMachine()));
       } else {
         if (getOptLevel() != CodeGenOpt::None && !DisableIfConverter) {
@@ -283,3 +359,4 @@ PatmosTargetMachine::PatmosTargetMachine(const Target &T,
 TargetPassConfig *PatmosTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new PatmosPassConfig(*this, PM);
 }
+

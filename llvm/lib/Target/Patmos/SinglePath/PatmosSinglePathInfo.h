@@ -110,6 +110,9 @@ namespace llvm {
       /// from an enabled path of a root or another pseudo-root.
       static bool usePseudoRoots();
 
+      /// Whether should use the new Single-Path transformation.
+      static bool useNewSinglePathTransform();
+
       /// PatmosSinglePathInfo - Constructor
       PatmosSinglePathInfo(const PatmosTargetMachine &tm);
 

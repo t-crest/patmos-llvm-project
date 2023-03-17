@@ -71,32 +71,56 @@ bool PatmosInstrInfo::findCommutedOpIndices(const MachineInstr &MI,
   return true;
 }
 
+/// Returns whether the given register is in the given register class.
+/// Works on both physical and virtual registers (using the given RegisterInfo for virtuals)
+static bool is_in_class(MachineRegisterInfo &RI, const TargetRegisterClass *rclass, Register reg){
+	  return reg.isPhysical()?
+			  rclass->contains(reg):
+			  RI.getRegClass(reg) == rclass;
+}
+
 void PatmosInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator I, const DebugLoc &DL,
                                   MCRegister DestReg, MCRegister SrcReg,
                                   bool KillSrc) const {
+  /// We enable this function to work with virtual registers too (even though it usually shouldn't)
+  /// because single-path will need to be able to call ExpandPostRAPseudosID on virtual predicate registers
+  auto &RI = MBB.getParent()->getRegInfo();
+  auto is_general = [&](Register reg){
+	   return is_in_class(RI, &Patmos::RRegsRegClass, reg);
+  };
+  auto is_predicate = [&](Register reg){
+	   return is_in_class(RI, &Patmos::PRegsRegClass, reg);
+  };
   unsigned Opc;
-  if (Patmos::RRegsRegClass.contains(DestReg, SrcReg)) {
+  if (is_general(DestReg) && is_general(SrcReg)) {
     Opc = Patmos::MOV;
-  } else if (Patmos::RRegsRegClass.contains(DestReg)
-      && Patmos::PRegsRegClass.contains(SrcReg)) {
+  } else if (is_general(DestReg) && is_predicate(SrcReg)) {
     Opc = Patmos::MOVpr;
-  } else if (Patmos::PRegsRegClass.contains(DestReg)
-      && Patmos::RRegsRegClass.contains(SrcReg)) {
+  } else if (is_predicate(DestReg) && is_general(SrcReg)) {
     Opc = Patmos::MOVrp;
-  } else if (Patmos::PRegsRegClass.contains(DestReg, SrcReg)) {
+  } else if (is_predicate(DestReg) && is_predicate(SrcReg)) {
     Opc = Patmos::PMOV;
   } else if (Patmos::SRegsRegClass.contains(DestReg)) {
-    assert(Patmos::RRegsRegClass.contains(SrcReg));
+    assert(is_general(SrcReg));
     Opc = Patmos::MTS;
   } else if (Patmos::SRegsRegClass.contains(SrcReg)) {
-    assert(Patmos::RRegsRegClass.contains(DestReg));
+    assert(is_general(DestReg));
     Opc = Patmos::MFS;
   }  else {
     llvm_unreachable("Impossible reg-to-reg copy");
   }
-  auto &instr = AddDefaultPred(BuildMI(MBB, I, DL, get(Opc), DestReg))
+  auto instr = AddDefaultPred(BuildMI(MBB, I, DL, get(Opc), DestReg))
         .addReg(SrcReg, getKillRegState(KillSrc));
+
+  switch(Opc) {
+  case Patmos::PMOV:
+  case Patmos::MOVpr:
+	  // Need to also add the negation flag (disabled) for predicate moves
+	  instr.addImm(0);
+	  break;
+  default: break;
+  }
 }
 
 void PatmosInstrInfo::
@@ -169,9 +193,16 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
     // during FrameIndex elimination.
     BuildMI(MBB, MI, DL, get(Patmos::PSEUDO_PREG_RELOAD), DestReg)
       .addFrameIndex(FrameIdx).addImm(0); // address
+
+    if(!DestReg.isPhysical()) {
+		// Sometimes the register allocator requires the virtual predicate registers
+		// have a hint. Since this register is likely created by the allocator itself
+		// it does not have a hint, so we set it here to nothing.
+		// This is a workaround for an unknown bug in the register allocator (maybe)
+		MBB.getParent()->getRegInfo().setSimpleHint(DestReg, Patmos::NoRegister);
+    }
   }
   else {
-    errs() << "Register: " << DestReg << "\n";
     llvm_unreachable("Register class not handled!");
   }
 }
@@ -242,8 +273,6 @@ CreateTargetScheduleState(const TargetSubtargetInfo &STI) const {
   const InstrItineraryData *II = STI.getInstrItineraryData();
   return static_cast<const PatmosSubtarget&>(STI).createDFAPacketizer(II);
 }
-
-
 
 bool PatmosInstrInfo::fixOpcodeForGuard(MachineInstr &MI) const {
   using namespace Patmos;
@@ -362,8 +391,6 @@ bool PatmosInstrInfo::moveTo(MachineBasicBlock &MBB,
 
   return false;
 }
-
-
 
 unsigned PatmosInstrInfo::moveUp(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator &II) const
@@ -487,7 +514,7 @@ unsigned PatmosInstrInfo::moveUp(MachineBasicBlock &MBB,
   return Cycles;
 }
 
-bool PatmosInstrInfo::isStackControl(const MachineInstr *MI) const {
+bool PatmosInstrInfo::isStackControl(const MachineInstr *MI) {
   switch (getPatmosFormat(MI->getDesc().TSFlags)) {
     case PatmosII::FrmSTCi:
     case PatmosII::FrmSTCr:
@@ -535,7 +562,8 @@ PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) {
   unsigned opc = MI.getOpcode();
   switch (opc) {
     case LWS: case LHS: case LBS: case LHUS: case LBUS:
-    case SWS: case SHS: case SBS:
+    case SWS: case SHS: case SBS: case PSEUDO_PREG_RELOAD:
+    case PSEUDO_PREG_SPILL:
       return PatmosII::MEM_S;
     case LWL: case LHL: case LBL: case LHUL: case LBUL:
     case SWL: case SHL: case SBL:
@@ -645,7 +673,6 @@ bool PatmosInstrInfo::advanceCycles(MachineBasicBlock &MBB,
   }
   return true;
 }
-
 
 const MachineInstr *PatmosInstrInfo::hasOpcode(const MachineInstr *MI,
                                                int Opcode) const {
@@ -786,7 +813,6 @@ bool PatmosInstrInfo::canRemoveFromSchedule(MachineBasicBlock &MBB,
   return true;
 }
 
-
 const Function *PatmosInstrInfo::getCallee(const MachineInstr &MI) const
 {
   const Function *F = NULL;
@@ -882,7 +908,6 @@ bool PatmosInstrInfo::getCallees(const MachineInstr &MI,
   }
 }
 
-
 unsigned PatmosInstrInfo::getIssueWidth(const MachineInstr *MI) const
 {
   if (MI->isInlineAsm())
@@ -946,7 +971,7 @@ int PatmosInstrInfo::getDefOperandLatency(const InstrItineraryData *ItinData,
 
 
 MachineBasicBlock *PatmosInstrInfo::
-getBranchTarget(const MachineInstr *MI) const {
+getBranchTarget(const MachineInstr *MI) {
   // can handle only direct branches
   assert(MI->isBranch() && !MI->isIndirectBranch() &&
          "Not a direct branch instruction!");
@@ -1057,7 +1082,6 @@ bool PatmosInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   // left the loop? then we're done
   return false;
 }
-
 
 unsigned PatmosInstrInfo::removeBranch(MachineBasicBlock &MBB,
                                        int *BytesRemoved) const {
@@ -1201,7 +1225,6 @@ bool PatmosInstrInfo::NegatePredicate(MachineInstr &MI) const
 
   return true;
 }
-
 
 bool PatmosInstrInfo::
 PredicateInstruction(MachineInstr &MI,

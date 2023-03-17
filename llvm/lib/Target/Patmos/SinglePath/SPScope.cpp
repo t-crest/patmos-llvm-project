@@ -273,7 +273,8 @@ public:
 
 //Constructors
   Impl(SPScope *pub, SPScope * parent, bool rootFunc, MachineLoop *loop,
-      MachineBasicBlock *header, MachineFunction &MF, MachineLoopInfo &LI):
+      MachineBasicBlock *header, MachineFunction &MF, MachineLoopInfo &LI
+  ):
     Pub(*pub), Parent(parent), LoopBound(-1), RootFunc(rootFunc),
     PredCount(0)
   {
@@ -1049,3 +1050,4 @@ PredicatedBlock* SPScope::findBlockOfGlobal(const MachineBasicBlock* mbb) const 
   assert(root);
   return root->findBlockOf(mbb);
 }
+

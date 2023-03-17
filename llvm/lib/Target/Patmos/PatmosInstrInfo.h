@@ -236,7 +236,7 @@ public:
                   MachineBasicBlock::iterator &II, unsigned Cycles) const;
 
   /// isStackControl - Return true if the instruction controls the stack cache.
-  bool isStackControl(const MachineInstr *MI) const;
+  static bool isStackControl(const MachineInstr *MI);
 
   /// isSideEffectFreeSRegAccess- return true if the instruction is a MTS/MFS
   /// to/from a special register without side-effects
@@ -347,7 +347,7 @@ public:
 
 
   /// getBranchTarget - Get the target machine basic block for direct branches
-  MachineBasicBlock *getBranchTarget(const MachineInstr *MI) const;
+  static MachineBasicBlock *getBranchTarget(const MachineInstr *MI);
 
   /// mayFalltrough - Check if the block might fall through to the next block.
   bool mayFallthrough(MachineBasicBlock &MBB) const;

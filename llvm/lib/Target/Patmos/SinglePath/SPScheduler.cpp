@@ -232,9 +232,6 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
 
   LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
 
-  auto reduceAnalysis = &getAnalysis<PatmosSPReduce>();
-  auto rootScope = reduceAnalysis->RootScope;
-
   for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; ++mbbIter){
     auto mbb = mbbIter;
     LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb->dump());

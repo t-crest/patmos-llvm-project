@@ -48,27 +48,17 @@
 // RUN: FileCheck %s --check-prefixes "CHECK,IN5XX,IN505"
 // END.
 
+extern void __patmos_main_mem_access_compensation4_di();   
+#define COMPENSATION_FN_ALIAS __patmos_main_mem_access_compensation4_di
 
-extern void __patmos_main_mem_access_compensation4_di(unsigned max, unsigned remaining);        
-
-int main(int input)
-{	
-	// We treat the first 2 decimals as the remainder,
-	// and the rest as the max
-	unsigned remaining = input%100;
-	unsigned max = input/100;
-	
-	__patmos_main_mem_access_compensation4_di(max, remaining);
-	
-	return 0;
-}
+#include "__patmos_main_mem_access_compensation_main.h"
 
 // Ensure that regardless of how many accesses need to be compensated,
 // the same number of instructions are executed (ensure is single-path)
-// IN1XX: Operations: 22
-// IN3XX: Operations: 22
-// IN4XX: Operations: 31
-// IN5XX: Operations: 31
+// IN1XX: Operations: 20
+// IN3XX: Operations: 20
+// IN4XX: Operations: 29
+// IN5XX: Operations: 29
 // CHECK-LABEL: Instruction Cache Statistics:
 // CHECK-LABEL: Data Cache Statistics:
 // CHECK-LABEL: Stack Cache Statistics:

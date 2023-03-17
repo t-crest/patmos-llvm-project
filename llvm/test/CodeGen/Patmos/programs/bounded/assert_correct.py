@@ -115,9 +115,13 @@ def execute_and_stat(program, args, pasim_args):
     if subprocess.run(["ld.lld", "-nostdlib", "-static", "-o", exec_name, program, 
         "--defsym", "input=" + input]).returncode != 0:
         return True, args + "\nFailed to generate executable from '" + program + "' for argument '" + input + "'"
-        
-    pasim_result = subprocess.run(["pasim", exec_name, "-V"] + pasim_args.split(), 
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+     
+    try:
+        pasim_result = subprocess.run(["pasim", exec_name, "-V"] + pasim_args.split(), 
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return True, "\nThe execution of '" + program + "' for input argument '" + input + "' timed out"
+    
     program_output=pasim_result.stdout
     pasim_stats=pasim_result.stderr
     
@@ -172,7 +176,7 @@ def compile_and_test(llc_args, pasim_args):
     # Compile into object file (not ELF yet)
     llc_compile_arg_list =[bin_dir+"/llc", compiled] + llc_args.split() + ["-filetype=obj", "-o", compiled]
     if with_debug:
-        llc_compile_arg_list = llc_compile_arg_list + ["--debug"]
+        llc_compile_arg_list = llc_compile_arg_list + ["--debug", "--print-after-all"]
         stderr_cfg = open(debug_file, "w", 1)
     else:
         stderr_cfg = None
@@ -245,10 +249,10 @@ compile_and_test_matrix("", "", [
     ],
     # Optimization levels
     [
-        "", "-O1", "-O2", "-O2 -mpatmos-disable-pseudo-roots", 
-        # We try low subfuction size to ensure the plitter works too 
+        "-O2", "", "-O1", "-O2 -mpatmos-disable-pseudo-roots", 
+        # We try low subfuction size to ensure the splitter works too 
         # (without needing to make tests with big functions)
-        "-O2 --mpatmos-max-subfunction-size=64"
+        "-O2 --mpatmos-max-subfunction-size=64",
     ]
 ])
 

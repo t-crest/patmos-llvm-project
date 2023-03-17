@@ -32,6 +32,7 @@ class PatmosTargetMachine : public LLVMTargetMachine {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   PatmosSubtarget        Subtarget;
 public:
+
   PatmosTargetMachine(const Target &T,
                       const Triple &TT,
                       StringRef CPU,
@@ -67,7 +68,6 @@ public:
   /// createPassConfig - Create a pass configuration object to be used by
   /// addPassToEmitX methods for generating a pipeline of CodeGen passes.
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
-
 }; // PatmosTargetMachine.
 
 } // end namespace llvm

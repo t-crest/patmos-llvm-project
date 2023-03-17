@@ -250,6 +250,10 @@ void PatmosSPMark::scanAndRewriteCalls(MachineFunction *MF, Worklist &W) {
             assert(!new_PMFI->isSinglePathPseudoRoot() && "Pseudo-Root already marked");
             new_PMFI->setSinglePathPseudoRoot();
             NumSPPseudo++;
+          } else if(PatmosSinglePathInfo::useNewSinglePathTransform()) {
+            // Non pseudo-roots use P7 as their enable/disable predicate argument
+            new_target_MF->addLiveIn(Patmos::P7, &Patmos::PRegsRegClass);
+            new_target_MF->begin()->addLiveIn(Patmos::P7);
           }
         }
 
@@ -280,6 +284,10 @@ void PatmosSPMark::rewriteCall(MachineInstr *MI, bool pseudo_root_target) {
   MI->RemoveOperand(2);
   MachineInstrBuilder MIB(*MBB->getParent(), MI);
   MIB.addGlobalAddress(SPTarget);
+  if(!pseudo_root_target && PatmosSinglePathInfo::useNewSinglePathTransform()) {
+	// Add P7 as implicit to ensure LLVM knows it is used by the call
+	MIB.addUse(Patmos::P7, RegState::Implicit);
+  }
   LLVM_DEBUG( dbgs() << "  Rewrite call: " << Target->getName()
                 << " -> " << SPFuncName << "\n" );
   NumSPCall++;

@@ -1,4 +1,4 @@
-# Assembly Tests
+# Patmos Tests
 
 This folder contains tests of the Patmos target.
 
@@ -10,8 +10,9 @@ for easy test setup.
 * `assembly`: Tests relating to inline assembly or reading or writing assembly.
 * `flags`: Tests various Patmos-only flags (and combinations).
 * `llvm-lit_commands`: Tests for the `llvm-lit` commands provided to all tests.
+* `misc`: Tests various aspects of LLC.
 * `optimization`: Tests various optimizations the compiler can/does do.
-* `singlepath`: Tests single-path code generation.
+* `programs`: Tests single-path code generation for complete LLVM-IR programs.
 
 ### Commands
 

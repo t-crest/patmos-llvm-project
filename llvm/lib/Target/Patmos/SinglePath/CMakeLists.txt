@@ -6,6 +6,8 @@ add_llvm_component_library(LLVMPatmosSinglePath
   PatmosSPBundling.cpp
   DataCacheAccessElimination.cpp
   PatmosSPReduce.cpp
+  PreRegallocReduce.cpp
+  Linearizer.cpp
   RAInfo.cpp
   SPScope.cpp
   SPScheduler.cpp
@@ -13,6 +15,9 @@ add_llvm_component_library(LLVMPatmosSinglePath
   OppositePredicateCompensation.cpp
   MemoryAccessNormalization.cpp
   ConstantLoopDominators.cpp
+  LoopCountInsert.cpp
+  VirtualizePredicates.cpp
+  EquivalenceClasses.cpp
   
   LINK_COMPONENTS
   PatmosInfo 
