@@ -388,7 +388,7 @@ bool patmos::PatmosBaseTool::ConstructOptJob(const Tool &Creator,
       OptExec, OptArgs, Inputs, Output));
   return true;
 }
-
+#include <iostream>
 void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     Compilation &C, const JobAction &JA,
     const InputInfo &Output, const InputInfoList &Inputs,
@@ -455,11 +455,25 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
       }
     }
   }
-
+  ;
   // Ensure constant execution time flags are set if needed
   if(Args.getLastArg(options::OPT_mpatmos_enable_cet)) {
     if(!sp_enabled) {
-      LLCArgs.push_back("--mpatmos-singlepath=");
+      bool at_least_one = false;
+      auto roots = Args.getLastArg(options::OPT_mpatmos_cet_functions);
+      if(roots) {
+        for(auto root: roots->getValues()) {
+          at_least_one = true;
+          LLCArgs.push_back("--mpatmos-singlepath");
+          LLCArgs.push_back(root);
+        }
+      }
+
+      if(!at_least_one) {
+    	  // No root function were given on the command line, but we
+    	  // still need to turn on single-path code. (Might be roots using attributes)
+    	  LLCArgs.push_back("--mpatmos-singlepath=");
+      }
     }
     if(!const_exec_enabled) {
       LLCArgs.push_back("--mpatmos-enable-cet");
