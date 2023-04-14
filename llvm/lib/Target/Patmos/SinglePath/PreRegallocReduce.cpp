@@ -44,11 +44,7 @@ static Register getVregForPred(
 	if (vreg_map.count(pred)) {
 		return vreg_map[pred];
 	} else {
-		auto new_vreg = RI.createVirtualRegister(&Patmos::PRegsRegClass);
-		// There is a bug either in the LLVM register allocator or in the Patmos backend
-		// that requires all predicate virtual register to have a hint. If not, the allocator
-		// will fail an assertion looking for it. Since we have no good hint, NoRegister will work.
-		RI.setSimpleHint(new_vreg, Patmos::NoRegister);
+		auto new_vreg = createVirtualRegisterWithHint(RI);
 		vreg_map[pred] = new_vreg;
 		return new_vreg;
 	}
@@ -122,7 +118,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF, std::map<unsigned, 
 					// We must ensure the predicate depends on whether the block is
 					// enabled in addition to the original condition.
 
-					auto new_vreg = RI.createVirtualRegister(&Patmos::PRegsRegClass);
+					auto new_vreg = createVirtualRegisterWithHint(RI);
 					BuildMI(mbb, MI, DebugLoc(),
 						TII->get(Patmos::PAND), new_vreg)
 							.addReg(Patmos::P0).addImm(0) // Don't predicate

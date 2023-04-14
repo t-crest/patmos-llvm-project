@@ -471,8 +471,6 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 
   MachineFunction &MF = *MBB.getParent();
   const TargetInstrInfo &TII = *STC.getInstrInfo();
-  PatmosMachineFunctionInfo &PMFI =
-                       *MF.getInfo<PatmosMachineFunctionInfo>();
 
   unsigned spilledSize = 0;
   for (unsigned i = CSI.size(); i != 0; --i) {

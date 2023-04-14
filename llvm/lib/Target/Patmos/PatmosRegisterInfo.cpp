@@ -50,7 +50,7 @@ const uint32_t *PatmosRegisterInfo::getCallPreservedMask(const MachineFunction &
 const MCPhysReg*
 PatmosRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   const TargetFrameLowering *TFI = MF->getSubtarget().getFrameLowering();
-  //const Function* F = MF->getFunction();
+
   static const uint16_t CalleeSavedRegs[] = {
     // Special regs
     Patmos::S0, Patmos::SRB, Patmos::SRO,

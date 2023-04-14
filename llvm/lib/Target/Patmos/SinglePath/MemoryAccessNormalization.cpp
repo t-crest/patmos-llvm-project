@@ -212,13 +212,12 @@ static Register new_vreg(MachineFunction &MF) {
 /// If 'should_insert' is false, no instructions are added and the function
 /// isn't changed. However, the count is still performed and returned as if
 /// instructions were added.
-unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_compensation, unsigned min_compensation, bool should_insert) {
-  assert((max_compensation - min_compensation) != 0 && "No compensation needed if no accesses are done");
+unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsigned max_accesses, unsigned min_accesses, bool should_insert) {
+  assert((max_accesses - min_accesses) != 0 && "No compensation needed if no accesses are done");
 
   auto &LI = getAnalysis<MachineLoopInfo>();
   auto &RI = MF.getRegInfo();
   unsigned insert_count = 0;
-  auto isPseudoRoot = MF.getInfo<PatmosMachineFunctionInfo>()->isSinglePathPseudoRoot();
   DebugLoc DL;
 
   auto compensation = memoryAccessCompensation(MF.getBlockNumbered(0), &LI, countAccesses);
@@ -257,17 +256,14 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
 
     if(current->pred_size() == 0) {
       // Initialize counter at entry block
-      auto count_and_init_reg = compensateEntryBlock(MF, current, max_compensation, should_insert);
+      auto count_and_init_reg = compensateEntryBlock(MF, current, max_accesses, should_insert);
       insert_count += count_and_init_reg.first;
       block_regs[current] = count_and_init_reg.second;
     } else if(current->pred_size() == 1) {
       auto *pred = *current->pred_begin();
       assert(block_regs.count(pred) && "Predecessor hasn't been assigned yet");
 
-      if( compensation.count({pred, current}) &&
-          // current doesn't dominate
-          (!isPseudoRoot || !cldoms.begin()->second.count(current))
-      ) {
+      if(compensation.count({pred, current})) {
         // Need to decrement counter.
         auto decremented_reg = new_vreg(MF);
         block_regs[current] = decremented_reg;
@@ -298,7 +294,7 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
     }
   }
 
-  insert_count += compensateEnd(MF, block_regs, max_compensation, should_insert);
+  insert_count += compensateEnd(MF, block_regs, max_accesses - min_accesses, should_insert);
 
   return insert_count;
 }
@@ -307,7 +303,7 @@ unsigned MemoryAccessNormalization::counter_compensate(MachineFunction &MF, unsi
 /// 1 block, also decrements the counter.
 /// Returns how many instructions were added and what register the counter uses.
 std::pair<unsigned, Register> MemoryAccessNormalization::compensateEntryBlock(
-    MachineFunction &MF, MachineBasicBlock *entry, unsigned max_end_accesses, bool should_insert
+    MachineFunction &MF, MachineBasicBlock *entry, unsigned max_accesses, bool should_insert
 ) {
   DebugLoc DL;
 
@@ -316,42 +312,24 @@ std::pair<unsigned, Register> MemoryAccessNormalization::compensateEntryBlock(
 
   auto insert_count = 1;
   if(should_insert){
-    auto count_opcode = max_end_accesses > 4095? Patmos::LIl : Patmos::LIi;
+	if(MF.size() == 1) {
+		assert(!PatmosSinglePathInfo::isRootLike(MF) &&
+			"Root-like single-block function shouldn't need decrementing");
+	}
+	// Single-block functions will not have any edges to decrement the counter
+	// so just reduce the initial count instead.
+	auto max_comp = MF.size() == 1? 0 : max_accesses;
+
+    auto count_opcode = max_comp > 4095? Patmos::LIl : Patmos::LIi;
     BuildMI(*entry, entry->getFirstTerminator(), DL, TII->get(count_opcode),
       init_reg)
       .addReg(Patmos::NoRegister).addImm(0) // May be predicated
-      .addImm(max_end_accesses);
+      .addImm(max_comp);
 
     LLVM_DEBUG(
       dbgs() << "Inserted counter initializer in '" << entry->getName() << "': "
-        << printReg(init_reg, TRI) << " = " << max_end_accesses << "\n";
+        << printReg(init_reg, TRI) << " = " << max_comp << "\n";
     );
-  }
-
-  if(MF.size() == 1) {
-    // Only one block, meaning no edges in 'compensation'
-    // Therefore, add decrement in the same block.
-    // This is needed for non-root-like functions for when they are disabled.
-    assert(!PatmosSinglePathInfo::isRootLike(MF) &&
-        "Root-like single-block function shouldn't need decrementing");
-
-    if(max_end_accesses <= 4095) {
-      insert_count++;
-      if(should_insert){
-        BuildMI(*entry, entry->getFirstTerminator(), DL, TII->get(Patmos::SUBi),
-          init_reg)
-          .addReg(Patmos::NoRegister).addImm(0)
-          .addReg(init_reg) // decrement init register
-          .addImm(max_end_accesses);
-
-        LLVM_DEBUG(
-          dbgs() << "Inserted counter decrement (single-block function) in '" << entry->getName() << "': "
-            << max_end_accesses << "\n";
-        );
-      }
-    } else {
-      report_fatal_error("Cannot handle memory access count > 4095 in single-block function");
-    }
   }
   return std::make_pair(insert_count, init_reg);
 }
@@ -466,7 +444,7 @@ unsigned MemoryAccessNormalization::compensateMerge(
 
         LLVM_DEBUG(
           dbgs() << "Inserted decrement count in predecessor '" << pred->getName() << "' as: ";
-          dbgs() << printReg(dec_reg, TRI) << "\n";
+          dbgs() << printReg(dec_reg, TRI) << " = " << dec_count << "\n";
         );
       }
     }
@@ -496,7 +474,7 @@ unsigned MemoryAccessNormalization::compensateMerge(
 /// Returns the number of instructions added
 unsigned MemoryAccessNormalization::compensateEnd(
   MachineFunction &MF, std::map<MachineBasicBlock*, Register> &block_regs,
-  unsigned max_end_accesses, bool should_insert
+  unsigned max_compensation, bool should_insert
 ) {
   bool found_end = false;
   DebugLoc DL;
@@ -511,11 +489,11 @@ unsigned MemoryAccessNormalization::compensateEnd(
   if (should_insert) {
 
 	// Put the max possible into r23 as input
-	auto max_opcode = max_end_accesses > 4095 ? Patmos::LIl : Patmos::LIi;
+	auto max_opcode = max_compensation > 4095 ? Patmos::LIl : Patmos::LIi;
 	BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
 	  Patmos::R23)
 	  .addReg(Patmos::NoRegister).addImm(0)
-	  .addImm(max_end_accesses)
+	  .addImm(max_compensation)
 	  .setMIFlags(MachineInstr::FrameSetup);
 
 	assert(block_regs.count(BB) && "End block doesn't have a counter register");
@@ -532,7 +510,7 @@ unsigned MemoryAccessNormalization::compensateEnd(
 	  BuildMI(*BB, BB->getFirstTerminator(), DL, TII->get(max_opcode),
 		Patmos::R24)
 		.addReg(Patmos::NoRegister).addImm(1)
-		.addImm(max_end_accesses);
+		.addImm(max_compensation);
 	}
 
 	// Insert call. Since the compensation function doesn't follow usual calling convention,

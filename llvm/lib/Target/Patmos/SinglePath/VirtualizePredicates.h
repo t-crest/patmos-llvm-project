@@ -22,11 +22,26 @@ namespace llvm {
 
 	class VirtualizePredicates : public MachineFunctionPass {
 	private:
+		const PatmosInstrInfo *TII;
+		const PatmosRegisterInfo *TRI;
+
+		/// The loop counter inserted by LoopCounterInsert may be
+		/// spilled/reloaded by the register allocator.
+		/// Since these spills/reloads use the Patmos::NoRegister
+		/// predicate by default, they will be predicated in the next steps.
+		///
+		/// This function finds all these spills/reloads and makes them use
+		/// Patmos::P0 instead, such that they are never predicated.
+		///
+		/// This spill/reload could happens e.g. when a loop uses all registers
+		/// meaning the register allocator will spill the counter since it is
+		/// only updated and used in the unilatch.
+		void unpredicateCounterSpillReload(MachineFunction &MF);
 	public:
 		static char ID;
 
 		VirtualizePredicates(const PatmosTargetMachine &tm) :
-			MachineFunctionPass(ID)
+			MachineFunctionPass(ID), TII(tm.getInstrInfo()), TRI(tm.getSubtargetImpl()->getRegisterInfo())
 		{}
 
 		StringRef getPassName() const override {
@@ -34,10 +49,13 @@ namespace llvm {
 		}
 
 		void getAnalysisUsage(AnalysisUsage &AU) const override {
+			AU.addRequired<MachineLoopInfo>();
+			AU.addPreserved<MachineLoopInfo>();
 			MachineFunctionPass::getAnalysisUsage(AU);
 		}
 
 		bool runOnMachineFunction(MachineFunction &MF) override;
+
 	};
 }
 

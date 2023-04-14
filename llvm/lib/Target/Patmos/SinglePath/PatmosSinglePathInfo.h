@@ -113,6 +113,15 @@ namespace llvm {
       /// Whether should use the new Single-Path transformation.
       static bool useNewSinglePathTransform();
 
+      /// Returns the preheader and unilatch of the loop inserted by LoopCountInsert.
+      ///
+      /// The preheader is the single predecessors of the loop.
+      /// The unilatch is the block all latches have an edge to instead of the header directly
+      static std::pair<MachineBasicBlock *, MachineBasicBlock *> getPreHeaderUnilatch(MachineLoop *loop);
+
+      /// Returns the counter decrementer in the given unilatch (as inserted by LoopCountInsert).
+      static MachineBasicBlock::iterator getUnilatchCounterDecrementer(MachineBasicBlock *unilatch);
+
       /// PatmosSinglePathInfo - Constructor
       PatmosSinglePathInfo(const PatmosTargetMachine &tm);
 

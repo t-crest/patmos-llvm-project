@@ -115,7 +115,12 @@ void LoopCountInsert::doFunction(MachineFunction &MF){
 				if(instr.isPHI()) {
 					auto *reg_class = MF.getRegInfo().getRegClass(instr.getOperand(0).getReg());
 					// Create PHI in preheader and unilatch to take over the operands
-					auto preheader_replacement_vreg = MF.getRegInfo().createVirtualRegister(reg_class);
+					Register preheader_replacement_vreg;
+					if(reg_class == &Patmos::PRegsRegClass) {
+						preheader_replacement_vreg = createVirtualRegisterWithHint(MF.getRegInfo());
+					} else {
+						preheader_replacement_vreg = MF.getRegInfo().createVirtualRegister(reg_class);
+					}
 					auto preheader_replacement_phi = BuildMI(*preheader, preheader->end(), DL,
 						TII->get(Patmos::PHI), preheader_replacement_vreg);
 					auto branch_replacement_vreg = MF.getRegInfo().createVirtualRegister(reg_class);

@@ -9,6 +9,7 @@
 
 #include "Patmos.h"
 #include "PatmosTargetInfo.h"
+#include "PatmosRegisterInfo.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Metadata.h"
@@ -93,6 +94,12 @@ MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
     return MF;
   }
   return NULL;
+}
+
+Register llvm::createVirtualRegisterWithHint(MachineRegisterInfo &RI, Register hint, StringRef name) {
+	auto new_vreg = RI.createVirtualRegister(&Patmos::PRegsRegClass, name);
+	RI.setSimpleHint(new_vreg, hint);
+	return new_vreg;
 }
 
 /// Returns true if the given opcode represents a load instruction.

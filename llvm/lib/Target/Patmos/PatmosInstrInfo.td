@@ -308,6 +308,14 @@ let mayLoad=1 in
 def PSEUDO_PREG_RELOAD : PseudoInst<(outs PRegs:$pd),
                                     (ins RRegs:$ra, i32imm:$imm),
                                     "#PSEUDO_PREG_RELOAD", "", []>;
+                                    
+// Used in single-path code to signify a register that needs to be
+// reloaded from the given stack slot after the loop exits in the unilatch. 
+// I.e. after the counter reaches maximum and the unilatch jumps out of the loop.
+let mayLoad=1 in
+def PSEUDO_POSTLOOP_RELOAD : PseudoInst<(outs RRegs:$rd),
+                                    (ins i32imm:$imm),
+                                    "#PSEUDO_POSTLOOP_RELOAD", "", []>;
 									
 // Denotes loop bounds, i.e., how many times a loop will iterate at runtime. 
 // Only used during Code-Gen.

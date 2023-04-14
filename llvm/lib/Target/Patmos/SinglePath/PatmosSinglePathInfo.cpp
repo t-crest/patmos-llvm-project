@@ -296,6 +296,31 @@ void PatmosSinglePathInfo::walkRoot(llvm::SPScopeWalker &walker) const {
   Root->walk(walker);
 }
 
+/// Returns the preheader and unilatch of the loop inserted by LoopCountInsert
+///
+/// The preheader is the single predecessors of the loop.
+/// The unilatch is the block all latches have an edge to instead of the header directly
+std::pair<MachineBasicBlock *, MachineBasicBlock *> PatmosSinglePathInfo::getPreHeaderUnilatch(MachineLoop *loop)
+{
+	auto header = loop->getHeader();
+	assert(header->pred_size() == 2
+			&& "Loops headers should only have a preheader and unilatch as predecessors");
+	if(loop->contains(*header->pred_begin())) {
+		return std::make_pair(*std::next(header->pred_begin()), *header->pred_begin());
+	} else {
+		return std::make_pair(*header->pred_begin(), *std::next(header->pred_begin()));
+	}
+}
 
-
-
+MachineBasicBlock::iterator PatmosSinglePathInfo::getUnilatchCounterDecrementer(MachineBasicBlock *unilatch){
+	auto is_dec = [](MachineInstr &instr){
+		return instr.getOpcode() == Patmos::SUBi;
+	};
+	assert(std::count_if(unilatch->begin(), unilatch->end(), is_dec) == 1
+			&& "Couldn't find unilatch unique counter decrementer");
+	auto counter_decrementer = std::find_if(unilatch->begin(), unilatch->end(), is_dec);
+	auto decremented_count_reg = counter_decrementer->getOperand(3).getReg();
+	assert(Patmos::RRegsRegClass.contains(decremented_count_reg)
+			&& "Loop counter not using general-purpose register");
+	return counter_decrementer;
+}
