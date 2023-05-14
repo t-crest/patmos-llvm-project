@@ -420,6 +420,7 @@ void PatmosFrameLowering::determineCalleeSaves(MachineFunction &MF,
 static Register get_special_spill_restore_reg(Register Reg)
 {
 	assert(Patmos::SRegsRegClass.contains(Reg));
+
 	switch (Reg) {
 	case Patmos::S0:
 		return Patmos::R9;
@@ -455,6 +456,7 @@ static Register get_special_spill_restore_reg(Register Reg)
 		return Patmos::R16;
 	default:
 		assert(false && "Unknown special-purpose register");
+		return 0;
 	}
 }
 
@@ -472,37 +474,62 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
   MachineFunction &MF = *MBB.getParent();
   const TargetInstrInfo &TII = *STC.getInstrInfo();
 
-  unsigned spilledSize = 0;
-  for (unsigned i = CSI.size(); i != 0; --i) {
-    unsigned Reg = CSI[i-1].getReg();
+  // Start by spilling general-purpose registers
+  std::vector<Register> rreg_spilled;
+  std::map<Register, unsigned> sreg_unspilled; // Special-purpose register in need of spilling and their frame_idx
+  for (unsigned i = 0; i < CSI.size(); i++) {
+	auto Reg = CSI[i].getReg();
+	auto frame_idx = CSI[i].getFrameIdx();
     // Add the callee-saved register as live-in. It's killed at the spill.
     MBB.addLiveIn(Reg);
+	if(Patmos::RRegsRegClass.contains(Reg)) {
 
-    // as all PRegs are aliased with S0, a spill of a Preg will cause
-    // a spill of S0
-    if (Patmos::PRegsRegClass.contains(Reg)){
-      continue;
-    }
+		// spill
+		const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+		TII.storeRegToStackSlot(MBB, MI, Reg, true,
+				frame_idx, RC, TRI);
+		std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
-    // copy to R register first, then spill
-    if (Patmos::SRegsRegClass.contains(Reg)) {
+		rreg_spilled.push_back(Reg);
+	} else if(Patmos::PRegsRegClass.contains(Reg)) {
+		assert(std::any_of(CSI.begin(), CSI.end(), [&](auto info){
+			return info.getReg() == Patmos::S0;
+		}) && "Must spill S0 instead of individual predicate registers");
+	} else {
+		assert(Patmos::SRegsRegClass.contains(Reg));
 
-      // In prolohue we know none of the scratch registers can be in use (since the function hasn't started yet)
-      // so we try to use them all so that scheduling is as free as possible
-      auto tmpReg = get_special_spill_restore_reg(Reg);
-      TII.copyPhysReg(MBB, MI, DL, tmpReg, Reg, true);
-      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
-      Reg = tmpReg;
-    }
+		// We don't spill special-purpose register now, as we want to know which
+		// general-purpose registers we're spilling, so we can reuse them for
+		// spilling the specials.
+		// This is crucial for single-path code, because a disabled function can't change any registers.
+		// Therefore we know we can use the spilled general-purpose registers since they will later be restored.
+		sreg_unspilled[Reg] = frame_idx;
+	}
+  }
 
-    // spill
-    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, true,
-        CSI[i-1].getFrameIdx(), RC, TRI);
-    std::prev(MI)->setFlag(MachineInstr::FrameSetup);
+  // Spill special-purpose registers
+  for(auto entry: sreg_unspilled) {
+	  auto reg = entry.first;
+	  auto frame_idx = entry.second;
 
-    // increment spilled size
-    spilledSize += 4;
+	  // copy sreg to rreg
+	  // We make each sreg use a different rreg to allow more flexible scheduling
+	  Register tmpReg;
+	  if(rreg_spilled.empty()) {
+		  auto MF = MBB.getParent();
+		  assert((!PatmosSinglePathInfo::isEnabled(*MF) || !PatmosSinglePathInfo::isRootLike(*MF)) &&
+				  "Couldn't find general-purpose register to use for spilling special-purpose register");
+		  tmpReg = get_special_spill_restore_reg(reg);
+	  } else {
+		  tmpReg = rreg_spilled[reg.id()%rreg_spilled.size()];
+	  }
+
+	  TII.copyPhysReg(MBB, MI, DL, tmpReg, reg, true);
+	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
+	  // Spill the value
+	  TII.storeRegToStackSlot(MBB, MI, tmpReg, true,
+	  			frame_idx, &Patmos::RRegsRegClass, TRI);
+		std::prev(MI)->setFlag(MachineInstr::FrameSetup);
   }
 
   return true;
@@ -523,40 +550,65 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
   const TargetInstrInfo &TII = *STC.getInstrInfo();
   PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
 
-  // if framepointer enabled, first restore the stack pointer.
+  // if frame-pointer enabled, first restore the stack pointer.
   if (hasFP(MF)) {
     // Restore stack pointer: SP = FP
     AddDefaultPred(BuildMI(MBB, MI, DL, TII.get(Patmos::MOV), Patmos::RSP))
       .addReg(Patmos::RFP);
   }
 
-  // restore the callee saved registers
-  for (unsigned i = CSI.size(); i != 0; --i) {
-    Register Reg = CSI[i-1].getReg();
-    auto tmpReg = Reg;
+  // We need to restore the special-purpose registers first, so sort the list of register
+  // into general and special (with their frame-indices)
+  std::vector<std::pair<Register, unsigned>> rregs;
+  std::map<Register, unsigned> sregs;
+  for (unsigned i = 0; i < CSI.size(); i++) {
+	auto Reg = CSI[i].getReg();
+	auto frame_idx = CSI[i].getFrameIdx();
+	if(Patmos::RRegsRegClass.contains(Reg)) {
+	  rregs.push_back(std::make_pair(Reg, frame_idx));
+	} else if(Patmos::PRegsRegClass.contains(Reg)) {
+		assert(std::any_of(CSI.begin(), CSI.end(), [&](auto info){
+			return info.getReg() == Patmos::S0;
+		}) && "Must restore S0 instead of individual predicate registers");
+	} else {
+	  assert(Patmos::SRegsRegClass.contains(Reg));
+	  sregs[Reg] = frame_idx;
+	}
+  }
 
-    // SZ is aliased with PRegs
-    if (Patmos::PRegsRegClass.contains(Reg))
-        continue;
+  // Restore special-purpose registers
+  for(auto entry: sregs) {
+	  auto reg = entry.first;
+	  auto frame_idx = entry.second;
 
-    // copy to special register after reloading
-    if (Patmos::SRegsRegClass.contains(Reg)){
-    	// In epilogue we know none of the scratch registers can be in use (since the function is done)
-    	// so we try to use them all so that scheduling is as free as possible
-    	tmpReg = get_special_spill_restore_reg(Reg);
-    }
+	  // We make each sreg use a different rreg for reloading to allow more flexible scheduling
+	  Register tmpReg;
+	  if(rregs.empty()) {
+		  auto MF = MBB.getParent();
+		  assert((!PatmosSinglePathInfo::isEnabled(*MF) || !PatmosSinglePathInfo::isRootLike(*MF)) &&
+				  "Couldn't find general-purpose register to use for restoring special-purpose register");
+		  tmpReg = get_special_spill_restore_reg(reg);
+	  } else {
+		  tmpReg = rregs[reg.id()%rregs.size()].first;
+	  }
 
+	  // load
+	  TII.loadRegFromStackSlot(MBB, MI, tmpReg, frame_idx, &Patmos::RRegsRegClass, TRI);
+	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
-    // load
-    TII.loadRegFromStackSlot(MBB, MI, tmpReg, CSI[i-1].getFrameIdx(), &Patmos::RRegsRegClass, TRI);
-    std::prev(MI)->setFlag(MachineInstr::FrameSetup);
+	  // Move value to special register
+	  TII.copyPhysReg(MBB, MI, DL, reg, tmpReg, true);
+	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
+  }
 
-    // copy, if needed
-    if (tmpReg != Reg)
-    {
-      TII.copyPhysReg(MBB, MI, DL, Reg, tmpReg, true);
-      std::prev(MI)->setFlag(MachineInstr::FrameSetup);
-    }
+  // Restore general-purpose registers
+  for(auto entry: rregs) {
+	  auto reg = entry.first;
+	  auto frame_idx = entry.second;
+
+	  // load
+	  TII.loadRegFromStackSlot(MBB, MI, reg, frame_idx, &Patmos::RRegsRegClass, TRI);
+	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
   }
 
   return true;
