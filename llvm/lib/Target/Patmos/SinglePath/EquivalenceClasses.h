@@ -18,6 +18,9 @@
 namespace llvm {
 
 	// Represents an equivalence class
+	//
+	// These aren't unique and therefore pointers to EqClass shouldn't be used to
+	// distinguish between classes.
 	struct EqClass {
 		/// The unique number assigned to this class
 		unsigned number;

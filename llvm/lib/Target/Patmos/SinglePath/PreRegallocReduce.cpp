@@ -24,7 +24,15 @@ bool PreRegallocReduce::runOnMachineFunction(MachineFunction &MF) {
 			MF.dump();
 		);
 
-		doReduceFunction(MF);
+		EQ = &getAnalysis<EquivalenceClasses>();
+		RI = &MF.getRegInfo();
+		LI = &getAnalysis<MachineLoopInfo>();
+		vreg_map.clear(); // make sure other functions' maps aren't used
+
+		applyPredicates(&MF, vreg_map);
+
+		insertPredDefinitions(&MF, vreg_map);
+
 		MF.getProperties().reset(MachineFunctionProperties::Property::IsSSA);
 		MF.getProperties().reset(MachineFunctionProperties::Property::NoVRegs);
 		changed |= true;
@@ -37,40 +45,26 @@ bool PreRegallocReduce::runOnMachineFunction(MachineFunction &MF) {
 	return changed;
 }
 
-static Register getVregForPred(
-		MachineRegisterInfo &RI, unsigned pred,
-		std::map<unsigned, Register>& vreg_map)
+Register PreRegallocReduce::getVreg(EqClass &eq_class)
 {
-	if (vreg_map.count(pred)) {
-		return vreg_map[pred];
+	if (vreg_map.count(eq_class.number)) {
+		return vreg_map[eq_class.number];
 	} else {
-		auto new_vreg = createVirtualRegisterWithHint(RI);
-		vreg_map[pred] = new_vreg;
+		auto new_vreg = createVirtualRegisterWithHint(*RI);
+		vreg_map[eq_class.number] = new_vreg;
 		return new_vreg;
 	}
 }
 
-void PreRegallocReduce::doReduceFunction(MachineFunction &MF){
-	// Assign each predicate to a virtual predicate register
-	std::map<unsigned, Register> vreg_map;
-
-	applyPredicates(&MF, vreg_map);
-
-	insertPredDefinitions(&MF, vreg_map);
-}
-
 void PreRegallocReduce::applyPredicates(MachineFunction *MF, std::map<unsigned, Register>& vreg_map) {
 
-	auto &EQ = getAnalysis<EquivalenceClasses>();
-	auto &RI = MF->getRegInfo();
-
 	std::for_each(MF->begin(), MF->end(), [&](auto &mbb){
-		auto block_pred = EQ.getClassFor(&mbb).number;
-		auto predVreg = getVregForPred(RI, block_pred, vreg_map);
+		auto eq_class = EQ->getClassFor(&mbb);
+		auto predVreg = getVreg(eq_class);
 
 		LLVM_DEBUG(
 			dbgs() << "Applying predicates in bb." << mbb.getNumber() << "." << mbb.getName() << ": "
-					<< block_pred << " -> " << printReg(predVreg, TRI, 0, &mbb.getParent()->getRegInfo()) <<"\n";
+					<< eq_class.number << " -> " << printReg(predVreg, TRI, 0, &mbb.getParent()->getRegInfo()) <<"\n";
 		);
 
 		// apply predicate to all instructions in block
@@ -118,7 +112,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF, std::map<unsigned, 
 					// We must ensure the predicate depends on whether the block is
 					// enabled in addition to the original condition.
 
-					auto new_vreg = createVirtualRegisterWithHint(RI);
+					auto new_vreg = createVirtualRegisterWithHint(*RI);
 					BuildMI(mbb, MI, DebugLoc(),
 						TII->get(Patmos::PAND), new_vreg)
 							.addReg(Patmos::P0).addImm(0) // Don't predicate
@@ -131,8 +125,8 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF, std::map<unsigned, 
 	});
 }
 
-static bool is_exit_edge(std::pair<MachineBasicBlock*, MachineBasicBlock*> edge, MachineLoopInfo &LI) {
-	auto source_loop = LI.getLoopFor(edge.first);
+bool PreRegallocReduce::is_exit_edge(std::pair<MachineBasicBlock*, MachineBasicBlock*> edge) {
+	auto source_loop = LI->getLoopFor(edge.first);
 	SmallVector<std::pair<MachineBasicBlock*, MachineBasicBlock*>, 4> exit_edges;
 	if(source_loop) {
 		source_loop->getExitEdges(exit_edges);
@@ -140,67 +134,118 @@ static bool is_exit_edge(std::pair<MachineBasicBlock*, MachineBasicBlock*> edge,
 	return std::count(exit_edges.begin(), exit_edges.end(), edge) != 0;
 }
 
-/// Gets the header of the given block's loop.
-/// If the block is not in a loop, the entry block is its header.
-MachineBasicBlock* get_header_of(MachineBasicBlock*mbb, MachineLoopInfo&LI) {
+MachineBasicBlock* PreRegallocReduce::get_header_of(MachineBasicBlock*mbb) {
 	auto entry = &*mbb->getParent()->begin();
-	auto loop = LI.getLoopFor(mbb);
+	auto loop = LI->getLoopFor(mbb);
 	return loop? loop->getHeader() : entry;
 }
 
-void PreRegallocReduce::insertPredDefinitions(
-		MachineFunction*MF, std::map<unsigned, Register>& vreg_map
-) {
-	auto &EQ = getAnalysis<EquivalenceClasses>();
-	MachineBasicBlock *entry = &*MF->begin();
-	auto &RI = MF->getRegInfo();
-	auto &LI = getAnalysis<MachineLoopInfo>();
+MachineBasicBlock* PreRegallocReduce::get_header_of(EqClass &eq_class) {
+	assert(std::all_of(eq_class.members.begin(), eq_class.members.end(), [&](auto mem){
+		return get_header_of(*eq_class.members.begin()) == get_header_of(mem);
+	}) && "Not all members in class have the same header");
+	return get_header_of(*eq_class.members.begin());
+}
 
-	for(auto eq_class: EQ.getAllClasses()) {
+Optional<MachineBasicBlock*> PreRegallocReduce::get_header_in_class(EqClass &eq_class) {
+	auto header_in_class = std::find_if(eq_class.members.begin(), eq_class.members.end(),
+			[&](auto member){ return LI->isLoopHeader(member) || (member->pred_size() == 0);});
+	if(header_in_class != eq_class.members.end()) {
+		return *header_in_class;
+	} else {
+		return None;
+	}
+}
+
+void PreRegallocReduce::insertHeaderClassPredDefinitions(
+	EqClass &eq_class, MachineFunction*MF, std::map<unsigned, Register>& vreg_map
+){
+	auto header_in_class = *get_header_in_class(eq_class);
+
+	auto target_vreg = getVreg(eq_class);
+	if(header_in_class->pred_size() == 0){
+		// The entry class can only have 1 initializer
+		auto initial_preg = PatmosSinglePathInfo::isRootLike(*MF)? Patmos::P0 : Patmos::P7;
+
+		auto def = BuildMI(*header_in_class, header_in_class->begin(), DebugLoc(),
+			TII->get(Patmos::COPY), target_vreg)
+				.addReg(initial_preg);
+		LLVM_DEBUG(
+			dbgs() << "Inserted entry definition of predicate " << eq_class.number << ":\n\t";
+			def.getInstr()->dump();
+		);
+	} else {
+		auto loop = LI->getLoopFor(header_in_class);
+		assert(loop);
+
+		// We use the preheader's and unilatch's predicates to initialize the predicate
+		// of a class containing a header.
+		MachineBasicBlock *preheader, *unilatch;
+		std::tie(preheader, unilatch) = PatmosSinglePathInfo::getPreHeaderUnilatch(loop);
+		auto preheader_class = EQ->getClassFor(preheader);
+
+		// Initialize in preheader
+		auto preheader_vreg = getVreg(preheader_class);
+		auto def = BuildMI(*preheader, preheader->getFirstTerminator(), DebugLoc(),
+									TII->get(Patmos::COPY), target_vreg)
+										.addReg(preheader_vreg);
+		LLVM_DEBUG(
+			dbgs() << "Inserted definition of header predicate " << eq_class.number
+					<< "in preheader bb." << preheader->getNumber() << "." << preheader->getName() <<":\n\t";
+			def.getInstr()->dump();
+		);
+		auto unilatch_class = EQ->getClassFor(unilatch);
+		// Initialize in unilatch
+		auto unilatch_vreg = getVreg(unilatch_class);
+		def = BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
+									TII->get(Patmos::COPY), target_vreg)
+										.addReg(unilatch_vreg);
+		LLVM_DEBUG(
+			dbgs() << "Inserted definition of header predicate " << eq_class.number
+					<< "in unilatch bb." << unilatch->getNumber() << "." << unilatch->getName() <<":\n\t";;
+			def.getInstr()->dump();
+		);
+	}
+}
+
+void PreRegallocReduce::insertPredDefinitions(
+	MachineFunction*MF, std::map<unsigned, Register>& vreg_map
+) {
+	for(auto eq_class: EQ->getAllClasses()) {
 		assert(eq_class.members.size() >= 1);
 		assert(eq_class.dependencies.size() >= 1);
 
-		auto class_header = get_header_of(*eq_class.members.begin(), LI);
+		if(get_header_in_class(eq_class)) {
+			insertHeaderClassPredDefinitions(eq_class, MF, vreg_map);
+		} else {
+			auto class_header = get_header_of(eq_class);
+			auto class_vreg = getVreg(eq_class);
+			bool has_exit = false;
+			bool has_definition_in_class_header = false;
+			// If there are more than 1 dependency edge, we can't use destructive definition
+			// (i.e. may only overwrite the old value in case the definition site is enabled)
+			bool non_destructive_def = eq_class.dependencies.size() > 1;
 
-		bool has_definition_in_class_header = false;
-		bool has_non_header_exit = false;
-		bool is_header_class = std::any_of(eq_class.members.begin(), eq_class.members.end(), [&](auto member){ return LI.isLoopHeader(member) || member == entry;});
-		bool has_multiple_real_dep_edges = eq_class.dependencies.size() > (eq_class.dependencies.count(None) + 1);
-		bool non_destructive_def = has_multiple_real_dep_edges && !is_header_class;
-
-		for(auto dep_edge: eq_class.dependencies) {
-			if(!dep_edge) {
-				auto initial_preg = PatmosSinglePathInfo::isRootLike(*MF)? Patmos::P0 : Patmos::P7;
-
-				auto pred_vreg = getVregForPred(RI, eq_class.number, vreg_map);
-				auto def = BuildMI(*entry, entry->begin(), DebugLoc(),
-					TII->get(Patmos::COPY), pred_vreg)
-						.addReg(initial_preg);
-				LLVM_DEBUG(
-					dbgs() << "Inserted entry definition of predicate " << eq_class.number << ":\n\t";
-					def.getInstr()->dump();
-				);
-				has_definition_in_class_header = true;
-			} else {
-				auto source_vreg = getVregForPred(RI, EQ.getClassFor(dep_edge->first).number, vreg_map);
-
-				auto target_vreg = getVregForPred(RI, eq_class.number, vreg_map);
-				auto number_or_terminators = std::distance(dep_edge->first->getFirstTerminator(), dep_edge->first->end());
+			for(auto dep_edge: eq_class.dependencies) {
+				assert(dep_edge);
+				auto source_class = EQ->getClassFor(dep_edge->first);
+				auto source_vreg = getVreg(source_class);
 
 				if(!eq_class.members.count(dep_edge->second)) {
+					auto sink_class = EQ->getClassFor(dep_edge->second);
 					// The edge doesn't go straight into the class.
 					// Therefore, copy the target's class's predicate into this class'es predicate
-					auto sink_vreg = getVregForPred(RI, EQ.getClassFor(dep_edge->second).number, vreg_map);
+					auto sink_vreg = getVreg(sink_class);
 
 					MachineInstrBuilder def;
 					if(non_destructive_def) {
 						def = BuildMI(*dep_edge->second, dep_edge->second->getFirstTerminator(), DebugLoc(),
-							TII->get(Patmos::PSET), target_vreg)
+							TII->get(Patmos::PSET), class_vreg)
 								.addReg(sink_vreg).addImm(0)
-								.addUse(target_vreg, RegState::Implicit);
+								.addUse(class_vreg, RegState::Implicit);
 					} else {
 						def = BuildMI(*dep_edge->second, dep_edge->second->getFirstTerminator(), DebugLoc(),
-							TII->get(Patmos::COPY), target_vreg)
+							TII->get(Patmos::COPY), class_vreg)
 								.addReg(sink_vreg);
 					}
 					LLVM_DEBUG(
@@ -209,8 +254,9 @@ void PreRegallocReduce::insertPredDefinitions(
 						def.getInstr()->dump();
 					);
 				} else {
+					auto number_of_terminators = std::distance(dep_edge->first->getFirstTerminator(), dep_edge->first->end());
 					assert(
-						number_or_terminators >= 1 &&
+						number_of_terminators >= 1 &&
 						dep_edge->first->getFirstTerminator()->getOpcode() == Patmos::BR &&
 						dep_edge->first->getFirstTerminator()->getNumExplicitOperands() == 3 &&
 						"Control dependency edge not sourced in a conditional branch"
@@ -227,7 +273,7 @@ void PreRegallocReduce::insertPredDefinitions(
 					// If the conditional branch doesn't target our target, negate the condition
 					cond_neg = target != dep_edge->second? !cond_neg: cond_neg;
 
-					auto target_header = get_header_of(dep_edge->second, LI);
+					auto target_header = get_header_of(dep_edge->second);
 
 					// We Need to initialize the predicate of an exit target to false in the header of the target
 					// (unless the target and header are in the same class, since the header needs to initially be
@@ -235,8 +281,9 @@ void PreRegallocReduce::insertPredDefinitions(
 					assert((target_header == dep_edge->second? eq_class.members.count(target_header) : true)
 						&& "If the target of a definition is a header, it must be in the class"
 					);
-					bool is_non_header_exit = is_exit_edge(*dep_edge, LI) && !eq_class.members.count(target_header);
-					has_non_header_exit |= is_non_header_exit;
+					assert(!eq_class.members.count(target_header));
+					bool is_exit = is_exit_edge(*dep_edge);
+					has_exit |= is_exit;
 
 					bool is_def_in_class_header = class_header == dep_edge->first;
 					has_definition_in_class_header |= is_def_in_class_header;
@@ -244,14 +291,13 @@ void PreRegallocReduce::insertPredDefinitions(
 					bool needs_implicit_use = false;
 					MachineInstrBuilder def;
 					if(non_destructive_def) {
-						assert(!is_non_header_exit);
 						def = BuildMI(*dep_edge->first, dep_edge->first->getFirstTerminator(), DebugLoc(),
-							TII->get(Patmos::PMOV), target_vreg)
+							TII->get(Patmos::PMOV), class_vreg)
 								.addReg(source_vreg).addImm(0); // Only update predicate if current block is enabled
 						needs_implicit_use = true;
 					} else {
 						def = BuildMI(*dep_edge->first, dep_edge->first->getFirstTerminator(), DebugLoc(),
-							TII->get(Patmos::PAND), target_vreg)
+							TII->get(Patmos::PAND), class_vreg)
 								// If this edge exits the loop, only allow the predicate to be written
 								// once (when the exit is taken). This ensures subsequent, disabled runs
 								// of the loop don't overwrite the exit target's register
@@ -259,9 +305,9 @@ void PreRegallocReduce::insertPredDefinitions(
 								// By using the target predicate as the negated guard, after the first
 								// time the exit is taken, the predicate cannot be assigned to again
 								// Remember: exit predicates are initialized to false unless their class includes the header
-								.addReg(is_non_header_exit? target_vreg : Patmos::P0).addImm(is_non_header_exit?1:0)
+								.addReg(is_exit? class_vreg : Patmos::P0).addImm(is_exit?1:0)
 								.addReg(source_vreg).addImm(0); // current guard as source
-						needs_implicit_use = is_non_header_exit;
+						needs_implicit_use = is_exit;
 					}
 					def.addReg(cond_reg).addImm(cond_neg? 1 : 0); // condition
 
@@ -271,7 +317,7 @@ void PreRegallocReduce::insertPredDefinitions(
 					// It will then delete previous definitions or reassign them to registers that are used by other
 					// predicates.
 					if(needs_implicit_use && !is_def_in_class_header) {
-						def.addUse(target_vreg, RegState::Implicit);
+						def.addUse(class_vreg, RegState::Implicit);
 					}
 					LLVM_DEBUG(
 						dbgs() << "Inserted definition of predicate " << eq_class.number
@@ -281,26 +327,18 @@ void PreRegallocReduce::insertPredDefinitions(
 					);
 				}
 			}
+
+			if((non_destructive_def || has_exit) && !has_definition_in_class_header) {
+				// Set predicate to false at the start of the scope (header)
+				auto def = BuildMI(*class_header, class_header->getFirstTerminator(), DebugLoc(),
+					TII->get(Patmos::PCLR), class_vreg)
+						.addReg(Patmos::P0).addImm(0); // Never predicated
+				LLVM_DEBUG(
+					dbgs() << "Inserted predicate " << eq_class.number << " initial clear "
+						<< "in bb." << class_header->getNumber() << "." << class_header->getName() <<":\n\t";
+					def.getInstr()->dump();
+				);
+			}
 		}
-
-		if((non_destructive_def || has_non_header_exit) && !has_definition_in_class_header) {
-			auto loop = LI.getLoopFor(*eq_class.members.begin());
-			assert(std::all_of(eq_class.members.begin(), eq_class.members.end(), [&](auto member){
-				return LI.getLoopFor(member) == loop;
-			}) && "All equivalence class members aren't in the same loop");
-			auto class_header = loop? loop->getHeader(): entry;
-
-			// Set predicate to false at the start of the scope (header)
-			auto def = BuildMI(*class_header, class_header->getFirstTerminator(), DebugLoc(),
-				TII->get(Patmos::PCLR), getVregForPred(RI, eq_class.number, vreg_map))
-					.addReg(Patmos::P0).addImm(0); // Never predicated
-			LLVM_DEBUG(
-				dbgs() << "Inserted predicate " << eq_class.number << " initial clear "
-					<< "in bb." << class_header->getNumber() << "." << class_header->getName() <<":\n\t";
-				def.getInstr()->dump();
-			);
-		}
-
-
 	}
 }
