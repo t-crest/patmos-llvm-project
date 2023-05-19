@@ -44,18 +44,15 @@ namespace llvm {
 		std::map<unsigned, Register> vreg_map;
 
 		/// applyPredicates - Predicate instructions of MBBs in the given SPScope.
-		void applyPredicates(MachineFunction *MF,
-				std::map<unsigned, Register>& vreg_map);
+		void applyPredicates(MachineFunction *MF);
 
 		/// insertPredDefinitions - Insert predicate register definitions
 		/// to MBBs of the given SPScope.
-		void insertPredDefinitions(MachineFunction*MF, std::map<unsigned, Register>& vreg_map);
+		void insertPredDefinitions(MachineFunction*MF);
 
 		/// Insert predicate register definitions for the given class assuming
 		/// it is the class of a loop header
-		void insertHeaderClassPredDefinitions(
-			EqClass &eq_class, MachineFunction*MF, std::map<unsigned, Register>& vreg_map
-		);
+		void insertHeaderClassPredDefinitions(EqClass &eq_class, MachineFunction*MF);
 
 		/// Gets the header of the given block's loop.
 		/// If the block is not in a loop, the entry block is its header.
@@ -68,9 +65,12 @@ namespace llvm {
 		Optional<MachineBasicBlock*> get_header_in_class(EqClass &eq_class);
 
 		/// Returns whether this edge exits any loop
-		bool is_exit_edge(std::pair<MachineBasicBlock*, MachineBasicBlock*> edge);
+		bool is_exit_edge(std::pair<Optional<MachineBasicBlock*>, MachineBasicBlock*> edge);
 
 		Register getVreg(EqClass &eq_class);
+
+		/// Inserts the definition of a class predicate at the entry
+		void insertEntryDependencyDefinition(EqClass &eq_class, MachineFunction *MF);
 
 	public:
 		static char ID;

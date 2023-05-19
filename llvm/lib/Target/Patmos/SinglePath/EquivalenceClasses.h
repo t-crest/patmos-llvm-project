@@ -12,6 +12,7 @@
 #define TARGET_PATMOS_SINGLEPATH_EQUIVALENCECLASSES_H_
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 
 #include <set>
 
@@ -26,7 +27,7 @@ namespace llvm {
 		unsigned number;
 
 		/// The edges the block is control dependent on
-		std::set<Optional<std::pair<MachineBasicBlock*,MachineBasicBlock*>>> dependencies;
+		std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>> dependencies;
 
 		// The blocks within the class
 		std::set<MachineBasicBlock*> members;
@@ -38,9 +39,10 @@ namespace llvm {
 			// Unique number of the class
 			unsigned,
 			std::pair<
-				// The control dependencies of the class
-				// 'None' defines the entry of the function, while 'Some' is an edge
-				std::set<Optional<std::pair<MachineBasicBlock*,MachineBasicBlock*>>>,
+				// The control dependencies of the class.
+				// If the source is 'None' it is a dependency on the entry to the loop.
+				// (the target is then the header)
+				std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>,
 				// The blocks in the class
 				std::set<MachineBasicBlock*>
 			>
@@ -58,6 +60,8 @@ namespace llvm {
 		}
 
 		void getAnalysisUsage(AnalysisUsage &AU) const override {
+			AU.addRequired<MachineLoopInfo>();
+			AU.addPreserved<MachineLoopInfo>();
 			MachineFunctionPass::getAnalysisUsage(AU);
 		}
 
