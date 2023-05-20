@@ -18,6 +18,7 @@ add_llvm_component_library(LLVMPatmosSinglePath
   LoopCountInsert.cpp
   VirtualizePredicates.cpp
   EquivalenceClasses.cpp
+  InstructionCounter.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

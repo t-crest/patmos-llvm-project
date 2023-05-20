@@ -171,7 +171,7 @@ void PreRegallocReduce::insertEntryDependencyDefinition(
 
 	Register initial_preg;
 	if(header->pred_size() == 0) {
-		// It is the entry
+		// It is the function entry
 		initial_preg = PatmosSinglePathInfo::isRootLike(*MF)? Patmos::P0 : Patmos::P7;
 	} else {
 		auto header_class = EQ->getClassFor(header);

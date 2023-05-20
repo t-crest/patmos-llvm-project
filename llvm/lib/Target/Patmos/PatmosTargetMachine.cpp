@@ -324,6 +324,9 @@ namespace {
         addPass(createPatmosModuleExportPass(getPatmosTargetMachine(),
             SerializeMachineCode, empty, SerializeRoots, false));
       }
+      if(PatmosSinglePathInfo::isEnabled()) {
+    	  addPass(createSinglePathInstructionCounter(getPatmosTargetMachine()));
+      }
     }
   };
 } // namespace
