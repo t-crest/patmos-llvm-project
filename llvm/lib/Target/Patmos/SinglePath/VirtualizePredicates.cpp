@@ -72,11 +72,21 @@ bool VirtualizePredicates::runOnMachineFunction(MachineFunction &MF) {
 	return changed;
 }
 
+/// Goes through each loop looking for its counter.
+/// If the counter is spilled/reloaded, unpredicate the spill/reload instructions
+/// to ensure the counter is correctly spilled/reloaded every iteration.
+///
+/// Also ensures if the registers used for counters are used by parallel paths
+/// or callers, then they are spilled/reloaded before/after the loop or in the
+/// function prologue/epilogue.
+/// This ensures a disabled loop doesn't mess with other path's register values
+/// and that if the function is called disabled, a loops counter doesn't overwrite
+/// caller's register (which they didn't spill since the paths is disabled).
 void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 	auto &LI = getAnalysis<MachineLoopInfo>();
 
-	// registers used for loop counter management and the preheader of their loop
-	std::map<Register, MachineLoop*> counter_mgmt_regs;
+	// registers used for loop counter management and their loop
+	std::set<std::pair<Register, MachineLoop*>> counter_mgmt_regs;
 
 	std::for_each(LI.begin(), LI.end(), [&](MachineLoop*loop){
 		auto header = loop->getHeader();
@@ -98,7 +108,6 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 		auto found_counter_init = std::find_if(preheader->begin(), preheader->end(), is_counter_init);
 		assert(found_counter_init != preheader->end());
 		auto counter_reg = found_counter_init->getOperand(0).getReg();
-		counter_mgmt_regs[counter_reg] = loop;
 
 		// Check if it is spilled
 		auto maybe_spill = std::next(found_counter_init);
@@ -106,9 +115,21 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 		unsigned reg = TII->isStoreToStackSlot(*maybe_spill, frame_index);
 
 		if(reg != 0 && counter_reg == reg) {
+			// Since the counter is spilled immediately, there is no point in using a general-purpose
+			// register, that might need to first be spilled so it doesn't overwrite a different paths use of the same register.
+			// (it might also overrite a caller's user of the register when the function is called disabled).
+			// Therefore, just use R26, since it is reserved
+			found_counter_init->getOperand(0).setReg(Patmos::R26);
+			LLVM_DEBUG(
+				dbgs() << "Loop counter initializer switched to use R26 in 'bb."
+				<< preheader->getNumber() << "." << preheader->getName() << "':";
+				found_counter_init->dump();
+			);
+
 			assert(maybe_spill->getOperand(0).isReg() && maybe_spill->getOperand(0).getReg() == Patmos::NoRegister);
 			assert(maybe_spill->getOperand(1).isImm() && maybe_spill->getOperand(1).getImm() == 0);
 			maybe_spill->getOperand(0).setReg(Patmos::P0);
+			maybe_spill->getOperand(4).setReg(Patmos::R26);
 			LLVM_DEBUG(
 				dbgs() << "Loop counter for loop header 'bb." << header->getNumber() << "." << header->getName()
 				<< "' is spilled. Unpredicating spills/reloads:\n"
@@ -121,7 +142,6 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 			auto unilatch_dec_def = unilatch_dec->getOperand(0).getReg(); // register after decrement
 			auto unilatch_dec_use = unilatch_dec->getOperand(3).getReg(); // register before decrement
 			assert(unilatch_dec_def == unilatch_dec_use && "Decrement changing registers (unexpected)");
-			counter_mgmt_regs[unilatch_dec_def] = loop;
 
 			// Update reload
 			auto reload = std::prev(unilatch_dec);
@@ -132,6 +152,7 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 			assert(reload->getOperand(1).isReg() && reload->getOperand(1).getReg() == Patmos::NoRegister);
 			assert(reload->getOperand(2).isImm() && reload->getOperand(2).getImm() == 0);
 			reload->getOperand(1).setReg(Patmos::P0);
+			reload->getOperand(0).setReg(Patmos::R26);
 			LLVM_DEBUG(
 				dbgs() << "in unilatch 'bb." << unilatch->getNumber() << "." << unilatch->getName()
 				<< "':"; reload->dump();
@@ -146,10 +167,27 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 			assert(spill->getOperand(0).isReg() && spill->getOperand(0).getReg() == Patmos::NoRegister);
 			assert(spill->getOperand(1).isImm() && spill->getOperand(1).getImm() == 0);
 			spill->getOperand(0).setReg(Patmos::P0);
+			spill->getOperand(4).setReg(Patmos::R26);
 			LLVM_DEBUG(
 				dbgs() << "in unilatch 'bb." << unilatch->getNumber() << "." << unilatch->getName()
 				<< "':"; spill->dump();
 			);
+
+			unilatch_dec->getOperand(0).setReg(Patmos::R26);
+			unilatch_dec->getOperand(3).setReg(Patmos::R26);
+			LLVM_DEBUG(
+				dbgs() << "Loop counter decrementer switched to use R26 in 'bb."
+				<< unilatch->getNumber() << "." << unilatch->getName() << "':";
+				unilatch_dec->dump();
+			);
+		} else {
+			// This register will be initialized and decremented unpredicated.
+			// Even if the loop is not taken. This means it might interfere with a different path's
+			// use of the same register. The register might also be used by a caller, with the current
+			// function being called disabled. In such a case, the caller didn't save his registers before
+			// the call (since the path is disabled), which means we must spill/reload this register
+			// in the prologue/epilogue.
+			counter_mgmt_regs.insert(std::make_pair(counter_reg, loop));
 		}
 	});
 
@@ -157,6 +195,7 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 	RD.runOnMachineFunction(MF);
 	PostDomTreeBase<MachineBasicBlock> PDT;
 	PDT.recalculate(MF);
+	std::set<std::pair<Register, MachineLoop*>> solved_counters;
 	for(auto entry: counter_mgmt_regs) {
 		auto reg = entry.first;
 		auto loop = entry.second;
@@ -202,14 +241,29 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 				// at this point, so we use this pseudo-instruction for now.
 				BuildMI(*unilatch, unilatch->getFirstInstrTerminator(), DebugLoc(),
 					TII->get(Patmos::PSEUDO_POSTLOOP_RELOAD), reg).addImm(frame_idx);
+
+				solved_counters.insert(std::make_pair(reg,loop));
+				break;
 			}
 		}
+	}
+
+	//Filter out any solved registers
+	for(auto entry: solved_counters) {
+		counter_mgmt_regs.erase(entry);
 	}
 
 	// Filter out any callee-save-regs
 	const MCPhysReg *saved_regs = TRI->getCalleeSavedRegs(&MF);
 	for(int idx = 0; saved_regs[idx] != 0; idx++) {
-		counter_mgmt_regs.erase(saved_regs[idx]);
+		auto is_saved = [&](auto entry){
+			return entry.first == saved_regs[idx];
+		};
+		auto found = std::find_if(counter_mgmt_regs.begin(), counter_mgmt_regs.end(), is_saved);
+		while(found != counter_mgmt_regs.end()) {
+			counter_mgmt_regs.erase(found);
+			found = std::find_if(counter_mgmt_regs.begin(), counter_mgmt_regs.end(), is_saved);
+		}
 	}
 
 	// Add registers to prologue/epilogue
