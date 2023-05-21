@@ -563,7 +563,7 @@ PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) {
   switch (opc) {
     case LWS: case LHS: case LBS: case LHUS: case LBUS:
     case SWS: case SHS: case SBS: case PSEUDO_PREG_RELOAD:
-    case PSEUDO_PREG_SPILL:
+    case PSEUDO_PREG_SPILL: case PSEUDO_POSTLOOP_RELOAD:
       return PatmosII::MEM_S;
     case LWL: case LHL: case LBL: case LHUL: case LBUL:
     case SWL: case SHL: case SBL:
@@ -574,7 +574,9 @@ PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) {
     case  LWM: case  LHM: case  LBM: case  LHUM: case  LBUM:
     case  SWM: case  SHM: case  SBM:
       return PatmosII::MEM_M;
-    default: llvm_unreachable("Unexpected memory access instruction!");
+    default:
+    	MI.dump();
+    	llvm_unreachable("Unexpected memory access instruction!");
   }
 
 }

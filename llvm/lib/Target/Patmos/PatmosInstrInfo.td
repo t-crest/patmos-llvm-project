@@ -316,7 +316,23 @@ let mayLoad=1 in
 def PSEUDO_POSTLOOP_RELOAD : PseudoInst<(outs RRegs:$rd),
                                     (ins i32imm:$imm),
                                     "#PSEUDO_POSTLOOP_RELOAD", "", []>;
-									
+                              
+// Denotes a single-path loop that doesn't need a counter maintained.
+// Should only be present in the header of the loop                     
+let hasSideEffects = 1 in // To ensure it is not optimized away
+def PSEUDO_COUNTLESS_SPLOOP : PseudoInst<(outs),
+                                    (ins),
+                                    "#PSEUDO_COUNTLESS_SPLOOP", "", []>;
+
+
+// For a single-path loop that doesn't use a counter, this instruction specifies
+// which predicate register should be used to check for when the unilatch
+// should exit the loop. Should only be in a unilatch.              
+let hasSideEffects = 1 in // To ensure it is not optimized away
+def PSEUDO_UNILATCH_EXIT_PRED : PseudoInst<(outs),
+                                    (ins PRegs:$ps),
+                                    "#PSEUDO_UNILATCH_EXIT_PRED", "", []>;
+
 // Denotes loop bounds, i.e., how many times a loop will iterate at runtime. 
 // Only used during Code-Gen.
 // 

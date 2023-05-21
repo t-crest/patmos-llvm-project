@@ -88,8 +88,11 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 	// registers used for loop counter management and their loop
 	std::set<std::pair<Register, MachineLoop*>> counter_mgmt_regs;
 
-	std::for_each(LI.begin(), LI.end(), [&](MachineLoop*loop){
-		auto header = loop->getHeader();
+	for(auto &header_mbb: MF){
+		auto header = &header_mbb;
+		auto loop = LI.getLoopFor(header);
+		if(!LI.isLoopHeader(header) || !PatmosSinglePathInfo::needsCounter(loop)) continue;
+
 		assert(getLoopBounds(header));
 		auto loop_bound = getLoopBounds(header)->second;
 		MachineBasicBlock *preheader, *unilatch;
@@ -189,7 +192,7 @@ void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
 			// in the prologue/epilogue.
 			counter_mgmt_regs.insert(std::make_pair(counter_reg, loop));
 		}
-	});
+	}
 
 	ReachingDefAnalysis RD;
 	RD.runOnMachineFunction(MF);

@@ -84,6 +84,12 @@ static cl::opt<bool> EnableOldSinglePathTransform(
     cl::desc("Enables the old version of the single-path transformation."),
     cl::Hidden);
 
+static cl::opt<bool> DisableCountlessLoops(
+    "mpatmos-disable-countless-loops",
+    cl::init(false),
+    cl::desc("Forces single-path code to use counters on all loops to ensure constant iteration counts."),
+    cl::Hidden);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 char PatmosSinglePathInfo::ID = 0;
@@ -175,6 +181,10 @@ void PatmosSinglePathInfo::getRootNames(std::set<StringRef> &S) {
 
 bool PatmosSinglePathInfo::useNewSinglePathTransform(){
 	return !EnableOldSinglePathTransform;
+}
+
+bool PatmosSinglePathInfo::useCountlessLoops(){
+	return !DisableCountlessLoops;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -324,3 +334,12 @@ MachineBasicBlock::iterator PatmosSinglePathInfo::getUnilatchCounterDecrementer(
 			&& "Loop counter not using general-purpose register");
 	return counter_decrementer;
 }
+
+bool PatmosSinglePathInfo::needsCounter(MachineLoop *loop){
+	auto header = loop->getHeader();
+
+	return !std::any_of(header->instr_begin(), header->instr_end(), [&](auto &instr){
+		return instr.getOpcode() == Patmos::PSEUDO_COUNTLESS_SPLOOP;
+	});
+}
+

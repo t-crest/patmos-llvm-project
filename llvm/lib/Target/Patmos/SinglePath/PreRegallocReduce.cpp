@@ -60,7 +60,7 @@ Register PreRegallocReduce::getVreg(EqClass &eq_class)
 
 void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 
-	std::for_each(MF->begin(), MF->end(), [&](auto &mbb){
+	for(auto &mbb: *MF){
 		auto eq_class = EQ->getClassFor(&mbb);
 		auto predVreg = getVreg(eq_class);
 
@@ -124,7 +124,16 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 				}
 			}
 		}
-	});
+
+		// Predicate the branches of the unilatches that don't use counters
+		auto loop = LI->getLoopFor(&mbb);
+		if(LI->isLoopHeader(&mbb) && !PatmosSinglePathInfo::needsCounter(loop)) {
+			auto unilatch = PatmosSinglePathInfo::getPreHeaderUnilatch(loop).second;
+			BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
+					TII->get(Patmos::PSEUDO_UNILATCH_EXIT_PRED))
+				.addReg(predVreg);
+		}
+	}
 }
 
 bool PreRegallocReduce::is_exit_edge(std::pair<Optional<MachineBasicBlock*>, MachineBasicBlock*> edge) {

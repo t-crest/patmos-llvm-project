@@ -28,6 +28,7 @@ namespace llvm {
 
 		void doFunction(MachineFunction &MF);
 		void remove_fallthroughs(MachineFunction &MF);
+		void classifyLoops(MachineFunction &MF);
 	public:
 		static char ID;
 

@@ -27,11 +27,12 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 
 		auto &LI = getAnalysis<MachineLoopInfo>();
 		// Update unilatch to use the counter as condition (instead of unconditionally branching
-		std::for_each(MF.begin(), MF.end(), [&](auto &header_mbb){
-			if(LI.isLoopHeader(&header_mbb)) {
-				DebugLoc DL;
-				auto loop = LI.getLoopFor(&header_mbb);
+		for(auto &header_mbb: MF){
+			if(!LI.isLoopHeader(&header_mbb)) continue;
+			DebugLoc DL;
+			auto loop = LI.getLoopFor(&header_mbb);
 
+			if(PatmosSinglePathInfo::needsCounter(loop)) {
 				auto unilatch = PatmosSinglePathInfo::getPreHeaderUnilatch(loop).second;
 
 				// Insert counter check in unilatch
@@ -67,8 +68,41 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 						iter++;
 					}
 				}
+			} else {
+				// Loops that don't use a counter just need to jump out when the unilatch is disabled.
+				auto unilatch = PatmosSinglePathInfo::getPreHeaderUnilatch(loop).second;
+				auto back_branch = unilatch->getFirstInstrTerminator();
+				assert(back_branch->getOpcode() == Patmos::BRu);
+				assert(back_branch->getOperand(0).getReg() == Patmos::NoRegister);
+				assert(back_branch->getOperand(1).isImm());
+				assert(back_branch->getOperand(2).getMBB() == &header_mbb);
+
+				// We find PSEUDO_UNILATCH_EXIT_PRED to figure out which predicate should be used.
+				auto found_pseudo_pred = std::find_if(unilatch->instr_begin(), unilatch->instr_end(), [&](auto &instr){
+					return instr.getOpcode() == Patmos::PSEUDO_UNILATCH_EXIT_PRED;
+				});
+				assert(found_pseudo_pred != unilatch->instr_end());
+				auto exit_pred = found_pseudo_pred->getOperand(0).getReg();
+				assert(exit_pred.isVirtual() && MF.getRegInfo().getRegClass(exit_pred) == &Patmos::PRegsRegClass);
+				// Erase pseudo-instruction so it doesn't need to be handled elsewhere
+				unilatch->erase(found_pseudo_pred);
+
+				// Replace branch with predicated version on the unilatch's predicate
+				unilatch->remove(&*unilatch->getFirstInstrTerminator());
+				BuildMI(*unilatch, unilatch->getFirstInstrTerminator(), DL,
+					TII->get(Patmos::BR))
+					.addReg(exit_pred).addImm(0)
+					.addMBB(&header_mbb);
+
+				// Remove the PSEUDO_COUNTLESS_SPLOOP instruction, since it is no longer needed
+				// and so we don't need to handle it in other passes
+				auto found_psuedo = std::find_if(header_mbb.instr_begin(), header_mbb.instr_end(), [&](auto &instr){
+					return instr.getOpcode() == Patmos::PSEUDO_COUNTLESS_SPLOOP;
+				});
+				assert(found_psuedo != header_mbb.instr_end());
+				header_mbb.erase(found_psuedo);
 			}
-		});
+		}
 
 		linearizeScope(getAnalysis<PatmosSinglePathInfo>().getRootScope());
 		mergeMBBs(MF);

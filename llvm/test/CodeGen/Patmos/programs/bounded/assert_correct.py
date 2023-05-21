@@ -250,6 +250,7 @@ compile_and_test_matrix("", "", [
     # Optimization levels
     [
         "-O2", "", "-O1", "-O2 -mpatmos-disable-pseudo-roots", 
+        "-O2 -mpatmos-disable-countless-loops", 
         # We try low subfuction size to ensure the splitter works too 
         # (without needing to make tests with big functions)
         "-O2 --mpatmos-max-subfunction-size=64",

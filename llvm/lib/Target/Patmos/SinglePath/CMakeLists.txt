@@ -19,6 +19,7 @@ add_llvm_component_library(LLVMPatmosSinglePath
   VirtualizePredicates.cpp
   EquivalenceClasses.cpp
   InstructionCounter.cpp
+  FCFGPostDom.cpp
   
   LINK_COMPONENTS
   PatmosInfo 
