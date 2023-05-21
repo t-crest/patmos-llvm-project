@@ -33,6 +33,8 @@ bool PreRegallocReduce::runOnMachineFunction(MachineFunction &MF) {
 
 		insertPredDefinitions(&MF);
 
+		removeUnusedPreds(MF);
+
 		MF.getProperties().reset(MachineFunctionProperties::Property::IsSSA);
 		MF.getProperties().reset(MachineFunctionProperties::Property::NoVRegs);
 		changed |= true;
@@ -369,6 +371,57 @@ void PreRegallocReduce::insertPredDefinitions(
 					<< "in bb." << class_header->getNumber() << "." << class_header->getName() <<":\n\t";
 				def.getInstr()->dump();
 			);
+		}
+	}
+}
+
+static bool is_used(Register pred_vreg, MachineFunction &MF) {
+	for(MachineBasicBlock &block: MF) {
+		for(auto instr_iter = block.instr_begin(); instr_iter != block.instr_end(); instr_iter++){
+
+			for(auto use: instr_iter->explicit_uses()) {
+				if(use.isReg()) {
+					auto reg = use.getReg();
+					if(reg == pred_vreg) {
+						assert(reg.isVirtual() && MF.getRegInfo().getRegClass(reg) == &Patmos::PRegsRegClass);
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+static unsigned remove_defs(Register pred_vreg, MachineFunction &MF) {
+	assert(pred_vreg.isVirtual() && MF.getRegInfo().getRegClass(pred_vreg) == &Patmos::PRegsRegClass);
+	unsigned removed_count = 0;
+
+	for(MachineBasicBlock &block: MF) {
+		for(auto instr_iter = block.instr_begin(); instr_iter != block.instr_end(); ){
+
+			if(instr_iter->definesRegister(pred_vreg)) {
+				block.erase(instr_iter);
+				instr_iter = block.instr_begin();
+				removed_count++;
+			} else {
+				instr_iter++;
+			}
+		}
+	}
+	return removed_count;
+}
+
+void PreRegallocReduce::removeUnusedPreds(MachineFunction &MF) {
+	bool any_removals = true;
+	while(any_removals) {
+		any_removals = false;
+		for(auto eq_class: EQ->getAllClasses()) {
+			auto vreg = getVreg(eq_class);
+			if(!is_used(vreg, MF)) {
+				if(remove_defs(vreg, MF) > 0){
+					any_removals = true;
+				}
+			}
 		}
 	}
 }

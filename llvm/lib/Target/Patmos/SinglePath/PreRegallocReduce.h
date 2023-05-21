@@ -72,6 +72,10 @@ namespace llvm {
 		/// Inserts the definition of a class predicate at the entry
 		void insertEntryDependencyDefinition(EqClass &eq_class, MachineFunction *MF);
 
+		/// For each equivalence class, checks to see if its predicate is actually used
+		/// to predicate any instruction. If not, removes all definitions of it.
+		void removeUnusedPreds(MachineFunction &MF);
+
 	public:
 		static char ID;
 
