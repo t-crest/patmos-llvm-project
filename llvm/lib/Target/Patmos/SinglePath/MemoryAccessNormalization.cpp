@@ -397,6 +397,7 @@ unsigned MemoryAccessNormalization::compensateMerge(
     return std::get<1>(c) == 0;
   });
 
+  assert(!counts.empty());
   if (all_zero) {
     if (should_insert) {
       // No need to do any decrementing, so just use the existing register as PHI result
@@ -409,60 +410,44 @@ unsigned MemoryAccessNormalization::compensateMerge(
       LLVM_DEBUG(dbgs() << "Joined predecessor counts in '" << current->getName() << "': " << printReg(block_regs[current]) << "\n";);
     }
   } else {
-    // First, create 2 PHI instructions, one for the source register from each predecessor
-    // and the second for the amount that register should be decremented by
-    auto phi_reg = new_vreg(*MF);
-    auto phi_dec_count = new_vreg(*MF);
-
-    MachineInstrBuilder phi_reg_inst_builder, phi_dec_count_inst_builder;
-    if (should_insert) {
-      phi_dec_count_inst_builder = BuildMI(*current, current->begin(), DL,
-          TII->get(Patmos::PHI), phi_dec_count);
-      phi_reg_inst_builder = BuildMI(*current, current->begin(), DL,
-          TII->get(Patmos::PHI), phi_reg);
-    }
+	// Create a PHI instruction to unify the decremented counter from each predecessor
+    MachineInstrBuilder phi_decremented_counter_phi;
+	if(should_insert) {
+		phi_decremented_counter_phi= BuildMI(*current, current->begin(), DL,
+            TII->get(Patmos::PHI), block_regs[current]);
+	}
 
     for (auto count : counts) {
       auto pred = std::get<0>(count);
       auto dec_count = std::get<1>(count);
       auto count_reg = std::get<2>(count);
-      insert_count++;
-      if (should_insert) {
-        phi_reg_inst_builder.addReg(count_reg);
-        phi_reg_inst_builder.addMBB(pred);
 
-        // Load dec_count into register in source block
-        auto dec_reg = new_vreg(*MF);
-        auto dec_opcode = dec_count > 4095 ? Patmos::LIl : Patmos::LIi;
-        BuildMI(*pred, pred->getFirstTerminator(), DL, TII->get(dec_opcode),
-          dec_reg)
-          .addReg(Patmos::NoRegister).addImm(0).
-          addImm(dec_count);
+      if(dec_count == 0 ) {
+    	if(should_insert) {
+	      phi_decremented_counter_phi.addReg(count_reg);
+	      phi_decremented_counter_phi.addMBB(pred);
+    	}
+      } else {
+		insert_count++;
+		if (should_insert) {
+		  // Decrement counter in source block
+		  auto dec_reg = new_vreg(*MF);
+		  auto dec_opcode = dec_count > 4095 ? Patmos::SUBl : Patmos::SUBi;
+		  auto dec_instr = BuildMI(*pred, pred->getFirstTerminator(), DL, TII->get(dec_opcode),
+		    dec_reg)
+		    .addReg(Patmos::NoRegister).addImm(0)
+		    .addReg(count_reg)	// Old count
+		    .addImm(dec_count);	// decrement by
 
-        phi_dec_count_inst_builder.addReg(dec_reg);
-        phi_dec_count_inst_builder.addMBB(pred);
+		  phi_decremented_counter_phi.addReg(dec_reg);
+		  phi_decremented_counter_phi.addMBB(pred);
 
-        LLVM_DEBUG(
-          dbgs() << "Inserted decrement count in predecessor '" << pred->getName() << "' as: ";
-          dbgs() << printReg(dec_reg, TRI) << " = " << dec_count << "\n";
-        );
+		  LLVM_DEBUG(
+		    dbgs() << "Inserted decrement count in merge predecessor '" << pred->getName() << "' as: ";
+		    dec_instr.getInstr()->dump();
+		  );
+		}
       }
-    }
-
-    insert_count++;
-    if (should_insert) {
-      // Decrement counter
-      BuildMI(*current, current->getFirstNonPHI(), DL, TII->get(Patmos::SUBr),
-        block_regs[current])
-        .addReg(Patmos::NoRegister).addImm(0)
-        .addReg(phi_reg)
-        .addReg(phi_dec_count); // Decrement by
-
-      LLVM_DEBUG(
-        dbgs() << "Inserted counter decrement in '" << current->getName() << "': "
-          << printReg(block_regs[current], TRI) << " = " << printReg(phi_reg, TRI)
-          << " - " << printReg(phi_dec_count, TRI) << "\n";
-      );
     }
   }
   return insert_count;
