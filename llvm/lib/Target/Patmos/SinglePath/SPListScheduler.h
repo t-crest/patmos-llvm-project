@@ -386,6 +386,10 @@ Optional<std::shared_ptr<Node>> get_next_ready(
 /// This scheduler can handle conditional branch instructions in the middle of the instruction
 /// list however does not attempt to occupy their delay slots nor add Nops.
 /// Therefore, post-processing is needed to ensure delayed branches/calls get at least Nops after them.
+///
+/// Note: Does not account for inter-functional scheduling requirements.
+/// 	  E.g. if a blocks ends with high-latency instruction and falls through
+///       to a block that uses the poisoned or written-to registers in the first instruction.
 template<
   typename Instruction,
   typename InstrIter,

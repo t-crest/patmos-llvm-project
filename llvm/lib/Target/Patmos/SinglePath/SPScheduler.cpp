@@ -232,12 +232,11 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
 
   LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
 
-  for(auto mbbIter = mf.begin(), mbbEnd = mf.end(); mbbIter != mbbEnd; ++mbbIter){
-    auto mbb = mbbIter;
-    LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb->dump());
+  for(auto &mbb: mf){
+    LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb.dump());
 
     // Statistics
-    for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
+    for(auto instrIter = mbb.begin(), instrEnd = mbb.end();
             instrIter != instrEnd; instrIter++)
 	{
     	if(is_long(&*instrIter)) SPLongInstructions++;
@@ -247,25 +246,67 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
     bool disable = DisableSPScheduler
         ||
         (DisableSPSchedulerFun != "" && DisableSPSchedulerFun == mf.getName() &&
-            (DisableSPSchedulerFunBlock == -1 || DisableSPSchedulerFunBlock == mbb->getNumber()))
+            (DisableSPSchedulerFunBlock == -1 || DisableSPSchedulerFunBlock == mbb.getNumber()))
             ;
 
     if(!disable) {
-      runListSchedule(&*mbb);
+      runListSchedule(&mbb);
     } else {
-      LLVM_DEBUG( dbgs() << "Disabled SPScheduler for '" << mf.getName() << "' block: " << mbb->getNumber() << "\n");
+      LLVM_DEBUG( dbgs() << "Disabled SPScheduler for '" << mf.getName() << "' block: " << mbb.getNumber() << "\n");
     }
 
-    for(auto instrIter = mbb->begin(), instrEnd = mbb->end();
+    for(auto instrIter = mbb.begin(), instrEnd = mbb.end();
         instrIter != instrEnd; )
     {
       SPInstructions++;
       auto latency = calculateLatency(instrIter, disable);
 	  for(auto i = 0; i<latency; i++){
-	    TM.getInstrInfo()->insertNoop(*mbb, std::next(instrIter));
+	    SPInstructions++;
+	    TM.getInstrInfo()->insertNoop(mbb, std::next(instrIter));
 	  }
 	  instrIter = std::next(instrIter, 1+latency); // Make sure to skip the newly added noops
     }
+  }
+
+  // Look for any fall-through that has a load at the end and ensure
+  // that nops are added if the target uses the load destination
+  //
+  // We do this here, instead of as part of the list scheduling, because it is
+  // quite a rare occurrence and likely not critical to performance.
+  for(auto &mbb: mf) {
+    if(mbb.canFallThrough()) {
+	  auto fall_to = mbb.getFallThrough();
+	  assert(fall_to);
+	  bool need_nop = false;
+
+	  auto check_instr = [&](MachineInstr *may_load){
+		  if(isLoadInst(may_load->getOpcode())){
+			  auto dest = may_load->getOperand(0).getReg();
+
+			  if(reads(&*fall_to->begin()).count(dest) ||
+				  (fall_to->begin()->isBundledWithSucc() &&
+					reads(&*std::next(fall_to->instr_begin())).count(dest))
+			  ) {
+				  need_nop = true;
+			  }
+		  }
+	  };
+
+	  if(std::prev(mbb.end())->isBundledWithSucc()) {
+		  // Check both instruction in last bundle
+		  check_instr(&*std::prev(mbb.instr_end()));
+	  }
+	  check_instr(&*std::prev(mbb.end()));
+
+	  if(need_nop) {
+		  SPInstructions++;
+		  TM.getInstrInfo()->insertNoop(mbb, mbb.end());
+		  LLVM_DEBUG(
+			dbgs() << "Added load delay to end of bb." << mbb.getNumber() << "." << mbb.getName()
+				<< " because successor bb." << fall_to->getNumber() << "." << fall_to->getName() << " uses load destination\n";
+		  );
+	  }
+	}
   }
 
   return true;
@@ -405,25 +446,7 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
 	  mbb->remove_instr(instr);
       mbb->insert(last_instr(), instr);
   }
-
-  auto check_schedule = [&](){
-    for(auto iter=mbb->instr_begin(); iter != last_instr(); iter++) {
-      auto * instr = &(*iter);
-      auto idx = std::distance(mbb->instr_begin(), iter);
-      if(!instr_map.count(idx)) {
-        if(instr->getOpcode() != Patmos::NOP) {
-          return false;
-        }
-      } else {
-        if(instr_map[idx] != instr) {
-          return false;
-        }
-      }
-    }
-    return true;
-  };
   LLVM_DEBUG( dbgs() << "MBB after list scheduling: \n"; mbb->dump());
-//  assert(check_schedule() && "Schedule was not reordered correctly");
 }
 
 
