@@ -41,6 +41,10 @@ TEST(ConstantLoopDominatorsAnalysisTest, OneMBB){
   );
 }
 
+//    1
+//    |
+//    v
+//    2
 TEST(ConstantLoopDominatorsAnalysisTest, Consecutive){
   MockLoopInfo LI;
 
@@ -66,6 +70,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, Consecutive){
   );
 }
 
+//    1
+//   / \
+//  v   v
+//  2   3
+//   \ /
+//    v
+//    4
 TEST(ConstantLoopDominatorsAnalysisTest, Branch){
   MockLoopInfo LI;
 
@@ -107,6 +118,19 @@ TEST(ConstantLoopDominatorsAnalysisTest, Branch){
   );
 }
 
+//    1
+//    |
+//    v
+//    2
+//   / \
+//  v   v
+//  3   4
+//   \ /
+//    v
+//    5
+//    |
+//    v
+//    6
 TEST(ConstantLoopDominatorsAnalysisTest, Branch2){
   MockLoopInfo LI;
 
@@ -165,6 +189,15 @@ TEST(ConstantLoopDominatorsAnalysisTest, Branch2){
   );
 }
 
+//    1
+//   /|\
+//  / | \
+// v  v  v
+// 2  3  4
+//  \ | /
+//   \|/
+//    v
+//    5
 TEST(ConstantLoopDominatorsAnalysisTest, Branch3){
   MockLoopInfo LI;
 
@@ -214,47 +247,16 @@ TEST(ConstantLoopDominatorsAnalysisTest, Branch3){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopOneMBBVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2 },
-      { &mockMBB2 },
-      { &mockMBB2 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(3));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB3
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, LoopOneMBBConstant){
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    3
+TEST(ConstantLoopDominatorsAnalysisTest, LoopOneMBB){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -277,28 +279,60 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopOneMBBConstant){
   EXPECT_THAT(
     result[&mockMBB1],
     UnorderedElementsAreArray({
+	  &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+
+  mockMBB2.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(3));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
       &mockMBB1
     })
   );
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB3
     })
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoMBBVariable){
+//    1
+//    |
+//    v
+//    2<--+
+//    |   |
+//    +-->3
+//    |
+//    v
+//    4
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoMBB){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
+  mockMBB(mockMBB2,true);
   mockMBB(mockMBB3,false);
   mockMBB(mockMBB4,false);
 
@@ -315,6 +349,35 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoMBBVariable){
   LI.add_loop(&mockLoop1);
 
   auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(4));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
+    })
+  );
+
+  mockMBB2.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(4));
   EXPECT_THAT(
@@ -343,56 +406,16 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoMBBVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoMBBConstant){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-
-  set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2, &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB2 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(4));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant){
+//    1
+//    |
+//    v
+//    2<--+---+
+//    |   |   |
+//    +-->3-->4
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatches){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -426,7 +449,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -438,7 +461,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant){
   EXPECT_THAT(
     result[&mockMBB4],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -447,31 +470,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant){
       &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB5
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-
-  set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2, &mockMBB3, &mockMBB4 },
-      { &mockMBB3,&mockMBB4 },
-      { &mockMBB2 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB2.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
   EXPECT_THAT(
@@ -506,7 +507,18 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant2){
+//    1
+//    |
+//    v
+//    2<-+-+
+//    |  | |
+//    +->3 |
+//    |    |
+//    +->4-+
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatches2){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -546,13 +558,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant2){
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2
     })
   );
   EXPECT_THAT(
     result[&mockMBB4],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB4
+      &mockMBB1, &mockMBB2
     })
   );
   EXPECT_THAT(
@@ -563,7 +575,230 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesConstant2){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant){
+//    1
+//    |
+//    v
+//    2<-+--+
+//    | /  /
+//    v/  /
+//    3->4
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoLatchesNonHeadExit){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,false);
+  mockMBB(mockMBB4,false);
+  mockMBB(mockMBB5,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB4, &mockMBB5}));
+  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2}));
+  set_preds_succs(mockMBB5, arr({&mockMBB3}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2,&mockMBB3,&mockMBB4 },
+      { &mockMBB3,&mockMBB4 },
+      { &mockMBB3 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
+
+  EXPECT_THAT(result, SizeIs(5));
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3,&mockMBB5
+    })
+  );
+}
+
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    v  |
+//    3--+
+//    |
+//    v
+//    4
+TEST(ConstantLoopDominatorsAnalysisTest, NonHeaderExit){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,false);
+  mockMBB(mockMBB4,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB4}));
+  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2,&mockMBB3 },
+      { &mockMBB3 },
+      { &mockMBB3 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
+
+  EXPECT_THAT(result, SizeIs(4));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1,&mockMBB2,&mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1,&mockMBB2,&mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1,&mockMBB2,&mockMBB3,&mockMBB4
+    })
+  );
+
+  mockMBB2.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
+
+  EXPECT_THAT(result, SizeIs(4));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1,&mockMBB4
+    })
+  );
+}
+
+//    1
+//    |
+//    v
+//    2<---+
+//    |\   |
+//    | \  |
+//    v  v |
+//    4->3-+
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, OptionalExit){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,false);
+  mockMBB(mockMBB4,false);
+  mockMBB(mockMBB5,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({&mockMBB3,&mockMBB5}));
+  set_preds_succs(mockMBB5, arr({&mockMBB4}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      {&mockMBB2,&mockMBB3,&mockMBB4},
+	  {&mockMBB3},
+	  {&mockMBB4}
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(5));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB5
+    })
+  );
+}
+
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    +->3
+//    |  |
+//    v  |
+//    4<-+
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExits){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -594,7 +829,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -611,7 +846,17 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant2){
+//    1
+//    |
+//    v
+// +--2<-+
+// |  |  |
+// |  v  |
+// |  3->4
+// |  |
+// |  v
+// +->5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExits2){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -644,13 +889,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant2){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -667,7 +912,20 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant2){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant3){
+//    1
+//    |
+//    v
+// +--2<-+
+// |  |  |
+// |  v  |
+// |  3  |
+// |  |  |
+// |  v  |
+// |  4--+
+// |  |
+// |  v
+// +->5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopBlockBetweenExits){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -700,13 +958,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant3){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -723,105 +981,16 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopTwoExitsConstant3){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopNonHeadExitConstant){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-
-  set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2, &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(4));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, LoopNonHeadExitVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-
-  set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2, &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(4));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB4
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopConstantConstant){
+//    1
+//    |
+//    +-+  +--+
+//    |  \ |  |
+//    v   \v  |
+//    2--->3->4
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, NestedLoop){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -860,13 +1029,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopConstantConstant){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-	  &mockMBB1, &mockMBB2
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-	  &mockMBB1, &mockMBB2, &mockMBB3
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -881,36 +1050,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopConstantConstant){
 	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4, &mockMBB5
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopConstantVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2, &mockMBB3, &mockMBB4 },
-	  { &mockMBB3 },
-	  { &mockMBB2 }
-  );
-  MockLoop mockLoop2(&mockLoop1,
-	  { &mockMBB3, &mockMBB4 },
-	  { &mockMBB4 },
-	  { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
   EXPECT_THAT(
@@ -943,36 +1085,45 @@ TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopConstantVariable){
 	  &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopVariableVariable){
-  MockLoopInfo LI;
+  mockMBB2.payload = false;
+  mockMBB3.payload = true;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2, &mockMBB3, &mockMBB4 },
-	  { &mockMBB3 },
-	  { &mockMBB2 }
+  EXPECT_THAT(result, SizeIs(5));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+	  &mockMBB1
+    })
   );
-  MockLoop mockLoop2(&mockLoop1,
-	  { &mockMBB3, &mockMBB4 },
-	  { &mockMBB4 },
-	  { &mockMBB3 }
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+	  &mockMBB1
+    })
   );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+	  &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+	  &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB5
+    })
+  );
 
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
   EXPECT_THAT(
@@ -1007,69 +1158,19 @@ TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopVariableVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, NestedLoopVariableConstant){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,true);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2, &mockMBB3, &mockMBB4 },
-	  { &mockMBB3 },
-	  { &mockMBB2 }
-  );
-  MockLoop mockLoop2(&mockLoop1,
-	  { &mockMBB3, &mockMBB4 },
-	  { &mockMBB4 },
-	  { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(5));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-	  &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-	  &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-	  &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-	  &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB5],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB5
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, TwoNonLatchHeaderPredsConstant){
+//    1
+//   / \
+//  v   v
+//  2   3
+//   \ /
+//    v
+//    4<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, TwoNonLatchHeaderPreds){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1124,31 +1225,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoNonLatchHeaderPredsConstant){
       &mockMBB1, &mockMBB4, &mockMBB5
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoNonLatchHeaderPredsVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-
-  set_preds_succs(mockMBB1, arr({}),arr({&mockMBB2,&mockMBB3}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB4}));
-  set_preds_succs(mockMBB3, arr({&mockMBB1}),arr({&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB4,&mockMBB5}));
-  set_preds_succs(mockMBB5, arr({&mockMBB4}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB4 },
-      { &mockMBB4 },
-      { &mockMBB4 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB4.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
   EXPECT_THAT(
@@ -1183,7 +1262,20 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoNonLatchHeaderPredsVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant){
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    v  |
+//    3<-+
+//    |  |
+//    v  |
+//    4--+
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNested){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1222,13 +1314,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -1243,9 +1335,57 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant){
       &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4, &mockMBB5
     })
   );
+
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(5));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB5
+    })
+  );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant2){
+//    1
+//    |
+//    v
+//    2<-+
+//    | /
+//    v/
+//    3<-+
+//    | /
+//    v/
+//    4
+//    |
+//    v
+//    5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNested2){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1284,13 +1424,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant2){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -1302,12 +1442,60 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant2){
   EXPECT_THAT(
     result[&mockMBB5],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB5
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4, &mockMBB5
+    })
+  );
+
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(5));
+  EXPECT_THAT(
+    result[&mockMBB1],
+    UnorderedElementsAreArray({
+      &mockMBB1
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB2],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB3],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB4],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2
+    })
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant3){
+//    1
+//    |
+//    v
+// +--2<-+
+// |  | /
+// |  v/
+// |  3<-+
+// |  | /
+// |  v/
+// |  4
+// |  |
+// |  v
+// +->5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNested3){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1346,13 +1534,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant3){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
   EXPECT_THAT(
@@ -1369,69 +1557,19 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantConstant3){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopExitFromNestedConstantVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2,&mockMBB4}), arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2, &mockMBB3, &mockMBB4 },
-	  { &mockMBB3 },
-	  { &mockMBB2, &mockMBB4 }
-  );
-  MockLoop mockLoop2(&mockLoop1,
-	  { &mockMBB3, &mockMBB4 },
-	  { &mockMBB4 },
-	  { &mockMBB3, &mockMBB4 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(5));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB5],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB5
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantConstant){
+//    1
+//    |
+//    v
+// +--2<-+--+
+// |  | /  /
+// |  v/  /
+// |  3<-+
+// |  | /
+// |  v/
+// |  4
+// |
+// +->5
+TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNested){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1470,7 +1608,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantConstant){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -1482,7 +1620,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantConstant){
   EXPECT_THAT(
     result[&mockMBB4],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -1491,36 +1629,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantConstant){
       &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB5
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB2}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}), arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  {&mockMBB2,&mockMBB3,&mockMBB4},
-	  {&mockMBB3,&mockMBB4},
-	  {&mockMBB2}
-  );
-  MockLoop mockLoop2(&mockLoop1,
-	  {&mockMBB3,&mockMBB4},
-	  {&mockMBB4},
-	  {&mockMBB3,&mockMBB4}
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
   EXPECT_THAT(
@@ -1555,7 +1666,21 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopLatchFromNestedConstantVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsConstantConstant){
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    3<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    4
+TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoops){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1607,34 +1732,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsConstantConstant){
       &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsConstantVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2 },
-      { &mockMBB2 },
-      { &mockMBB2 }
-  );
-  MockLoop mockLoop2(nullptr,
-      { &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(4));
   EXPECT_THAT(
@@ -1661,34 +1761,10 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsConstantVariable){
       &mockMBB1, &mockMBB2, &mockMBB4
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsVariableConstant){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,true);
-  mockMBB(mockMBB4,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2 },
-      { &mockMBB2 },
-      { &mockMBB2 }
-  );
-  MockLoop mockLoop2(nullptr,
-      { &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB2.payload = false;
+  mockMBB3.payload = true;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(4));
   EXPECT_THAT(
@@ -1715,34 +1791,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsVariableConstant){
       &mockMBB1, &mockMBB3, &mockMBB4
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsVariableVariable){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB2,&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB3}),arr({&mockMBB3,&mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2 },
-      { &mockMBB2 },
-      { &mockMBB2 }
-  );
-  MockLoop mockLoop2(nullptr,
-      { &mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB3.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(4));
   EXPECT_THAT(
@@ -1771,7 +1822,24 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsVariableVariable){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstConst){
+//    1
+//    |
+//    v
+//    2<----+
+//    |     |
+//    +->3->5
+//    |     ^
+//    |     |
+//    +->4--+
+//    |
+//    v
+//    6<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    7
+TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranched){
   MockLoopInfo LI;
 
   mockMBB(mockMBB1,false);
@@ -1814,19 +1882,19 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstConst){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
     result[&mockMBB4],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB4
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
@@ -1847,40 +1915,9 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstConst){
       &mockMBB1, &mockMBB2, &mockMBB5, &mockMBB6, &mockMBB7
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstVar){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  mockMBB(mockMBB6,false);
-  mockMBB(mockMBB7,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB5}),arr({&mockMBB3,&mockMBB4,&mockMBB6}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB5}));
-  set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({&mockMBB5}));
-  set_preds_succs(mockMBB5, arr({&mockMBB3,&mockMBB4}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB6, arr({&mockMBB2}),arr({&mockMBB6,&mockMBB7}));
-  set_preds_succs(mockMBB7, arr({&mockMBB6}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2,&mockMBB3,&mockMBB4,&mockMBB5 },
-	  { &mockMBB5 },
-	  { &mockMBB2 }
-  );
-  MockLoop mockLoop2(nullptr,
-	  { &mockMBB6 },
-	  { &mockMBB6 },
-	  { &mockMBB6 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB6.payload = false;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(7));
   EXPECT_THAT(
@@ -1892,19 +1929,19 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstVar){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
     result[&mockMBB3],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
     result[&mockMBB4],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB4
+      &mockMBB1, &mockMBB2, &mockMBB5
     })
   );
   EXPECT_THAT(
@@ -1925,40 +1962,10 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedConstVar){
       &mockMBB1, &mockMBB2, &mockMBB5, &mockMBB7
     })
   );
-}
 
-TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedVarConst){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  mockMBB(mockMBB6,true);
-  mockMBB(mockMBB7,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB5}),arr({&mockMBB3,&mockMBB4,&mockMBB6}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB5}));
-  set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({&mockMBB5}));
-  set_preds_succs(mockMBB5, arr({&mockMBB3,&mockMBB4}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB6, arr({&mockMBB2}),arr({&mockMBB6,&mockMBB7}));
-  set_preds_succs(mockMBB7, arr({&mockMBB6}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-	  { &mockMBB2,&mockMBB3,&mockMBB4,&mockMBB5 },
-	  { &mockMBB5 },
-	  { &mockMBB2 }
-  );
-  MockLoop mockLoop2(nullptr,
-	  { &mockMBB6 },
-	  { &mockMBB6 },
-	  { &mockMBB6 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  mockMBB2.payload = false;
+  mockMBB6.payload = true;
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(7));
   EXPECT_THAT(
@@ -2005,6 +2012,18 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoConsecutiveLoopsBranchedVarConst){
   );
 }
 
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    3
+//    |
+//    v
+//    4
 TEST(ConstantLoopDominatorsAnalysisTest, LoopExitToNonEnd){
   MockLoopInfo LI;
 
@@ -2053,6 +2072,21 @@ TEST(ConstantLoopDominatorsAnalysisTest, LoopExitToNonEnd){
     );
 }
 
+//    1
+//    |
+//    v
+//    2<-+
+//    | /
+//    v/
+//    3<-+
+//    |  |
+//    v  |
+//    4<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    5
 TEST(ConstantLoopDominatorsAnalysisTest, DeepVariableLoopExit){
   MockLoopInfo LI;
 
@@ -2098,7 +2132,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, DeepVariableLoopExit){
   EXPECT_THAT(
     result[&mockMBB2],
     UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2,
+      &mockMBB1, &mockMBB2, &mockMBB3
     })
   );
   EXPECT_THAT(
@@ -2121,68 +2155,21 @@ TEST(ConstantLoopDominatorsAnalysisTest, DeepVariableLoopExit){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, DeepConstantVariableLoopLatch){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3,&mockMBB5}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB2, &mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB2}));
-  set_preds_succs(mockMBB5, arr({&mockMBB2}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2,&mockMBB3,&mockMBB4 },
-      { &mockMBB3 },
-      { &mockMBB2 }
-  );
-  MockLoop mockLoop2(&mockLoop1,
-      { &mockMBB3,&mockMBB4 },
-      { &mockMBB4 },
-      { &mockMBB3,&mockMBB4 }
-  );
-  LI.add_loop(&mockLoop1);
-  LI.add_loop(&mockLoop2);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
-
-  EXPECT_THAT(result, SizeIs(5));
-  EXPECT_THAT(
-    result[&mockMBB1],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB5],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB5
-    })
-  );
-}
-
+//    1
+//    |
+//    v
+//    2<-+
+//    | /
+//    v/
+//    3<-+
+//    | /
+//    v/
+//    4<-+
+//    |  |
+//    +--+
+//    |
+//    v
+//    5
 TEST(ConstantLoopDominatorsAnalysisTest, DeepConstantLoopExitVariableParent){
   MockLoopInfo LI;
 
@@ -2251,140 +2238,18 @@ TEST(ConstantLoopDominatorsAnalysisTest, DeepConstantLoopExitVariableParent){
   );
 }
 
-TEST(ConstantLoopDominatorsAnalysisTest, LoopBodyDominatedByOutside){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2,&mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
-
-  EXPECT_THAT(result, SizeIs(4));
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3,&mockMBB4
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, LoopBodyDominatedByOutside2){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,true);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  mockMBB(mockMBB5,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3,&mockMBB4}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB4, &mockMBB5}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2}));
-  set_preds_succs(mockMBB5, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2,&mockMBB3,&mockMBB4 },
-      { &mockMBB3,&mockMBB4 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
-
-  EXPECT_THAT(result, SizeIs(5));
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3,&mockMBB4
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB5],
-    UnorderedElementsAreArray({
-      &mockMBB1, &mockMBB2, &mockMBB3,&mockMBB5
-    })
-  );
-}
-
-TEST(ConstantLoopDominatorsAnalysisTest, VariableLoopBodyNotDominatedByLoop){
-  MockLoopInfo LI;
-
-  mockMBB(mockMBB1,false);
-  mockMBB(mockMBB2,false);
-  mockMBB(mockMBB3,false);
-  mockMBB(mockMBB4,false);
-  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
-  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB3}),arr({&mockMBB3}));
-  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB4}));
-  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({}));
-
-  MockLoop mockLoop1(nullptr,
-      { &mockMBB2,&mockMBB3 },
-      { &mockMBB3 },
-      { &mockMBB3 }
-  );
-  LI.add_loop(&mockLoop1);
-
-  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds, false);
-
-  EXPECT_THAT(result, SizeIs(4));
-  EXPECT_THAT(
-    result[&mockMBB2],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB3],
-    UnorderedElementsAreArray({
-      &mockMBB1
-    })
-  );
-  EXPECT_THAT(
-    result[&mockMBB4],
-    UnorderedElementsAreArray({
-      &mockMBB1,&mockMBB4
-    })
-  );
-}
-
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    +--+
+//   / \
+//  v   v
+//  3   4
+//   \ /
+//    v
+//    5
 TEST(ConstantLoopDominatorsAnalysisTest, TwoLoopExitTargets){
   MockLoopInfo LI;
 
@@ -2439,18 +2304,60 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoLoopExitTargets){
     })
   );
 
-  // Try with variable loop
   mockMBB2.payload = false;
-  auto result2 = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+  result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(
-	result2[&mockMBB5],
+	result[&mockMBB1],
 	UnorderedElementsAreArray({
-	  &mockMBB1, &mockMBB5
+	  &mockMBB1
 	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB2],
+	UnorderedElementsAreArray({
+	  &mockMBB1
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB3],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB4],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB4
+	})
+  );
+  EXPECT_THAT(
+    result[&mockMBB5],
+    UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB5
+    })
   );
 }
 
+//    1
+//   / \
+//  v   v
+//  2   3
+//  |   |
+//  |   v
+//  |   4
+//  |   |
+//  |   v
+//  |   5
+//  |   |
+//  |   v
+//  |   6
+//  |   |
+//  |   v
+//  +-->7
+//      |
+//      v
+//      8
 TEST(ConstantLoopDominatorsAnalysisTest, LongBranch){
   MockLoopInfo LI;
 
@@ -2482,6 +2389,94 @@ TEST(ConstantLoopDominatorsAnalysisTest, LongBranch){
   );
 }
 
+//    1
+//    |
+//    v
+//    2<--+
+//    |   |
+//    +-->3
+//    |   |
+//    v   v
+//    4   5
+//    |   |
+//    +-+-+
+//      |
+//      v
+//      6
+TEST(ConstantLoopDominatorsAnalysisTest, TwoExitsAndExitTargets){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,false);
+  mockMBB(mockMBB4,false);
+  mockMBB(mockMBB5,false);
+  mockMBB(mockMBB6,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3, &mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2}),arr({&mockMBB2, &mockMBB5}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2}),arr({&mockMBB6}));
+  set_preds_succs(mockMBB5, arr({&mockMBB3}),arr({&mockMBB6}));
+  set_preds_succs(mockMBB6, arr({&mockMBB4,&mockMBB5}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2,&mockMBB3 },
+      { &mockMBB3 },
+      { &mockMBB2, &mockMBB3 }
+  );
+  LI.add_loop(&mockLoop1);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(6));
+  EXPECT_THAT(
+	result[&mockMBB1],
+	UnorderedElementsAreArray({
+	  &mockMBB1
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB2],
+	UnorderedElementsAreArray({
+	  &mockMBB1,&mockMBB2,&mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB3],
+	UnorderedElementsAreArray({
+	  &mockMBB1,&mockMBB2,&mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB4],
+	UnorderedElementsAreArray({
+	  &mockMBB1,&mockMBB2,&mockMBB3,&mockMBB4
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB5],
+	UnorderedElementsAreArray({
+	  &mockMBB1,&mockMBB2,&mockMBB3,&mockMBB5
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB6],
+	UnorderedElementsAreArray({
+	  &mockMBB1,&mockMBB2,&mockMBB6
+	})
+  );
+}
+
+//    1
+//    |
+//    v
+//    2<-+
+//    |  |
+//    v  |
+//    3->4
+//    |
+//    v
+//    5
 TEST(ConstantLoopDominatorsAnalysisTest, CLDAPaperExample){
   MockLoopInfo LI;
 
@@ -2515,13 +2510,13 @@ TEST(ConstantLoopDominatorsAnalysisTest, CLDAPaperExample){
   EXPECT_THAT(
 	result[&mockMBB2],
 	UnorderedElementsAreArray({
-	  &mockMBB1, &mockMBB2,
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
 	})
   );
   EXPECT_THAT(
 	result[&mockMBB3],
 	UnorderedElementsAreArray({
-	  &mockMBB1, &mockMBB2, &mockMBB3
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB4
 	})
   );
   EXPECT_THAT(
@@ -2537,9 +2532,7 @@ TEST(ConstantLoopDominatorsAnalysisTest, CLDAPaperExample){
 	})
   );
 
-  // Test variable loop
   mockMBB2.payload = false;
-
   result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
 
   EXPECT_THAT(result, SizeIs(5));
@@ -2572,6 +2565,100 @@ TEST(ConstantLoopDominatorsAnalysisTest, CLDAPaperExample){
   	UnorderedElementsAreArray({
   	  &mockMBB1, &mockMBB5
   	})
+  );
+}
+
+//    1
+//    |
+//    v
+//  +-2<---+
+//  | |    |
+//  | +--+ |
+//  | |  | |
+//  | v  | |
+//  | 3->4 |
+//  | |  | |
+//  | v  v |
+//  | 6  5 |
+//  | |  | |
+//  | +--+-+
+//  v
+//  7
+TEST(ConstantLoopDominatorsAnalysisTest, TwoNestedExistsToLatches){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,true);
+  mockMBB(mockMBB4,false);
+  mockMBB(mockMBB5,false);
+  mockMBB(mockMBB6,false);
+  mockMBB(mockMBB7,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3,&mockMBB7}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB4}),arr({&mockMBB4,&mockMBB6}));
+  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB3,&mockMBB5}));
+  set_preds_succs(mockMBB5, arr({&mockMBB4}),arr({&mockMBB2}));
+  set_preds_succs(mockMBB6, arr({&mockMBB3}),arr({&mockMBB2}));
+  set_preds_succs(mockMBB7, arr({&mockMBB2}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2,&mockMBB3,&mockMBB4,&mockMBB5,&mockMBB6 },
+      { &mockMBB5,&mockMBB6 },
+      { &mockMBB2 }
+  );
+  MockLoop mockLoop2(&mockLoop1,
+      { &mockMBB3,&mockMBB4 },
+      { &mockMBB4 },
+      { &mockMBB3,&mockMBB4 }
+  );
+  LI.add_loop(&mockLoop1);
+  LI.add_loop(&mockLoop2);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(7));
+  EXPECT_THAT(
+	result[&mockMBB1],
+	UnorderedElementsAreArray({
+	  &mockMBB1
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB2],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB3],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB4],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB5],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB6],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB7],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB7
+	})
   );
 }
 }
