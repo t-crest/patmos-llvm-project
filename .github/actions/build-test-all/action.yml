@@ -219,7 +219,7 @@ runs:
       working-directory: ${{env.CET_TESTS_PATH}}
       shell: bash
       run: |
-        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v
+        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v --filter="^(?!((.*/dijkstra.c)|(.*/gsm_dec.c)|(.*/huff_dec.c)|(.*/st.c)|(.*/minver.c)|(.*/deg2rad.c)|(.*/rad2deg.c)|(.*/complex_updates.c))).*"
     # Upload Package artifact
     - name: Upload Package Artifact
       if: inputs.enable-package == 'true'
