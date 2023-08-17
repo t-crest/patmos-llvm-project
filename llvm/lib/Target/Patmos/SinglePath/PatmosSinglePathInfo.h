@@ -189,7 +189,12 @@ namespace llvm {
     }
   };
 
-
+  // Creates a new virtual predicate register and sets the given hint.
+  //
+  // There is a bug either in the LLVM register allocator or in the Patmos backend
+  // that requires all predicate virtual register to have a hint. If not, the allocator
+  // will fail an assertion looking for it. When we have no good hint, NoRegister will work.
+  Register createVirtualRegisterWithHint(MachineRegisterInfo &RI, Register hint = Patmos::NoRegister, StringRef name="");
 
 
 } // end of namespace llvm

@@ -343,3 +343,8 @@ bool PatmosSinglePathInfo::needsCounter(MachineLoop *loop){
 	});
 }
 
+Register llvm::createVirtualRegisterWithHint(MachineRegisterInfo &RI, Register hint, StringRef name) {
+	auto new_vreg = RI.createVirtualRegister(&Patmos::PRegsRegClass, name);
+	RI.setSimpleHint(new_vreg, hint);
+	return new_vreg;
+}

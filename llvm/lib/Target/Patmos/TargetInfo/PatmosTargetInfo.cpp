@@ -96,12 +96,6 @@ MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
   return NULL;
 }
 
-Register llvm::createVirtualRegisterWithHint(MachineRegisterInfo &RI, Register hint, StringRef name) {
-	auto new_vreg = RI.createVirtualRegister(&Patmos::PRegsRegClass, name);
-	RI.setSimpleHint(new_vreg, hint);
-	return new_vreg;
-}
-
 /// Returns true if the given opcode represents a load instruction.
 /// Pseudo-instructions aren't considered.
 bool llvm::isLoadInst(unsigned opcode) {
