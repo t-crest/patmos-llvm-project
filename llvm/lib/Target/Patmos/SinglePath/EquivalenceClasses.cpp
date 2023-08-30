@@ -100,6 +100,15 @@ bool EquivalenceClasses::runOnMachineFunction(MachineFunction &MF) {
 			}
 			dbgs() << "}\n";
 		}
+		auto parent_tree = getClassParents();
+		dbgs() << "Equivalence Class Tree:\n";
+		for(auto entry: parent_tree) {
+			dbgs() << entry.first << ": ";
+			for(auto parent: entry.second) {
+				dbgs() << parent << ", ";
+			}
+			dbgs() << "\n";
+		}
 	);
 
 	return false;
@@ -129,9 +138,125 @@ EqClass EquivalenceClasses::getClassFor(MachineBasicBlock *mbb) const{
 	};
 }
 
+std::map<unsigned, std::set<unsigned>> EquivalenceClasses::getClassParents() const {
+	std::map<unsigned, std::set<unsigned>> parents;
 
+	for(auto entry: classes){
+		auto class_nr = entry.first;
+		auto &class_deps = entry.second.first;
 
+		for(auto dep: class_deps) {
+			auto dep_class_nr = getClassFor(dep.first? *dep.first : dep.second).number;
+			if(dep_class_nr != class_nr) {
+				parents[class_nr].insert(dep_class_nr);
+			}
+		}
+	}
 
+	return parents;
+}
 
+std::set<unsigned> EquivalenceClasses::getAllParents(
+		unsigned class_nr,
+		std::map<unsigned, std::set<unsigned>> &parent_tree
+) {
+	std::set<unsigned> result;
+
+	if(parent_tree.count(class_nr)) {
+		for(auto parent: parent_tree[class_nr]){
+			auto temp = getAllParents(parent, parent_tree);
+			result.insert(temp.begin(), temp.end());
+		}
+	}
+
+	return result;
+}
+
+static MDNode* unsigned_md(unsigned x, LLVMContext &C) {
+	return MDNode::get(C, ConstantAsMetadata::get(ConstantInt::get(C, llvm::APInt(64, x, false))));
+}
+
+void EquivalenceClasses::exportClassTreeToModule(
+		std::map<unsigned, std::set<unsigned>> &parent_tree,
+		MachineFunction &MF
+) {
+	auto &F= MF.getFunction();
+	LLVMContext &C = F.getContext();
+	std::vector<Metadata*> mds;
+	std::map<unsigned, MDNode*> result;
+
+	for(auto entry: parent_tree) {
+		std::vector<Metadata*> parents_md_list;
+		for(auto parent: entry.second) {
+			parents_md_list.push_back(unsigned_md(parent, C));
+		}
+		MDNode* parents_md = MDTuple::get(C, ArrayRef<Metadata*>(parents_md_list));
+		std::vector<Metadata*> entry_md_list;
+		auto class_md = unsigned_md(entry.first, C);
+		result[entry.first] = class_md;
+		entry_md_list.push_back(class_md);
+		entry_md_list.push_back(parents_md);
+		mds.push_back(MDTuple::get(C, entry_md_list));
+	}
+	F.setMetadata("llvm.patmos.equivalence.class.tree", MDTuple::get(C, mds));
+}
+
+std::map<unsigned, std::set<unsigned>> EquivalenceClasses::importClassTreeFromModule(const MachineFunction &MF) {
+	std::map<unsigned, std::set<unsigned>> result;
+
+	auto &F= MF.getFunction();
+	LLVMContext &C = F.getContext();
+	assert(F.getMetadata("llvm.patmos.equivalence.class.tree") && "Equivalence class tree not exported to metadata");
+
+	auto class_tree_md = dyn_cast<MDTuple>(F.getMetadata("llvm.patmos.equivalence.class.tree"));
+
+	for(auto i = 0; i<class_tree_md->getNumOperands(); i++) {
+		auto class_tree_md_entry = dyn_cast<MDTuple>(class_tree_md->getOperand(i));
+		assert(class_tree_md_entry->getNumOperands() == 2);
+
+		auto get_val = [&](auto &md){
+			return cast<ConstantInt>(dyn_cast<ConstantAsMetadata>(dyn_cast<MDNode>(md)->getOperand(0))->getValue())->getSExtValue();
+		};
+
+		auto class_nr = get_val(class_tree_md_entry->getOperand(0));
+		auto parents_md = dyn_cast<MDTuple>(class_tree_md_entry->getOperand(1));
+		std::set<unsigned> parents;
+		for(auto j = 0; j<parents_md->getNumOperands(); j++) {
+			parents.insert(get_val(parents_md->getOperand(j)));
+		}
+		result[class_nr] = parents;
+	}
+
+	return result;
+}
+
+void EquivalenceClasses::addClassMD(MachineInstr* MI, unsigned class_nr) {
+	auto MF = MI->getParent()->getParent();
+	auto &C = MF->getFunction().getContext();
+
+	MI->addOperand(*MF, MachineOperand::CreateMetadata(MDNode::get(C, MDString::get(C, "patmos.eq.class"))));
+	MI->addOperand(*MF, MachineOperand::CreateMetadata(unsigned_md(class_nr, C)));
+}
+
+Optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI) {
+	Optional<unsigned> idx;
+	for(int i = 0; i<MI->getNumOperands(); i++){
+		if(MI->getOperand(i).isMetadata()){
+			auto &md = MI->getOperand(i).getMetadata()->getOperand(0);
+			if(auto string = dyn_cast<MDString>(md)) {
+				if(string->getString().equals("patmos.eq.class")) {
+					idx = i+1;
+					break;
+				}
+			}
+		}
+	}
+	if(idx) {
+		assert(MI->getOperand(*idx).isMetadata());
+		return cast<ConstantInt>(dyn_cast<ConstantAsMetadata>(dyn_cast<MDNode>(MI->getOperand(*idx).getMetadata())->getOperand(0))->getValue())->getSExtValue();
+	} else {
+		return None;
+	}
+}
 
 

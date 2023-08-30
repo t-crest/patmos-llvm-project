@@ -1,6 +1,7 @@
 #include "Linearizer.h"
 #include "Patmos.h"
 #include "SinglePath/PatmosSPReduce.h"
+#include "SinglePath/EquivalenceClasses.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/DepthFirstIterator.h"
@@ -84,15 +85,18 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 				assert(found_pseudo_pred != unilatch->instr_end());
 				auto exit_pred = found_pseudo_pred->getOperand(0).getReg();
 				assert(exit_pred.isVirtual() && MF.getRegInfo().getRegClass(exit_pred) == &Patmos::PRegsRegClass);
+				auto eq_class = EquivalenceClasses::getEqClassNr(&*found_pseudo_pred);
+				assert(eq_class && "Unilatch exit pseudo-instr has no equivalence class metadata");
 				// Erase pseudo-instruction so it doesn't need to be handled elsewhere
 				unilatch->erase(found_pseudo_pred);
 
 				// Replace branch with predicated version on the unilatch's predicate
 				unilatch->remove(&*unilatch->getFirstInstrTerminator());
-				BuildMI(*unilatch, unilatch->getFirstInstrTerminator(), DL,
+				auto unilatch_exit_br = BuildMI(*unilatch, unilatch->getFirstInstrTerminator(), DL,
 					TII->get(Patmos::BR))
 					.addReg(exit_pred).addImm(0)
 					.addMBB(&header_mbb);
+				EquivalenceClasses::addClassMD(unilatch_exit_br, *eq_class);
 
 				// Remove the PSEUDO_COUNTLESS_SPLOOP instruction, since it is no longer needed
 				// and so we don't need to handle it in other passes

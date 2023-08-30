@@ -67,10 +67,30 @@ namespace llvm {
 
 		bool runOnMachineFunction(MachineFunction &MF) override;
 
-
 		std::vector<EqClass> getAllClasses() const;
 
 		EqClass getClassFor(MachineBasicBlock*mbb) const;
+
+		// Returns for each equivalence class, which classes are the source
+		// of its dependence edges
+		std::map<unsigned, std::set<unsigned>> getClassParents() const;
+
+		// Returns for the given equivalence class, which classes are the source
+		// of its dependence edges, recursively
+		static std::set<unsigned> getAllParents(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree);
+
+		// Exports the equivalence class "parent" relations given as metadata connected to the given function
+		static void exportClassTreeToModule(std::map<unsigned, std::set<unsigned>> &parent_tree, MachineFunction &MF);
+
+		// Imports the metadata representing the equivalence class relation tree connected to the given function
+		static std::map<unsigned, std::set<unsigned>> importClassTreeFromModule(const MachineFunction &MF);
+
+		// Adds the given class number, as a metadata operand, to the given instruction,
+		// signifying what equivalence class the instruction is predicated by)
+		static void addClassMD(MachineInstr* MI, unsigned class_nr);
+
+		// Extracts the metadata operand signifying what equivalence class the instruction is predicated by
+		static Optional<unsigned> getEqClassNr(const MachineInstr* MI);
 	};
 }
 

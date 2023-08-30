@@ -96,6 +96,19 @@ MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
   return NULL;
 }
 
+bool llvm::isLoadStackInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::LBS:
+    case Patmos::LBUS:
+    case Patmos::LHS:
+    case Patmos::LHUS:
+    case Patmos::LWS:
+      return true;
+  }
+}
+
 /// Returns true if the given opcode represents a load instruction.
 /// Pseudo-instructions aren't considered.
 bool llvm::isLoadInst(unsigned opcode) {
@@ -144,6 +157,63 @@ bool llvm::isStoreInst(unsigned opcode) {
     case Patmos::SWL:
     case Patmos::SWM:
     case Patmos::SWS:
+      return true;
+  }
+}
+
+bool llvm::isStoreStackInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::SBS:
+    case Patmos::SHS:
+    case Patmos::SWS:
+      return true;
+  }
+}
+
+bool llvm::isStackMgmtInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::SRESi:
+    case Patmos::SENSi:
+    case Patmos::SENSr:
+    case Patmos::SFREEi:
+    case Patmos::SSPILLi:
+    case Patmos::SSPILLr:
+      return true;
+  }
+}
+
+bool llvm::isBranchInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::BR:
+    case Patmos::BRCF:
+    case Patmos::BRCFND:
+    case Patmos::BRCFNDu:
+    case Patmos::BRCFR:
+    case Patmos::BRCFRND:
+    case Patmos::BRCFRNDu:
+    case Patmos::BRCFRu:
+    case Patmos::BRCFT:
+    case Patmos::BRCFTND:
+    case Patmos::BRCFTNDu:
+    case Patmos::BRCFTu:
+    case Patmos::BRCFu:
+    case Patmos::BRND:
+    case Patmos::BRNDu:
+    case Patmos::BRR:
+    case Patmos::BRRND:
+    case Patmos::BRRNDu:
+    case Patmos::BRRu:
+    case Patmos::BRT:
+    case Patmos::BRTND:
+    case Patmos::BRTNDu:
+    case Patmos::BRTu:
+    case Patmos::BRu:
       return true;
   }
 }

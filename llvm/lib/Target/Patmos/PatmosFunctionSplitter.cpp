@@ -1997,12 +1997,12 @@ namespace llvm {
 
           // If any branch instruction were moved, update edges
           for(auto iter = newBB->instr_begin(); iter != newBB->instr_end(); iter++){
-            if(iter->isBranch()) {
+            if(iter->isBranch(MachineInstr::QueryType::IgnoreBundle)) {
               auto* target = iter->getOperand(2).getMBB();
               newBB->addSuccessorWithoutProb(target);
 
               if(std::find_if(MBB->instr_begin(), MBB->instr_end(), [&](auto& i){
-                return i.isBranch() && (i.getOperand(2).getMBB() == target);
+                return i.isBranch(MachineInstr::QueryType::IgnoreBundle) && (i.getOperand(2).getMBB() == target);
               }) == MBB->instr_end()){
                 MBB->removeSuccessor(target);
               }

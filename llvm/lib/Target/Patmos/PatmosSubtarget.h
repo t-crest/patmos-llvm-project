@@ -137,6 +137,8 @@ public:
   /// @param frameSize the required frame size in bytes.
   unsigned getAlignedStackFrameSize(unsigned frameSize) const;
 
+  static bool usePermissiveDualIssue();
+
 };
 } // End llvm namespace
 

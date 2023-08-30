@@ -59,6 +59,10 @@ Register PreRegallocReduce::getVreg(EqClass &eq_class)
 }
 
 void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
+	auto parent_tree = EQ->getClassParents();
+	EquivalenceClasses::exportClassTreeToModule(parent_tree, *MF);
+
+	auto &C = MF->getFunction().getContext();
 
 	for(auto &mbb: *MF){
 		auto eq_class = EQ->getClassFor(&mbb);
@@ -91,7 +95,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 				DebugLoc DL = MI->getDebugLoc();
 				// copy actual preg to temporary preg
 				// (this is the predicate call argument which enables/disabled the whole function)
-				BuildMI(mbb, MI, DL,
+				auto copy_instr = BuildMI(mbb, MI, DL,
 					TII->get(Patmos::COPY), Patmos::P7)
 				.addReg(predVreg);
 				continue;
@@ -122,6 +126,10 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 							.addReg(MI->getOperand(pred_op_idx).getReg()).addImm(0);
 					MI->getOperand(pred_op_idx).setReg(new_vreg);
 				}
+
+				EquivalenceClasses::addClassMD(&*MI, eq_class.number);
+				assert(EquivalenceClasses::getEqClassNr(&*MI));
+				assert(EquivalenceClasses::getEqClassNr(&*MI) == eq_class.number);
 			}
 		}
 
@@ -129,9 +137,12 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 		auto loop = LI->getLoopFor(&mbb);
 		if(LI->isLoopHeader(&mbb) && !PatmosSinglePathInfo::needsCounter(loop)) {
 			auto unilatch = PatmosSinglePathInfo::getPreHeaderUnilatch(loop).second;
-			BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
+			auto instr = BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
 					TII->get(Patmos::PSEUDO_UNILATCH_EXIT_PRED))
 				.addReg(predVreg);
+			EquivalenceClasses::addClassMD(instr, eq_class.number);
+			assert(EquivalenceClasses::getEqClassNr(instr));
+			assert(EquivalenceClasses::getEqClassNr(instr) == eq_class.number);
 		}
 	}
 }

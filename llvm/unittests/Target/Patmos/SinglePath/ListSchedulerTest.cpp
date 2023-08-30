@@ -50,23 +50,34 @@ namespace llvm{
 	/// Whether this instruction is a call instruction
 	bool is_call;
 
+    /// If true, instruction may not be bundled with other instructions that also
+    /// have this field set.
+    bool non_bundleable;
+
 	InstrAttr( unsigned latency, bool poisons, bool memory_access,
 			bool conditional_branch, bool may_second_slot, bool is_long,
-			bool is_call
+			bool is_call, bool nonBundleable
 	): poisons(poisons), memory_access(memory_access), latency(latency),
 	  conditional_branch(conditional_branch), may_second_slot(may_second_slot),
-	  is_long(is_long), is_call(is_call)
+	  is_long(is_long), is_call(is_call), non_bundleable(nonBundleable)
 	{}
 
 	/// Instruction with default attributes similar to simple ALU instructions
 	static InstrAttr simple(unsigned latency=0){
-	  return InstrAttr(latency,false,false,false,true,false,false);
+	  return InstrAttr(latency,false,false,false,true,false,false,false);
 	}
 
 	/// Similar to `simple()` except cannot be in second issue slot
 	static InstrAttr simple_first_only(unsigned latency=0){
 	  auto simple = InstrAttr::simple(latency);
 	  simple.may_second_slot = false;
+	  return simple;
+	}
+
+	/// Similar to `simple()` except may not be bundled
+	static InstrAttr simple_non_bundleable(unsigned latency=0){
+	  auto simple = InstrAttr::simple(latency);
+	  simple.non_bundleable = true;
 	  return simple;
 	}
 
@@ -86,22 +97,22 @@ namespace llvm{
 
 	/// Similar to `load()` except doesn't poison and with given latency
 	static InstrAttr mem_acc(unsigned latency){
-	  return InstrAttr(latency,false,true,false,false,false,false);
+	  return InstrAttr(latency,false,true,false,false,false,false,false);
 	}
 
 	/// Like Patmos load instruction
 	static InstrAttr load(){
-	  return InstrAttr(1,true,true,false,false,false,false);
+	  return InstrAttr(1,true,true,false,false,false,false,false);
 	}
 
 	/// Like Patmos branch instructions (with optional latency)
 	static InstrAttr branch(unsigned latency=0){
-	  return InstrAttr(latency,false,false,true,false,false,false);
+	  return InstrAttr(latency,false,false,true,false,false,false,false);
 	}
 
 	/// Like Patmos branch instructions (with optional latency)
 	static InstrAttr call(){
-	  return InstrAttr(0,false,false,false,false,false,true);
+	  return InstrAttr(0,false,false,false,false,false,true,false);
 	}
   };
 
@@ -172,16 +183,22 @@ namespace llvm{
     return instr->attr.is_long;
   }
 
+  bool may_bundle(const MockInstr* instr1, const MockInstr* instr2) {
+	  return !(instr1->attr.non_bundleable && instr2->attr.non_bundleable);
+  }
+
   llvm::Optional<std::tuple<
       void*,
       bool (*)(void*, const MockInstr *),
-      bool (*)(const MockInstr *)
+      bool (*)(const MockInstr *),
+      bool (*)(const MockInstr *, const MockInstr *)
     >> disable_dual_issue = None;
   llvm::Optional<std::tuple<
       void*,
       bool (*)(void*, const MockInstr *),
-      bool (*)(const MockInstr *)
-    >> enable_dual_issue = std::make_tuple((void*)nullptr, may_second_slot, is_long);
+      bool (*)(const MockInstr *),
+      bool (*)(const MockInstr *, const MockInstr *)
+    >> enable_dual_issue = std::make_tuple((void*)nullptr, may_second_slot, is_long, may_bundle);
 
   class MockMBB {
   public:
@@ -1048,4 +1065,29 @@ TEST(ListSchedulerTest, CallPoison){
       })
   );
 }
+
+TEST(ListSchedulerTest, non_bundleable){
+  /* Tests that two instruction marked as not mutually bundleable, aren't bundle together
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R1},{Operand::R2},InstrAttr::simple_non_bundleable()),
+    MockInstr({Operand::R1},{Operand::R3},InstrAttr::simple_non_bundleable()),
+    MockInstr({Operand::R2,Operand::R3},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(4, 2),
+        pair(6, 3),
+      })
+  );
+}
+
 }

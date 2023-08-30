@@ -237,6 +237,7 @@ compile_and_test_matrix("", "", [
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
         # Single-path with dual-issue
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"),
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false -mpatmos-disable-permissive-dual-issue=false", "-D ideal --permissive-dual-issue"),
         # Constant execution time using opposite predicate compensation       
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=opposite", "-D lru2"),         
         # Constant execution time using decrementing counter compensation

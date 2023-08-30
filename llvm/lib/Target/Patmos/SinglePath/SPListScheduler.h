@@ -107,7 +107,8 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     Optional<std::tuple<
         MAY_SECOND_SLOT_EXTRA,
         bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
-        bool (*)(const Instruction *)
+        bool (*)(const Instruction *),
+        bool (*)(const Instruction *,const Instruction *)
       >> enable_dual_issue
 ) {
   auto instr_count = std::distance(instr_begin, instr_end);
@@ -233,7 +234,8 @@ std::set<std::shared_ptr<Node>> dependence_graph(
 template<
   typename Instruction,
   typename InstrIter,
-  typename Operand
+  typename Operand,
+  typename Bundleable
 >
 Optional<std::shared_ptr<Node>> get_next_ready(
     InstrIter instr_begin, InstrIter instr_end,
@@ -243,7 +245,8 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     std::set<Operand> (*writes)(const Instruction *),
     bool enable_second_slot,
     bool requesting_second_slot,
-    bool can_be_long
+    bool can_be_long,
+    Bundleable bundleable
 ) {
   assert(requesting_second_slot? !can_be_long:true
       && "Cannot request long instruction in second slot");
@@ -276,6 +279,7 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     accesses.insert(writes_set.begin(), writes_set.end());
 
     if( (requesting_second_slot? node->may_second_slot: true) &&
+        bundleable(instr) &&
         (can_be_long? true:!node->is_long) &&
       std::all_of(accesses.begin(), accesses.end(), [&](auto op){
         for(auto entry: executing)  {
@@ -299,7 +303,7 @@ Optional<std::shared_ptr<Node>> get_next_ready(
   }
 
   LLVM_DEBUG(
-    dbgs() << "Unpoisoned nodes (indices): ";
+    dbgs() << "Unpoisoned/bundleable nodes (indices): ";
     for(auto node: unpoisoned) {
       dbgs() << node->idx << ", ";
     }
@@ -378,10 +382,12 @@ Optional<std::shared_ptr<Node>> get_next_ready(
 /// * conditional_branch: Whether this instruction is a conditional branch our of the block.
 ///                 E.g. Patmos::BR. Call instructions don't count.
 /// * enable_dual_issue: If given, enables dual issue code and contains
-///                 1) a function that should return true is the given instruction may be
+///                 1) a function that should return true if the given instruction may be
 ///                    scheduled in the second issue slot. Otherwise false.
 ///                 2) a function that should return true if the instruction takes
 ///                    up both issue slots. Otherwise false.
+///                 3) a function that should return true the two given instructions
+///                    may be scheduled in the same bundle
 ///
 /// This scheduler can handle conditional branch instructions in the middle of the instruction
 /// list however does not attempt to occupy their delay slots nor add Nops.
@@ -408,7 +414,8 @@ std::map<unsigned, unsigned> list_schedule(
   Optional<std::tuple<
     MAY_SECOND_SLOT_EXTRA,
     bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
-    bool (*)(const Instruction *)
+    bool (*)(const Instruction *),
+    bool (*)(const Instruction *,const Instruction *)
   >> enable_dual_issue
 ) {
   std::map<unsigned, unsigned> result;
@@ -537,14 +544,25 @@ std::map<unsigned, unsigned> list_schedule(
     };
 
     auto next = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
-        enable_dual_issue.hasValue(), false, true);
+        enable_dual_issue.hasValue(), false, true, [](auto instr){ return true;});
     if(next) {
       schedule_instruction(*next, enable_dual_issue? idx*2: idx);
 
       if(enable_dual_issue && !(*next)->is_long) {
         ready = ready_nodes();
         auto next2 = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
-            enable_dual_issue.hasValue(), !(*next)->may_second_slot, false);
+          enable_dual_issue.hasValue(), !(*next)->may_second_slot, false,
+          [&](auto instr){
+            if(enable_dual_issue) {
+              return std::get<3>(*enable_dual_issue)(
+                &*(std::next(instr_begin, (*next)->idx)),
+                instr
+              );
+            } else {
+              return true;
+            }
+          }
+        );
         if(next2) {
           assert(!(*next2)->is_long);
           assert(!(!(*next)->may_second_slot && !(*next2)->may_second_slot)

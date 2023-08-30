@@ -12,6 +12,7 @@
 
 #include "SPScheduler.h"
 #include "SPListScheduler.h"
+#include "EquivalenceClasses.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/ADT/Statistic.h"
@@ -82,6 +83,7 @@ void convert_s0_to_p(std::set<Register> &regs) {
 
 std::set<Register> reads(const MachineInstr *instr){
   std::set<Register> result;
+  auto opcode = instr->getOpcode();
   std::for_each(instr->operands_begin(), instr->operands_end(), [&](auto op){
     if(op.isReg() && op.isUse()) {
       result.insert(op.getReg());
@@ -96,12 +98,18 @@ std::set<Register> reads(const MachineInstr *instr){
     result.insert(Patmos::P7);
   }
 
+  if(isLoadStackInst(opcode) || isStoreStackInst(opcode)) {
+    result.insert(Patmos::SS);
+    result.insert(Patmos::ST);
+  }
+
   convert_s0_to_p(result);
   return result;
 }
 
 std::set<Register> writes(const MachineInstr *instr){
   std::set<Register> result;
+  auto opcode = instr->getOpcode();
   std::for_each(instr->operands_begin(), instr->operands_end(), [&](auto op){
     if(op.isReg() && op.isDef()) {
       result.insert(op.getReg());
@@ -113,6 +121,7 @@ std::set<Register> writes(const MachineInstr *instr){
     result.insert(Patmos::RSP);
     result.insert(Patmos::RFP);
   }
+
   return result;
 }
 
@@ -122,9 +131,7 @@ bool poisons(const MachineInstr *instr) {
 
 bool memory_access(const MachineInstr *instr) {
   auto opcode = instr->getOpcode();
-  return isLoadInst(opcode) || isStoreInst(opcode) || instr->isCall() || instr->isReturn() ||
-      opcode == Patmos::SRESi || opcode == Patmos::SFREEi ||
-      opcode == Patmos::SENSi || opcode == Patmos::SENSr;
+  return isLoadInst(opcode) || isStoreInst(opcode) || instr->isCall() || instr->isReturn();
 }
 
 unsigned latency(const MachineInstr *instr) {
@@ -193,7 +200,49 @@ bool may_second_slot(const PatmosInstrInfo *TII, const MachineInstr *instr) {
     // so act as if they can't be in second slot
     return false;
   }
-  return TII->canIssueInSlot(instr, 1);
+  if(PatmosSubtarget::usePermissiveDualIssue() && (
+    isLoadInst(instr->getOpcode()) || isStoreInst(instr->getOpcode()) || isBranchInst(instr->getOpcode())
+  )){
+    return true;
+  } else {
+    return TII->canIssueInSlot(instr, 1);
+  }
+}
+
+bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
+  auto opcode1 = instr1->getOpcode();
+  auto opcode2 = instr2->getOpcode();
+
+  auto is_combination = [&](bool(*req1)(unsigned), bool(*req2)(unsigned)) {
+    return (req1(opcode1) && req2(opcode2)) || (req1(opcode2) && req2(opcode1));
+  };
+
+  if(PatmosSubtarget::usePermissiveDualIssue() && (
+    is_combination(isLoadInst, isLoadInst) || is_combination(isStoreInst, isStoreInst) ||
+	is_combination(isLoadInst, isStoreInst) ||is_combination(isBranchInst, isBranchInst
+  ))) {
+    auto MF = instr1->getParent()->getParent();
+    auto parent_tree = EquivalenceClasses::importClassTreeFromModule(*MF);
+
+    auto class1 = EquivalenceClasses::getEqClassNr(instr1);
+    auto class2 = EquivalenceClasses::getEqClassNr(instr1);
+
+    if(class1 && class2) {
+      auto parents1 = EquivalenceClasses::getAllParents(*class1, parent_tree);
+      auto parents2 = EquivalenceClasses::getAllParents(*class2, parent_tree);
+
+      return *class1 != *class2 && !parents1.count(*class2) && !parents2.count(*class1);
+    } else {
+      // Unpredicated are always enabled and so can't be bundled with anything
+      return false;
+    }
+  } else if(is_combination(isLoadStackInst, isStackMgmtInst) || is_combination(isStoreStackInst, isStackMgmtInst)) {
+    // There is some ambiguity about how bundled stack management and stack load/store behave.
+    // Therefore, disallow for now.
+    // See: https://github.com/t-crest/patmos-simulator/issues/25
+    return false;
+  }
+  return true;
 }
 
 /////////////////////////////////////////////
@@ -206,19 +255,19 @@ SPScheduler::SPScheduler(const PatmosTargetMachine &tm):
   auto warning = "Warning: '--";
   auto post_msg = "' flag is meant for internal compiler development only and shouldn't be used otherwise.\n";
   if(DisableSPScheduler) {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler" << post_msg;
+    errs() << warning << "mpatmos-disable-singlepath-scheduler" << post_msg;
   }
   if(DisableSPSchedulerFun != "") {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler-function" << post_msg;
+    errs() << warning << "mpatmos-disable-singlepath-scheduler-function" << post_msg;
   }
   if(DisableSPSchedulerFunBlock != -1) {
-	errs() << warning << "mpatmos-disable-singlepath-scheduler-function-block" << post_msg;
+    errs() << warning << "mpatmos-disable-singlepath-scheduler-function-block" << post_msg;
   }
   if(SPSchedulerIgnoreFirstInstructions != 0) {
-	errs() << warning << "mpatmos-singlepath-scheduler-ignore-first-instructions" << post_msg;
+    errs() << warning << "mpatmos-singlepath-scheduler-ignore-first-instructions" << post_msg;
   }
   if(SPSchedulerInstructionsToSchedule != 0) {
-	errs() << warning << "mpatmos-singlepath-scheduler-instruction-to-schedule" << post_msg;
+    errs() << warning << "mpatmos-singlepath-scheduler-instruction-to-schedule" << post_msg;
   }
 }
 
@@ -231,6 +280,18 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   }
 
   LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
+  auto eq_class_tree = EquivalenceClasses::importClassTreeFromModule(mf);
+  LLVM_DEBUG(
+	dbgs() << "Equivalence class tree:\n";
+    for(auto entry: eq_class_tree) {
+    	dbgs() << entry.first << ": ";
+    	for(auto parent: entry.second) {
+    		dbgs() << parent << ", ";
+    	}
+    	dbgs() << "\n";
+    }
+    dbgs() << "\n";
+  );
 
   for(auto &mbb: mf){
     LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb.dump());
@@ -376,12 +437,13 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
   llvm::Optional<std::tuple<
     const PatmosInstrInfo *,
     bool (*)(const PatmosInstrInfo *, const MachineInstr *),
-    bool (*)(const MachineInstr *)
+    bool (*)(const MachineInstr *),
+    bool (*)(const MachineInstr *,const MachineInstr *)
   >> enable_dual_issue;
 
   if(PatmosSubtarget::enableBundling()) {
     // Enable dual-issue
-    enable_dual_issue = std::make_tuple(TM.getSubtargetImpl()->getInstrInfo(), may_second_slot, is_long);
+    enable_dual_issue = std::make_tuple(TM.getSubtargetImpl()->getInstrInfo(), may_second_slot, is_long, may_bundle);
   } else {
     // disable dual-issue
     enable_dual_issue = None;
