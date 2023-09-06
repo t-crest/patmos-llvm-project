@@ -14,6 +14,15 @@
 // through llc's mpatmos-enable-cet option
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// RUN: %clang --target=patmos -c %s -mpatmos-enable-cet -mpatmos-cet-functions="some_fn" \
+// RUN: -mllvm --mpatmos-singlepath-scheduler-ignore-first-instructions=0
+// RUN: llvm-objdump -d %t | FileCheck %s
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Tests can pass a flag to llc starting with "--patmos-singlepath..." while also using "-mpatmos-enable-cet".
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // END.
 
 volatile int _0 = 0;
@@ -33,7 +42,7 @@ int some_fn()  {
 // CHECK-NOT: {{([0-9]|[a-f])+}} br
 
 // Stop checking for branching at next function
-// CHEC-LABEL: >:
+// CHECK-LABEL: >:
 
 int main() {
 	return some_fn();

@@ -446,7 +446,7 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
           A->claim();
           LLCArgs.push_back(v);
         }
-        if(std::string(v).rfind("--mpatmos-singlepath",0) == 0) {
+        if(std::string(v).rfind("--mpatmos-singlepath=",0) == 0 || std::string(v) == "--mpatmos-singlepath") {
           sp_enabled = true;
         }
         if(std::string(v).rfind("--mpatmos-enable-cet",0) == 0) {
