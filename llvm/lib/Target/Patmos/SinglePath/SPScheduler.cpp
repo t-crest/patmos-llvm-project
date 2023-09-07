@@ -17,6 +17,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include <sstream>
 
 
 using namespace llvm;
@@ -27,28 +28,10 @@ static cl::opt<bool> DisableSPScheduler(
     cl::desc("Disables the single-path-specific instruction scheduler. (reverts to simple Nop-padding)"),
     cl::Hidden);
 
-static cl::opt<std::string> DisableSPSchedulerFun(
-    "mpatmos-disable-singlepath-scheduler-function",
+static cl::opt<std::string> SPSchedulerConfig(
+    "mpatmos-singlepath-scheduler-config",
     cl::init(""),
-    cl::desc("Disables the single-path-specific instruction scheduler for the named function"),
-    cl::Hidden);
-
-static cl::opt<int> DisableSPSchedulerFunBlock(
-    "mpatmos-disable-singlepath-scheduler-function-block",
-    cl::init(-1),
-    cl::desc("Disables the single-path-specific instruction scheduler for the named function's numbered block"),
-    cl::Hidden);
-
-static cl::opt<unsigned> SPSchedulerIgnoreFirstInstructions(
-    "mpatmos-singlepath-scheduler-ignore-first-instructions",
-    cl::init(0),
-    cl::desc("The single-path-specific instruction scheduler doesn't schedule the first given number of instructions"),
-    cl::Hidden);
-
-static cl::opt<unsigned> SPSchedulerInstructionsToSchedule(
-    "mpatmos-singlepath-scheduler-instruction-to-schedule",
-    cl::init(0),
-    cl::desc("The single-path-specific instruction scheduler only schedules the first given number of instructions in a block"),
+    cl::desc("Configures the single-path scheduler (function-name,block-number,ignore-first-instructions-count,instructions-to-schedule-count). If block is -1, disables scheduling for all blocks in the function."),
     cl::Hidden);
 
 STATISTIC(SPInstructions,     "Number of instruction bundles in single-path code (both single and double)");
@@ -62,6 +45,67 @@ FunctionPass *llvm::createSPSchedulerPass(const PatmosTargetMachine &tm) {
   return new SPScheduler(tm);
 }
 
+static std::tuple<std::string,int,unsigned,unsigned> split_SPSchedulerConfig()
+{
+	std::stringstream stream(SPSchedulerConfig.getValue());
+
+	std::string fn_name = "";
+	int block_nr = -1;
+	unsigned ignore_count = 0;
+	unsigned sched_count = 0;
+
+	int i = 0;
+	while (stream.good()) {
+		std::string substr;
+		std::getline(stream, substr, ',');
+
+		switch(i){
+		case 0:  fn_name = substr; break;
+		case 1:  block_nr = std::stoi(substr); break;
+		case 2:  ignore_count = std::stoul(substr); break;
+		case 3:  sched_count = std::stoul(substr); break;
+		default: assert(false);
+		}
+		i++;
+	}
+
+	return std::make_tuple(fn_name, block_nr, ignore_count, sched_count);
+}
+
+static bool config_schedule_for_fn(const MachineFunction *mf) {
+	auto fn_name = std::get<0>(split_SPSchedulerConfig());
+	return  fn_name != "" && fn_name == mf->getName();
+}
+
+static bool config_schedule_for_block(const MachineBasicBlock * mbb) {
+	auto block_nr = std::get<1>(split_SPSchedulerConfig());
+	return config_schedule_for_fn(mbb->getParent()) && (block_nr == -1 || block_nr == mbb->getNumber());
+}
+
+static unsigned config_schedule_ignore_first_count(const MachineBasicBlock * mbb) {
+	auto ignore_first_count = std::get<2>(split_SPSchedulerConfig());
+	return config_schedule_for_block(mbb)? ignore_first_count: 0;
+}
+
+static unsigned config_schedule_instructions_to_schedule_count(const MachineBasicBlock * mbb) {
+	auto instruction_schedule_count = std::get<3>(split_SPSchedulerConfig());
+	return config_schedule_for_block(mbb)? instruction_schedule_count: 0;
+}
+
+static bool disable_schedule_for_fn(const MachineFunction *mf) {
+	auto block_nr = std::get<1>(split_SPSchedulerConfig());
+	return config_schedule_for_fn(mf) && block_nr == -1;
+}
+
+static bool disable_schedule_for_block(const MachineBasicBlock * mbb) {
+	auto ignore_first_count = std::get<2>(split_SPSchedulerConfig());
+	auto instruction_schedule_count = std::get<3>(split_SPSchedulerConfig());
+	return
+		config_schedule_for_fn(mbb->getParent()) &&
+		config_schedule_for_block(mbb) &&
+		ignore_first_count == 0 &&
+		instruction_schedule_count == 0;
+}
 
 /////////////////////////////////////////////
 // Functions for use with the list scheduler
@@ -98,7 +142,7 @@ std::set<Register> reads(const MachineInstr *instr){
     result.insert(Patmos::P7);
   }
 
-  if(isLoadStackInst(opcode) || isStoreStackInst(opcode)) {
+  if(isStackInst(opcode) && !isStackMgmtInst(opcode)) {
     result.insert(Patmos::SS);
     result.insert(Patmos::ST);
   }
@@ -131,7 +175,7 @@ bool poisons(const MachineInstr *instr) {
 
 bool memory_access(const MachineInstr *instr) {
   auto opcode = instr->getOpcode();
-  return isLoadInst(opcode) || isStoreInst(opcode) || instr->isCall() || instr->isReturn();
+  return isLoadInst(opcode) || isStoreInst(opcode) || instr->isCall() || instr->isReturn() || isStackMgmtInst(opcode);
 }
 
 unsigned latency(const MachineInstr *instr) {
@@ -201,12 +245,21 @@ bool may_second_slot(const PatmosInstrInfo *TII, const MachineInstr *instr) {
     return false;
   }
   if(PatmosSubtarget::usePermissiveDualIssue() && (
-    isLoadInst(instr->getOpcode()) || isStoreInst(instr->getOpcode()) || isBranchInst(instr->getOpcode())
+    isLoadInst(instr->getOpcode()) || isStoreInst(instr->getOpcode()) || isControlFlowInst(instr->getOpcode())
   )){
     return true;
   } else {
     return TII->canIssueInSlot(instr, 1);
   }
+}
+
+/// At this point in the single-path transformation, all branches use
+/// the Patmos::BR opcode. Later, some 'BR's might turn into 'BRCF'
+/// depending on block sizes and how the function spiller splits.
+/// Therefore, at this stage all branches must be assumed to be BRCF
+/// and as such touch main memory.
+static bool sp_scheduler_is_main_mem_instr(unsigned opcode) {
+	return isMainMemInst(opcode) || (opcode == Patmos::BR);
 }
 
 bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
@@ -218,9 +271,13 @@ bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
   };
 
   if(PatmosSubtarget::usePermissiveDualIssue() && (
-    is_combination(isLoadInst, isLoadInst) || is_combination(isStoreInst, isStoreInst) ||
-	is_combination(isLoadInst, isStoreInst) ||is_combination(isBranchInst, isBranchInst
-  ))) {
+    is_combination(isLoadInst, isLoadInst) ||
+	is_combination(isStoreInst, isStoreInst) ||
+	is_combination(isLoadInst, isStoreInst) ||
+	is_combination(isStackInst, isStackInst) ||
+	is_combination(sp_scheduler_is_main_mem_instr, sp_scheduler_is_main_mem_instr) ||
+	is_combination(isControlFlowInst, isControlFlowInst)
+  )) {
     auto MF = instr1->getParent()->getParent();
     auto parent_tree = EquivalenceClasses::importClassTreeFromModule(*MF);
 
@@ -236,11 +293,6 @@ bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
       // Unpredicated are always enabled and so can't be bundled with anything
       return false;
     }
-  } else if(is_combination(isLoadStackInst, isStackMgmtInst) || is_combination(isStoreStackInst, isStackMgmtInst)) {
-    // There is some ambiguity about how bundled stack management and stack load/store behave.
-    // Therefore, disallow for now.
-    // See: https://github.com/t-crest/patmos-simulator/issues/25
-    return false;
   }
   return true;
 }
@@ -257,17 +309,8 @@ SPScheduler::SPScheduler(const PatmosTargetMachine &tm):
   if(DisableSPScheduler) {
     errs() << warning << "mpatmos-disable-singlepath-scheduler" << post_msg;
   }
-  if(DisableSPSchedulerFun != "") {
-    errs() << warning << "mpatmos-disable-singlepath-scheduler-function" << post_msg;
-  }
-  if(DisableSPSchedulerFunBlock != -1) {
-    errs() << warning << "mpatmos-disable-singlepath-scheduler-function-block" << post_msg;
-  }
-  if(SPSchedulerIgnoreFirstInstructions != 0) {
-    errs() << warning << "mpatmos-singlepath-scheduler-ignore-first-instructions" << post_msg;
-  }
-  if(SPSchedulerInstructionsToSchedule != 0) {
-    errs() << warning << "mpatmos-singlepath-scheduler-instruction-to-schedule" << post_msg;
+  if(std::get<0>(split_SPSchedulerConfig()) != "") {
+    errs() << warning << "mpatmos-singlepath-scheduler-config" << post_msg;
   }
 }
 
@@ -304,11 +347,7 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
     	if(!(instrIter->isInlineAsm() || instrIter->isPseudo()) && !may_second_slot(TM.getSubtargetImpl()->getInstrInfo(), &*instrIter)) SPFirstSlotInstructions++;
 	}
 
-    bool disable = DisableSPScheduler
-        ||
-        (DisableSPSchedulerFun != "" && DisableSPSchedulerFun == mf.getName() &&
-            (DisableSPSchedulerFunBlock == -1 || DisableSPSchedulerFunBlock == mbb.getNumber()))
-            ;
+    bool disable = DisableSPScheduler || disable_schedule_for_fn(&mf) || disable_schedule_for_block(&mbb);
 
     if(!disable) {
       runListSchedule(&mbb);
@@ -411,15 +450,22 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
 
   unsigned total_instr_count = std::distance(mbb->instr_begin(), last_instr());
 
+  unsigned ignore_count;
+  if(config_schedule_ignore_first_count(mbb) != 0) {
+	  ignore_count = config_schedule_ignore_first_count(mbb);
+  } else {
+	  ignore_count = 0;
+  }
+
   // If requested, don't schedule the first X instruction (move them to the end immediately
-  for(auto i = 0; i<std::min(total_instr_count, SPSchedulerIgnoreFirstInstructions.getValue()); i++) {
+  for(auto i = 0; i<std::min(total_instr_count, ignore_count); i++) {
       // Add nop to ensure any need delays after e.g. loads are adhered to
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
 	  auto instr = &*mbb->instr_begin();
 	  mbb->remove_instr(instr);
       mbb->insert(last_instr(), instr);
   }
-  if(SPSchedulerIgnoreFirstInstructions<total_instr_count && SPSchedulerIgnoreFirstInstructions>0){
+  if(ignore_count<total_instr_count && ignore_count>0){
 	  // Add some nops to easily show where the divide between scheduled and unscheduled is
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
@@ -427,12 +473,12 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
       TM.getInstrInfo()->insertNoop(*mbb, last_instr());
   }
-  auto schedule_count = total_instr_count-SPSchedulerIgnoreFirstInstructions;
-  auto last_to_schedule = std::next(mbb->instr_begin(),
-		  SPSchedulerInstructionsToSchedule == 0?
-		  schedule_count :
-		  std::min(schedule_count, SPSchedulerInstructionsToSchedule.getValue())
-	  );
+  auto schedule_count = total_instr_count-ignore_count;
+  if(config_schedule_instructions_to_schedule_count(mbb) != 0) {
+	  schedule_count = std::min(schedule_count, config_schedule_instructions_to_schedule_count(mbb));
+  }
+
+  auto last_to_schedule = std::next(mbb->instr_begin(),schedule_count);
 
   llvm::Optional<std::tuple<
     const PatmosInstrInfo *,
@@ -459,6 +505,11 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
       dbgs() << entry.first << "<-" << entry.second << "\n";
     }
   );
+  if(schedule.size() == 0)  {
+    LLVM_DEBUG( dbgs() << "No Scheduling done\n");
+    return;
+  }
+
   auto last_new_idx = schedule.rbegin()->first;
 
   // Get a map from new index to the instruction that should be in it
@@ -488,9 +539,9 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     }
   }
 
-  auto max_possible_moved = SPSchedulerInstructionsToSchedule == 0?
+  auto max_possible_moved = config_schedule_instructions_to_schedule_count(mbb) == 0?
 	  total_instr_count :
-	  std::min(total_instr_count,SPSchedulerIgnoreFirstInstructions + SPSchedulerInstructionsToSchedule);
+	  std::min(total_instr_count,config_schedule_ignore_first_count(mbb) + config_schedule_instructions_to_schedule_count(mbb));
   auto unschedule_at_end = total_instr_count - max_possible_moved;
   if(unschedule_at_end>0){
 	  // Add some nops to easily show where the divide between scheduled and unscheduled is

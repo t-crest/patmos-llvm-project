@@ -96,78 +96,66 @@ MachineFunction *llvm::getCallTargetMF(const MachineInstr *MI) {
   return NULL;
 }
 
-bool llvm::isLoadStackInst(unsigned opcode) {
+bool llvm::isLoadInst(unsigned opcode) {
   switch( opcode ){
     default:
-      return false;
+      return isMainMemLoadInst(opcode);
+    case Patmos::LBL:
     case Patmos::LBS:
+    case Patmos::LBUL:
     case Patmos::LBUS:
+    case Patmos::LHL:
     case Patmos::LHS:
+    case Patmos::LHUL:
     case Patmos::LHUS:
+    case Patmos::LWL:
     case Patmos::LWS:
       return true;
   }
 }
 
-/// Returns true if the given opcode represents a load instruction.
-/// Pseudo-instructions aren't considered.
-bool llvm::isLoadInst(unsigned opcode) {
+bool llvm::isMainMemLoadInst(unsigned opcode) {
   switch( opcode ){
     default:
       return false;
     case Patmos::LBC:
-    case Patmos::LBL:
     case Patmos::LBM:
-    case Patmos::LBS:
     case Patmos::LBUC:
-    case Patmos::LBUL:
     case Patmos::LBUM:
-    case Patmos::LBUS:
     case Patmos::LHC:
-    case Patmos::LHL:
     case Patmos::LHM:
-    case Patmos::LHS:
     case Patmos::LHUC:
-    case Patmos::LHUL:
     case Patmos::LHUM:
-    case Patmos::LHUS:
     case Patmos::LWC:
-    case Patmos::LWL:
     case Patmos::LWM:
-    case Patmos::LWS:
       return true;
   }
 }
 
-/// Returns true if the given opcode represents a store instruction.
-/// Pseudo-instructions aren't considered.
 bool llvm::isStoreInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return isMainMemStoreInst(opcode);
+    case Patmos::SBL:
+    case Patmos::SBS:
+    case Patmos::SHL:
+    case Patmos::SHS:
+    case Patmos::SWL:
+    case Patmos::SWS:
+      return true;
+  }
+}
+
+bool llvm::isMainMemStoreInst(unsigned opcode) {
   switch( opcode ){
     default:
       return false;
     case Patmos::SBC:
-    case Patmos::SBL:
     case Patmos::SBM:
-    case Patmos::SBS:
     case Patmos::SHC:
-    case Patmos::SHL:
     case Patmos::SHM:
-    case Patmos::SHS:
     case Patmos::SWC:
-    case Patmos::SWL:
     case Patmos::SWM:
-    case Patmos::SWS:
-      return true;
-  }
-}
-
-bool llvm::isStoreStackInst(unsigned opcode) {
-  switch( opcode ){
-    default:
-      return false;
-    case Patmos::SBS:
-    case Patmos::SHS:
-    case Patmos::SWS:
       return true;
   }
 }
@@ -186,23 +174,31 @@ bool llvm::isStackMgmtInst(unsigned opcode) {
   }
 }
 
-bool llvm::isBranchInst(unsigned opcode) {
+bool llvm::isStackInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return isStackMgmtInst(opcode);
+    case Patmos::LBS:
+    case Patmos::LBUS:
+    case Patmos::LHS:
+    case Patmos::LHUS:
+    case Patmos::LWS:
+    case Patmos::SBS:
+    case Patmos::SHS:
+    case Patmos::SWS:
+      return true;
+  }
+}
+
+bool llvm::isControlFlowInst(unsigned opcode) {
+  return isControlFlowCFInst(opcode) || isControlFlowNonCFInst(opcode);
+}
+
+bool llvm::isControlFlowNonCFInst(unsigned opcode) {
   switch( opcode ){
     default:
       return false;
     case Patmos::BR:
-    case Patmos::BRCF:
-    case Patmos::BRCFND:
-    case Patmos::BRCFNDu:
-    case Patmos::BRCFR:
-    case Patmos::BRCFRND:
-    case Patmos::BRCFRNDu:
-    case Patmos::BRCFRu:
-    case Patmos::BRCFT:
-    case Patmos::BRCFTND:
-    case Patmos::BRCFTNDu:
-    case Patmos::BRCFTu:
-    case Patmos::BRCFu:
     case Patmos::BRND:
     case Patmos::BRNDu:
     case Patmos::BRR:
@@ -216,6 +212,38 @@ bool llvm::isBranchInst(unsigned opcode) {
     case Patmos::BRu:
       return true;
   }
+}
+
+bool llvm::isControlFlowCFInst(unsigned opcode) {
+  switch( opcode ){
+    default:
+      return false;
+    case Patmos::BRCF:
+    case Patmos::BRCFND:
+    case Patmos::BRCFNDu:
+    case Patmos::BRCFR:
+    case Patmos::BRCFRND:
+    case Patmos::BRCFRNDu:
+    case Patmos::BRCFRu:
+    case Patmos::BRCFT:
+    case Patmos::BRCFTND:
+    case Patmos::BRCFTNDu:
+    case Patmos::BRCFTu:
+    case Patmos::BRCFu:
+    case Patmos::CALL:
+    case Patmos::CALLND:
+    case Patmos::CALLR:
+    case Patmos::CALLRND:
+    case Patmos::RET:
+    case Patmos::RETND:
+    // TODO: traps, interrupts
+      return true;
+  }
+}
+
+
+bool llvm::isMainMemInst(unsigned opcode) {
+  return isMainMemLoadInst(opcode) || isMainMemStoreInst(opcode) || isControlFlowCFInst(opcode) || isStackMgmtInst(opcode);
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetInfo() {

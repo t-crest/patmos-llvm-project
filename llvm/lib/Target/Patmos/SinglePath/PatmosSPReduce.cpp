@@ -837,7 +837,6 @@ insertDefToStackLoc(MachineBasicBlock &MBB, unsigned stloc, unsigned guard,
   InsertedInstrs += 2; // STATISTIC
 }
 
-
 void PatmosSPReduce::
 insertDefToS0SpillSlot(MachineBasicBlock &MBB, unsigned slot, unsigned predReg,
                        unsigned guard,
@@ -912,7 +911,6 @@ void PatmosSPReduce::fixupKillFlagOfCondRegs(void) {
   } // end for all elements in KilledCondRegs
   KilledCondRegs.clear();
 }
-
 
 void PatmosSPReduce::applyPredicates(SPScope *S, MachineFunction &MF) {
   LLVM_DEBUG( dbgs() << " Applying predicates in [MBB#"
@@ -1066,7 +1064,6 @@ void PatmosSPReduce::getStackLocPair(int &fi, unsigned &bitpos,
   bitpos = stloc % 32;
 }
 
-
 void PatmosSPReduce::insertUseSpillLoad(const RAInfo &R,
                                         PredicatedBlock *block) {
   auto MBB = block->getMBB();
@@ -1131,7 +1128,6 @@ void PatmosSPReduce::insertUseSpillLoad(const RAInfo &R,
   }
 }
 
-
 void PatmosSPReduce::insertPredicateLoad(MachineBasicBlock *MBB,
                                          MachineBasicBlock::iterator MI,
                                          int loc, unsigned target_preg) {
@@ -1148,7 +1144,6 @@ void PatmosSPReduce::insertPredicateLoad(MachineBasicBlock *MBB,
     .addReg(GuardsReg, RegState::Kill).addImm(bitpos);
   InsertedInstrs += 2; // STATISTIC
 }
-
 
 void PatmosSPReduce::mergeMBBs(MachineFunction &MF) {
   LLVM_DEBUG( dbgs() << "Function before block merge:\n"; MF.dump() );
@@ -1216,7 +1211,6 @@ void PatmosSPReduce::mergeMBBs(MachineFunction &MF) {
   // invalidate order
   order.clear();
 }
-
 
 void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
   LLVM_DEBUG( dbgs() << "Collect return info insts\n" );
@@ -1292,7 +1286,6 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
   }
 }
 
-
 void PatmosSPReduce::eliminateFrameIndices(MachineFunction &MF) {
 
   for (MachineFunction::iterator MBB = MF.begin(), MBBe = MF.end();
@@ -1308,7 +1301,6 @@ void PatmosSPReduce::eliminateFrameIndices(MachineFunction &MF) {
     }
   }
 }
-
 
 void PatmosSPReduce::getLoopLiveOutPRegs(const SPScope *S,
                                          std::vector<unsigned> &pregs) const {
@@ -1407,7 +1399,6 @@ void LinearizeWalker::enterSubscope(SPScope *S) {
   // append the preheader
   nextMBB(PrehdrMBB);
 }
-
 
 void LinearizeWalker::exitSubscope(SPScope *S) {
 

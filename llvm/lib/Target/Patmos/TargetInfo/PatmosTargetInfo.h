@@ -37,27 +37,35 @@ const Function *getCallTarget(const MachineInstr *MI);
 
 MachineFunction *getCallTargetMF(const MachineInstr *MI);
 
-/// Returns true if the given opcode represents a load from stack instruction.
-/// Pseudo-instructions aren't considered.
-bool isLoadStackInst(unsigned opcode);
+/// Returns true if the given opcode represents a load instruction that may touch main-memory.
+bool isMainMemLoadInst(unsigned opcode);
 
 /// Returns true if the given opcode represents a load instruction.
-/// Pseudo-instructions aren't considered.
 bool isLoadInst(unsigned opcode);
 
 /// Returns true if the given opcode represents a store instruction.
-/// Pseudo-instructions aren't considered.
 bool isStoreInst(unsigned opcode);
 
-/// Returns true if the given opcode represents a store from stack instruction.
-/// Pseudo-instructions aren't considered.
-bool isStoreStackInst(unsigned opcode);
+/// Returns true if the given opcode represents a store instruction that may touch main-memory.
+bool isMainMemStoreInst(unsigned opcode);
 
-/// Returns true if the given opcode represents a stack cache management instruction.
+/// Returns true if the given opcode represents a stack-touching instruction.
+bool isStackInst(unsigned opcode);
+
+/// Returns true if the given opcode represents a stack-touching instruction.
 bool isStackMgmtInst(unsigned opcode);
 
+/// Returns true if the given opcode represents an instruction that might touch main memory.
+bool isMainMemInst(unsigned opcode);
+
 /// Returns true if the given opcode represents a branch instruction.
-bool isBranchInst(unsigned opcode);
+bool isControlFlowInst(unsigned opcode);
+
+/// Returns true if the given opcode represents a branch instruction without cache-fill.
+bool isControlFlowNonCFInst(unsigned opcode);
+
+/// Returns true if the given opcode represents a branch instruction with cache-fill.
+bool isControlFlowCFInst(unsigned opcode);
 
 } // namespace llvm
 
