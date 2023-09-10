@@ -59,8 +59,7 @@ Register PreRegallocReduce::getVreg(EqClass &eq_class)
 }
 
 void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
-	auto parent_tree = EQ->getClassParents();
-	EquivalenceClasses::exportClassTreeToModule(parent_tree, *MF);
+	EQ->exportClassPredecessorsToModule(*MF);
 
 	auto &C = MF->getFunction().getContext();
 
@@ -127,7 +126,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 					MI->getOperand(pred_op_idx).setReg(new_vreg);
 				}
 
-				EquivalenceClasses::addClassMD(&*MI, eq_class.number);
+				EquivalenceClasses::addClassMetaData(&*MI, eq_class.number);
 				assert(EquivalenceClasses::getEqClassNr(&*MI));
 				assert(EquivalenceClasses::getEqClassNr(&*MI) == eq_class.number);
 			}
@@ -140,7 +139,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 			auto instr = BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
 					TII->get(Patmos::PSEUDO_UNILATCH_EXIT_PRED))
 				.addReg(predVreg);
-			EquivalenceClasses::addClassMD(instr, eq_class.number);
+			EquivalenceClasses::addClassMetaData(instr, eq_class.number);
 			assert(EquivalenceClasses::getEqClassNr(instr));
 			assert(EquivalenceClasses::getEqClassNr(instr) == eq_class.number);
 		}

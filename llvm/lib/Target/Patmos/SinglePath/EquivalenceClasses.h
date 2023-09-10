@@ -48,6 +48,18 @@ namespace llvm {
 			>
 		> classes;
 
+		// Returns for each equivalence class, which classes are the source
+		// of its dependence edges
+		std::map<unsigned, std::set<unsigned>> getAllClassPredecessors() const;
+
+		// Returns for the given equivalence class, which classes are the source
+		// of its dependence edges, recursively
+		static std::set<unsigned> getAllPredecessors(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree);
+
+		/// Returns for the given equivalence class, which classes are the source of its dependence edges, recursively.
+		/// Predecessors are added to 'result'.
+		static void getAllPredecessors(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree, std::set<unsigned> &result);
+
 	public:
 		static char ID;
 
@@ -70,27 +82,23 @@ namespace llvm {
 		std::vector<EqClass> getAllClasses() const;
 
 		EqClass getClassFor(MachineBasicBlock*mbb) const;
+		// Exports the equivalence class predecessor relations as metadata connected to the given function
+		void exportClassPredecessorsToModule(MachineFunction &MF);
 
-		// Returns for each equivalence class, which classes are the source
-		// of its dependence edges
-		std::map<unsigned, std::set<unsigned>> getClassParents() const;
-
-		// Returns for the given equivalence class, which classes are the source
-		// of its dependence edges, recursively
-		static std::set<unsigned> getAllParents(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree);
-
-		// Exports the equivalence class "parent" relations given as metadata connected to the given function
-		static void exportClassTreeToModule(std::map<unsigned, std::set<unsigned>> &parent_tree, MachineFunction &MF);
-
-		// Imports the metadata representing the equivalence class relation tree connected to the given function
-		static std::map<unsigned, std::set<unsigned>> importClassTreeFromModule(const MachineFunction &MF);
+		// Imports the metadata representing the equivalence class predecessor relations connected to the given function
+		static std::map<unsigned, std::set<unsigned>> importClassPredecessorsFromModule(const MachineFunction &MF);
 
 		// Adds the given class number, as a metadata operand, to the given instruction,
-		// signifying what equivalence class the instruction is predicated by)
-		static void addClassMD(MachineInstr* MI, unsigned class_nr);
+		// signifying what equivalence class the instruction is predicated by
+		static void addClassMetaData(MachineInstr* MI, unsigned class_nr);
 
 		// Extracts the metadata operand signifying what equivalence class the instruction is predicated by
 		static Optional<unsigned> getEqClassNr(const MachineInstr* MI);
+
+		/// Returns whether the two given instructions have independent classes in the given class tree.
+		/// If two classes are dependent, it means they may be enabled at the same time.
+		/// E.g., an if-else statement's two alternatives will be mutually independent but dependent on the class surrounding them.
+		static bool dependentClasses(const MachineInstr* instr1,const MachineInstr* instr2, std::map<unsigned, std::set<unsigned>> &class_predecessors);
 	};
 }
 

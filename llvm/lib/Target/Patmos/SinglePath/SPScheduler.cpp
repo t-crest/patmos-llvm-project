@@ -278,21 +278,7 @@ bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
 	is_combination(sp_scheduler_is_main_mem_instr, sp_scheduler_is_main_mem_instr) ||
 	is_combination(isControlFlowInst, isControlFlowInst)
   )) {
-    auto MF = instr1->getParent()->getParent();
-    auto parent_tree = EquivalenceClasses::importClassTreeFromModule(*MF);
-
-    auto class1 = EquivalenceClasses::getEqClassNr(instr1);
-    auto class2 = EquivalenceClasses::getEqClassNr(instr1);
-
-    if(class1 && class2) {
-      auto parents1 = EquivalenceClasses::getAllParents(*class1, parent_tree);
-      auto parents2 = EquivalenceClasses::getAllParents(*class2, parent_tree);
-
-      return *class1 != *class2 && !parents1.count(*class2) && !parents2.count(*class1);
-    } else {
-      // Unpredicated are always enabled and so can't be bundled with anything
-      return false;
-    }
+    return false;
   }
   return true;
 }
@@ -323,10 +309,10 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   }
 
   LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
-  auto eq_class_tree = EquivalenceClasses::importClassTreeFromModule(mf);
   LLVM_DEBUG(
-	dbgs() << "Equivalence class tree:\n";
-    for(auto entry: eq_class_tree) {
+	auto eq_class_predecessors = EquivalenceClasses::importClassPredecessorsFromModule(mf);
+	dbgs() << "Equivalence class predecessors:\n";
+    for(auto entry: eq_class_predecessors) {
     	dbgs() << entry.first << ": ";
     	for(auto parent: entry.second) {
     		dbgs() << parent << ", ";
@@ -495,9 +481,15 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     enable_dual_issue = None;
   }
 
+  auto class_predecessors = EquivalenceClasses::importClassPredecessorsFromModule(*mbb->getParent());
+  auto is_dependent = [&](const MachineInstr* instr1,const MachineInstr* instr2){
+    return EquivalenceClasses::dependentClasses(instr1, instr1, class_predecessors);
+  };
+
   auto schedule = list_schedule(
     mbb->instr_begin(), last_to_schedule,
-    reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue
+    reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,
+	is_dependent
   );
   LLVM_DEBUG(
     dbgs() << "List Schedule (New Order <- old order):\n";

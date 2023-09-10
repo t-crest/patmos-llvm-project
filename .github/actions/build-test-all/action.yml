@@ -207,7 +207,7 @@ runs:
     - name: Download CET test suite
       if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
       env:
-        CET_TESTS_COMMIT: 9aaece64b99462870087be08f8659246ab3b7315
+        CET_TESTS_COMMIT: a462addfb3eaa4060efc1e924a18d9c44409d246
       shell: bash
       run: |
         git clone https://github.com/t-crest/patmos-cet-test-suite ${{env.CET_TESTS_PATH}}
@@ -219,7 +219,7 @@ runs:
       working-directory: ${{env.CET_TESTS_PATH}}
       shell: bash
       run: |
-        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v --filter="^(?!((.*/dijkstra.c)|(.*/gsm_dec.c)|(.*/huff_dec.c)|(.*/st.c)|(.*/minver.c)|(.*/deg2rad.c)|(.*/rad2deg.c)|(.*/complex_updates.c))).*"
+        $GITHUB_WORKSPACE/$BUILD_PATH/bin/llvm-lit . -v --filter="^(?!((.*/dijkstra.c)|(.*/gsm_dec.c)|(.*/huff_dec.c)|(.*/st.c)|(.*/minver.c))).*"
     # Upload Package artifact
     - name: Upload Package Artifact
       if: inputs.enable-package == 'true'

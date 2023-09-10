@@ -96,7 +96,7 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 					TII->get(Patmos::BR))
 					.addReg(exit_pred).addImm(0)
 					.addMBB(&header_mbb);
-				EquivalenceClasses::addClassMD(unilatch_exit_br, *eq_class);
+				EquivalenceClasses::addClassMetaData(unilatch_exit_br, *eq_class);
 
 				// Remove the PSEUDO_COUNTLESS_SPLOOP instruction, since it is no longer needed
 				// and so we don't need to handle it in other passes

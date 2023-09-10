@@ -100,9 +100,9 @@ bool EquivalenceClasses::runOnMachineFunction(MachineFunction &MF) {
 			}
 			dbgs() << "}\n";
 		}
-		auto parent_tree = getClassParents();
-		dbgs() << "Equivalence Class Tree:\n";
-		for(auto entry: parent_tree) {
+		auto predecessors = getAllClassPredecessors();
+		dbgs() << "Equivalence Class predecessors:\n";
+		for(auto entry: predecessors) {
 			dbgs() << entry.first << ": ";
 			for(auto parent: entry.second) {
 				dbgs() << parent << ", ";
@@ -138,8 +138,8 @@ EqClass EquivalenceClasses::getClassFor(MachineBasicBlock *mbb) const{
 	};
 }
 
-std::map<unsigned, std::set<unsigned>> EquivalenceClasses::getClassParents() const {
-	std::map<unsigned, std::set<unsigned>> parents;
+std::map<unsigned, std::set<unsigned>> EquivalenceClasses::getAllClassPredecessors() const {
+	std::map<unsigned, std::set<unsigned>> predecessors;
 
 	for(auto entry: classes){
 		auto class_nr = entry.first;
@@ -148,44 +148,51 @@ std::map<unsigned, std::set<unsigned>> EquivalenceClasses::getClassParents() con
 		for(auto dep: class_deps) {
 			auto dep_class_nr = getClassFor(dep.first? *dep.first : dep.second).number;
 			if(dep_class_nr != class_nr) {
-				parents[class_nr].insert(dep_class_nr);
+				predecessors[class_nr].insert(dep_class_nr);
 			}
 		}
 	}
 
-	return parents;
+	return predecessors;
 }
 
-std::set<unsigned> EquivalenceClasses::getAllParents(
+std::set<unsigned> EquivalenceClasses::getAllPredecessors(
 		unsigned class_nr,
 		std::map<unsigned, std::set<unsigned>> &parent_tree
 ) {
 	std::set<unsigned> result;
 
-	if(parent_tree.count(class_nr)) {
-		for(auto parent: parent_tree[class_nr]){
-			auto temp = getAllParents(parent, parent_tree);
-			result.insert(temp.begin(), temp.end());
-		}
-	}
+	getAllPredecessors(class_nr, parent_tree, result);
 
 	return result;
+}
+
+void EquivalenceClasses::getAllPredecessors(
+		unsigned class_nr,
+		std::map<unsigned, std::set<unsigned>> &parent_tree,
+		std::set<unsigned> &result
+) {
+	if(parent_tree.count(class_nr)) {
+		for(auto parent: parent_tree[class_nr]){
+			/// Loops in the program may add loops to the predecessors
+			if(!result.count(parent)){
+				getAllPredecessors(parent, parent_tree, result);
+			}
+		}
+	}
 }
 
 static MDNode* unsigned_md(unsigned x, LLVMContext &C) {
 	return MDNode::get(C, ConstantAsMetadata::get(ConstantInt::get(C, llvm::APInt(64, x, false))));
 }
 
-void EquivalenceClasses::exportClassTreeToModule(
-		std::map<unsigned, std::set<unsigned>> &parent_tree,
-		MachineFunction &MF
-) {
+void EquivalenceClasses::exportClassPredecessorsToModule(MachineFunction &MF) {
 	auto &F= MF.getFunction();
 	LLVMContext &C = F.getContext();
 	std::vector<Metadata*> mds;
 	std::map<unsigned, MDNode*> result;
 
-	for(auto entry: parent_tree) {
+	for(auto entry: getAllClassPredecessors()) {
 		std::vector<Metadata*> parents_md_list;
 		for(auto parent: entry.second) {
 			parents_md_list.push_back(unsigned_md(parent, C));
@@ -201,7 +208,7 @@ void EquivalenceClasses::exportClassTreeToModule(
 	F.setMetadata("llvm.patmos.equivalence.class.tree", MDTuple::get(C, mds));
 }
 
-std::map<unsigned, std::set<unsigned>> EquivalenceClasses::importClassTreeFromModule(const MachineFunction &MF) {
+std::map<unsigned, std::set<unsigned>> EquivalenceClasses::importClassPredecessorsFromModule(const MachineFunction &MF) {
 	std::map<unsigned, std::set<unsigned>> result;
 
 	auto &F= MF.getFunction();
@@ -230,7 +237,7 @@ std::map<unsigned, std::set<unsigned>> EquivalenceClasses::importClassTreeFromMo
 	return result;
 }
 
-void EquivalenceClasses::addClassMD(MachineInstr* MI, unsigned class_nr) {
+void EquivalenceClasses::addClassMetaData(MachineInstr* MI, unsigned class_nr) {
 	auto MF = MI->getParent()->getParent();
 	auto &C = MF->getFunction().getContext();
 
@@ -259,4 +266,20 @@ Optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI) {
 	}
 }
 
+bool EquivalenceClasses::dependentClasses(
+		const MachineInstr* instr1,const MachineInstr* instr2,
+		std::map<unsigned, std::set<unsigned>> &parent_tree
+){
+	auto class1 = EquivalenceClasses::getEqClassNr(instr1);
+	auto class2 = EquivalenceClasses::getEqClassNr(instr2);
+	if(class1 && class2) {
+	  auto preds1 = EquivalenceClasses::getAllPredecessors(*class1, parent_tree);
+	  auto preds2 = EquivalenceClasses::getAllPredecessors(*class2, parent_tree);
+
+	  return !(*class1 != *class2 && !preds1.count(*class2) && !preds2.count(*class1));
+	} else {
+	  // Unpredicated instructions are always enabled and so may be enabled with all others
+	  return true;
+	}
+}
 

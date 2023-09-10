@@ -5,6 +5,7 @@
 #include "llvm/ADT/APInt.h"
 #include <map>
 #include <set>
+#include <deque>
 
 #define DEBUG_TYPE "patmos-singlepath"
 
@@ -83,7 +84,19 @@ public:
 
     }
   }
+
 };
+
+/// Returns the instruction represented by the given node, assuming the given iterator
+//
+/// Is the beginning of the instructions list.
+template<
+	typename Instruction,
+	typename InstrIter
+>
+static const Instruction* get_instr(std::shared_ptr<Node> node, InstrIter iter_begin) {
+	return &(*std::next(iter_begin,node->idx));
+}
 
 /// Constructs the dependence graph for the given block.
 /// Returns the set of root nodes that don't depend on other nodes.
@@ -93,7 +106,8 @@ template<
   typename Instruction,
   typename InstrIter,
   typename Operand,
-  typename MAY_SECOND_SLOT_EXTRA
+  typename MAY_SECOND_SLOT_EXTRA,
+  typename DEPENDENT_EQ_CLASSES
 >
 std::set<std::shared_ptr<Node>> dependence_graph(
     InstrIter instr_begin, InstrIter instr_end,
@@ -109,38 +123,18 @@ std::set<std::shared_ptr<Node>> dependence_graph(
         bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
         bool (*)(const Instruction *),
         bool (*)(const Instruction *,const Instruction *)
-      >> enable_dual_issue
+      >> enable_dual_issue,
+	DEPENDENT_EQ_CLASSES dependent_eq_classes
 ) {
   auto instr_count = std::distance(instr_begin, instr_end);
   assert(instr_count >= 1 && "Cannot create DFG for empty block");
 
   // Nodes that depend on no other nodes
   std::set<std::shared_ptr<Node>> roots;
-  // Tracks what nodes last wrote each operand
-  std::map<Operand, std::shared_ptr<Node>> last_writes;
-  // Tracks what nodes have read from an operand since it was last written to.
-  std::map<Operand, std::set<std::shared_ptr<Node>>> last_reads;
-  // Tracks which node was the last to access memory
-  Optional<std::shared_ptr<Node>> last_mem_acc = None;
   // Tracks nodes seen since the last conditional branch
   std::set<std::shared_ptr<Node>> last_non_branch;
   // Tracks the last seen conditional branch
   Optional<std::shared_ptr<Node>> last_branch = None;
-
-  // Updates last_writes and last_reads following
-  // the given node
-  auto update_read_writes = [&](std::shared_ptr<Node> node){
-    auto *instr = &(*std::next(instr_begin,node->idx));
-    for(auto r: reads(instr)) {
-      last_reads[r].insert(node);
-    }
-    for(auto r: writes(instr)) {
-      if(!is_constant(r)){
-        last_writes[r] = node;
-        last_reads.erase(r);
-      }
-    }
-  };
 
   for(unsigned i = 0; i != instr_count; i++) {
     auto *instr = &(*std::next(instr_begin, i));
@@ -160,46 +154,56 @@ std::set<std::shared_ptr<Node>> dependence_graph(
       node->preds[*last_branch] |= true;
     }
 
-    // Memory access dependency
-    // Must not change the order of memory accesses
-    if(last_mem_acc && memory_access(instr)) {
-      node->preds[*last_mem_acc] |= false;
-    }
-    if(memory_access(instr)) {
-      last_mem_acc = node;
-    }
+    std::deque<std::shared_ptr<Node>> worklist(roots.begin(), roots.end());
+	std::set<std::shared_ptr<Node>> donelist;
 
-    // True dependencies (read must follow last write)
-    for(auto read_op : reads(instr)) {
-      if(last_writes.count(read_op)) {
-    	// Calls don't actually read anything, so they have weak dependency
-    	// This doesn't work for indirect calls (which we don't have since we use single-path)
-        node->preds[last_writes[read_op]] |= instr->isCall()? false : true;
-      }
-    }
+	// Go through all preceding nodes and check for dependencies
+	while(worklist.size()>0) {
+		auto current = worklist.front();
+		worklist.pop_front();
+		donelist.insert(current);
+		auto current_instr = get_instr<Instruction>(current, instr_begin);
 
-    // Anti-dependency (write must follow last read)
-    for(auto write_op : writes(instr)) {
-      if(last_reads.count(write_op)) {
-        for(auto read_node: last_reads[write_op]) {
-          // Calls read in the called function, which runs after the call instruction
-          // executes. So can't let writes following the call be bundled with the call
-          // itself, as that would mean the writes execute before the function body.
-          node->preds[read_node] |=
-        		  std::next(instr_begin, read_node->idx)->isCall()? true : false;
-        }
-      }
-    }
+		if(dependent_eq_classes(instr, current_instr)) {
+			// Memory access dependency
+			// Must not change the order of memory accesses
+			if(memory_access(instr) && memory_access(current_instr)) {
+				node->preds[current] |= false;
+			}
 
-    // Output dependency (write must follow last write)
-    for(auto write_op : writes(instr)) {
-      if(last_writes.count(write_op)) {
-    	// Calls don't write immediately (their bodies do the writing)
-	    // meaning we just need to ensure the call doesn't happen before a preceding write
-        node->preds[last_writes[write_op]] |=
-        		std::next(instr_begin, node->idx)->isCall()? false : true;
-      }
-    }
+			// True dependencies (read must follow last write)
+			for(auto read_op : reads(instr)) {
+				if(!is_constant(read_op) && writes(current_instr).count(read_op)) {
+					node->preds[current] |= instr->isCall()? false : true;
+				}
+			}
+
+			// Anti-dependency (write must follow last read)
+			for(auto write_op : writes(instr)) {
+				if(reads(current_instr).count(write_op)) {
+					// Calls read in the called function, which runs after the call instruction
+					// executes. So can't let writes following the call be bundled with the call
+					// itself, as that would mean the writes execute before the function body.
+					node->preds[current] |=  current_instr->isCall()? true : false;
+				}
+			}
+
+			// Output dependency (write must follow last write)
+			for(auto write_op : writes(instr)) {
+				if(!is_constant(write_op) && writes(current_instr).count(write_op)) {
+					// Calls don't write immediately (their bodies do the writing)
+					// meaning we just need to ensure the call doesn't happen before a preceding write
+					node->preds[current] |=  instr->isCall()? false : true;
+				}
+			}
+		}
+
+		for(auto succ: current->succs){
+			if(!donelist.count(succ)) {
+				worklist.push_back(succ);
+			}
+		}
+	}
 
     // if branch, it depends on all previous nodes (until previous branch)
     if(conditional_branch(instr)) {
@@ -220,8 +224,6 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     if(node->preds.size() == 0) {
       roots.insert(node);
     }
-
-    update_read_writes(node);
   }
 
   return roots;
@@ -235,7 +237,8 @@ template<
   typename Instruction,
   typename InstrIter,
   typename Operand,
-  typename Bundleable
+  typename Bundleable,
+  typename Independent
 >
 Optional<std::shared_ptr<Node>> get_next_ready(
     InstrIter instr_begin, InstrIter instr_end,
@@ -246,7 +249,8 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     bool enable_second_slot,
     bool requesting_second_slot,
     bool can_be_long,
-    Bundleable bundleable
+    Bundleable bundleable,
+	Independent independent
 ) {
   assert(requesting_second_slot? !can_be_long:true
       && "Cannot request long instruction in second slot");
@@ -279,7 +283,7 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     accesses.insert(writes_set.begin(), writes_set.end());
 
     if( (requesting_second_slot? node->may_second_slot: true) &&
-        bundleable(instr) &&
+        (bundleable(instr) || independent(instr)) &&
         (can_be_long? true:!node->is_long) &&
       std::all_of(accesses.begin(), accesses.end(), [&](auto op){
         for(auto entry: executing)  {
@@ -382,12 +386,17 @@ Optional<std::shared_ptr<Node>> get_next_ready(
 /// * conditional_branch: Whether this instruction is a conditional branch our of the block.
 ///                 E.g. Patmos::BR. Call instructions don't count.
 /// * enable_dual_issue: If given, enables dual issue code and contains
-///                 1) a function that should return true if the given instruction may be
+///					1) a value that is passed as the first argument to 2)
+///                 2) a function that should return true if the given instruction may be
 ///                    scheduled in the second issue slot. Otherwise false.
-///                 2) a function that should return true if the instruction takes
+///                 3) a function that should return true if the instruction takes
 ///                    up both issue slots. Otherwise false.
-///                 3) a function that should return true the two given instructions
-///                    may be scheduled in the same bundle
+///                 4) a function that should return true the two given instructions
+///                    may be scheduled in the same bundle without restriction.
+///                    If this returns false, the instructions will only be bundled if they
+///                    have independent equivalence classes.
+/// * dependent_eq_classes: Given two instructions, returns whether they have dependent equivalence classes.
+///                         See EquivalenceClass::dependentClasses
 ///
 /// This scheduler can handle conditional branch instructions in the middle of the instruction
 /// list however does not attempt to occupy their delay slots nor add Nops.
@@ -400,7 +409,8 @@ template<
   typename Instruction,
   typename InstrIter,
   typename Operand,
-  typename MAY_SECOND_SLOT_EXTRA
+  typename MAY_SECOND_SLOT_EXTRA,
+  typename DEPENDENT_EQ_CLASSES
 >
 std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
@@ -416,7 +426,8 @@ std::map<unsigned, unsigned> list_schedule(
     bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
     bool (*)(const Instruction *),
     bool (*)(const Instruction *,const Instruction *)
-  >> enable_dual_issue
+  >> enable_dual_issue,
+  DEPENDENT_EQ_CLASSES dependent_eq_classes
 ) {
   std::map<unsigned, unsigned> result;
   if(std::distance(instr_begin, instr_end) == 0) {
@@ -424,7 +435,8 @@ std::map<unsigned, unsigned> list_schedule(
   }
 
   auto dependence_roots = dependence_graph(instr_begin, instr_end,
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,
+	  dependent_eq_classes);
   LLVM_DEBUG(Node::dump_graph(dependence_roots, dbgs()));
 
   // Instructions that have already been scheduled and finished executing
@@ -544,7 +556,9 @@ std::map<unsigned, unsigned> list_schedule(
     };
 
     auto next = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
-        enable_dual_issue.hasValue(), false, true, [](auto instr){ return true;});
+        enable_dual_issue.hasValue(), false, true, [](auto instr){ return true;},
+    	[](auto instr){ return true;}
+    );
     if(next) {
       schedule_instruction(*next, enable_dual_issue? idx*2: idx);
 
@@ -561,6 +575,9 @@ std::map<unsigned, unsigned> list_schedule(
             } else {
               return true;
             }
+          },
+          [&](auto instr){
+            return !dependent_eq_classes(&*(std::next(instr_begin, (*next)->idx)), instr);
           }
         );
         if(next2) {
@@ -598,6 +615,34 @@ std::map<unsigned, unsigned> list_schedule(
   }
 
   return result;
+}
+
+/// Version of list_schedule that assumes all instructions have dependent equivalence classes.
+template<
+  typename Instruction,
+  typename InstrIter,
+  typename Operand,
+  typename MAY_SECOND_SLOT_EXTRA
+>
+std::map<unsigned, unsigned> list_schedule(
+  InstrIter instr_begin, InstrIter instr_end,
+  std::set<Operand> (*reads)(const Instruction *),
+  std::set<Operand> (*writes)(const Instruction *),
+  bool (*poisons)(const Instruction *),
+  bool (*memory_access)(const Instruction *),
+  unsigned (*latency)(const Instruction *),
+  bool (*is_constant)(Operand),
+  bool (*conditional_branch)(const Instruction *),
+  Optional<std::tuple<
+    MAY_SECOND_SLOT_EXTRA,
+    bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
+    bool (*)(const Instruction *),
+    bool (*)(const Instruction *,const Instruction *)
+  >> enable_dual_issue
+) {
+	return list_schedule(instr_begin, instr_end, reads, writes, poisons, memory_access,
+			latency, is_constant, conditional_branch, enable_dual_issue,
+			[](const Instruction*, const Instruction*){ return true;});
 }
 
 }

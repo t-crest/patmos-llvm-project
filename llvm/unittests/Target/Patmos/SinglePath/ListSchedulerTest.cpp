@@ -96,8 +96,8 @@ namespace llvm{
 	}
 
 	/// Similar to `load()` except doesn't poison and with given latency
-	static InstrAttr mem_acc(unsigned latency){
-	  return InstrAttr(latency,false,true,false,false,false,false,false);
+	static InstrAttr mem_acc(unsigned latency, bool may_second = false){
+	  return InstrAttr(latency,false,true,false,may_second,false,false,false);
 	}
 
 	/// Like Patmos load instruction
@@ -124,10 +124,17 @@ namespace llvm{
     /// Set of operands this instruction writes.
     std::set<Operand> writes;
 
+    /// Equivalence class of this instruction.
+    Optional<unsigned> eq_class_nr;
+
     InstrAttr attr;
 
     MockInstr(std::set<Operand> reads, std::set<Operand> writes, InstrAttr attr):
-      reads(reads), writes(writes), attr(attr)
+      reads(reads), writes(writes), attr(attr), eq_class_nr(None)
+    {}
+
+    MockInstr(std::set<Operand> reads, std::set<Operand> writes, unsigned eq_class_nr, InstrAttr attr):
+      reads(reads), writes(writes), attr(attr), eq_class_nr(eq_class_nr)
     {}
 
     bool is_read(Operand r) {
@@ -187,6 +194,18 @@ namespace llvm{
 	  return !(instr1->attr.non_bundleable && instr2->attr.non_bundleable);
   }
 
+  bool dependent_eq_classes(const MockInstr* instr1, const MockInstr* instr2
+		  ,std::set<std::pair<unsigned, unsigned>> &dependencies
+  ) {
+	  if(instr1->eq_class_nr && instr2->eq_class_nr) {
+		  return *instr1->eq_class_nr == *instr2->eq_class_nr ||
+			  dependencies.count(std::make_pair(*instr1->eq_class_nr, *instr2->eq_class_nr)) ||
+			  dependencies.count(std::make_pair(*instr2->eq_class_nr, *instr1->eq_class_nr));
+	  } else {
+		  return true;
+	  }
+  }
+
   llvm::Optional<std::tuple<
       void*,
       bool (*)(void*, const MockInstr *),
@@ -199,6 +218,11 @@ namespace llvm{
       bool (*)(const MockInstr *),
       bool (*)(const MockInstr *, const MockInstr *)
     >> enable_dual_issue = std::make_tuple((void*)nullptr, may_second_slot, is_long, may_bundle);
+
+  auto no_dependencies = [](auto instr1, auto instr2){
+    std::set<std::pair<unsigned, unsigned>> class_deps;
+    return dependent_eq_classes(instr1, instr2, class_deps);
+  };
 
   class MockMBB {
   public:
@@ -331,6 +355,37 @@ TEST(ListSchedulerTest, DelayAddsNop){
   );
 }
 
+TEST(ListSchedulerTest, IndependentDelayIgnored){
+  /* Tests that a nop is added in delay slots if nothing else can be put there.
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},1,InstrAttr::simple(1)),
+    MockInstr({Operand::R1},{Operand::R2},2,InstrAttr::simple()),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+}
+
 TEST(ListSchedulerTest, FillDelay){
   /* Tests that an unrelated instruction is put in delay slots
    */
@@ -435,6 +490,83 @@ TEST(ListSchedulerTest, MaintainMemAccessOrder){
         pair(0, 0),
         pair(4, 1),
         pair(6, 2),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder){
+  /* Tests instructions accessing memory may be reordered if they are independent
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},InstrAttr::mem_acc(1)),
+    MockInstr({Operand::R1},{Operand::R2},1,InstrAttr::mem_acc(0)),
+    MockInstr({Operand::R3},{Operand::R3},2,InstrAttr::mem_acc(0)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+	  no_dependencies
+  );
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(1, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(2, 2),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder2){
+  /* Tests instructions accessing memory may be reordered if they are independent
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},1,InstrAttr::mem_acc(1)),
+    MockInstr({Operand::R1},{Operand::R2},2,InstrAttr::mem_acc(0)),
+    MockInstr({Operand::R3},{Operand::R3},3,InstrAttr::mem_acc(0,true)),
+  }));
+
+  auto independent = [](auto instr1, auto instr2){
+	    std::set<std::pair<unsigned, unsigned>> class_deps = {pair(1,2)};
+	    return dependent_eq_classes(instr1, instr2, class_deps);
+  };
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+	  independent
+  );
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(1, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,independent);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(1, 2),
       })
   );
 }
@@ -656,6 +788,40 @@ TEST(ListSchedulerTest, WritesToSameArentReordered){
   );
 }
 
+TEST(ListSchedulerTest, IndependentWritesToSameReordered){
+  /* Tests that instructions that write to the same operand but are equivalence independent are reordered
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},1,InstrAttr::load()),
+    MockInstr({Operand::R1},{Operand::R2},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R2},2,InstrAttr::simple())
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(1, 2),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(4, 1),
+        pair(1, 2),
+      })
+  );
+}
+
 TEST(ListSchedulerTest, NoLongInSecondIssue){
   /* Tests that a long instruction cannot be in the second issue slot and that
    * another instruction can't be scheduled in its second issue slot
@@ -751,7 +917,7 @@ TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
     MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple()),
     MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple()),
     MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple()),
-    // We give the last read a latency of 1 so that it is move above the other reads
+    // We give the last read a latency of 1 so that it is moved above the other reads.
     // If the schedule only tracks 1 read (the last), it would then move the write
     // above the other reads (which it shouldn't).
     MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple(1)),
@@ -785,6 +951,45 @@ TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
         pair(3, 2),
         pair(0, 3),
         pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, WriteBeforeIndepedentReads){
+  /* Tests that when a write is preceded by multiple reads, the write can be
+   * moved above any of the independent reads
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    // We give the write high latency so it is prioritized before the independent reads
+    MockInstr({Operand::R4},{Operand::R3},2,InstrAttr::simple(4)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(1, 3),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(1, 3),
       })
   );
 }
@@ -1066,8 +1271,9 @@ TEST(ListSchedulerTest, CallPoison){
   );
 }
 
-TEST(ListSchedulerTest, non_bundleable){
-  /* Tests that two instruction marked as not mutually bundleable, aren't bundle together
+TEST(ListSchedulerTest, DependentNonBundleable){
+  /* Tests that two instruction marked as mutually non-bundleable, aren't bundle together
+   * if they are dependent
    */
   block(mockMBB, arr({
     MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple()),
@@ -1086,6 +1292,60 @@ TEST(ListSchedulerTest, non_bundleable){
         pair(2, 1),
         pair(4, 2),
         pair(6, 3),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentNonBundleable){
+  /* Tests that two instruction marked as mutually non-bundleable, may be bundled if independent
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R1},{Operand::R2},1,InstrAttr::simple_non_bundleable()),
+    MockInstr({Operand::R1},{Operand::R3},2,InstrAttr::simple_non_bundleable()),
+    MockInstr({Operand::R2,Operand::R3},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(4, 3),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentClassesIgnoreInputsOutputs){
+  /* Tests that two instruction marked as not mutually bundleable, aren't bundle together
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple(1)),
+    MockInstr({Operand::R1},{Operand::R2},1,InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R3},2,InstrAttr::simple()),
+    MockInstr({Operand::R2,Operand::R3},{Operand::R4},InstrAttr::simple()),
+  }));
+
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+	  [](auto instr1, auto instr2){
+	  	  std::set<std::pair<unsigned, unsigned>> class_deps;
+	  	  return dependent_eq_classes(instr1, instr2, class_deps);
+  	  }
+  );
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(2, 1),
+        pair(1, 2),
+        pair(3, 3),
       })
   );
 }
