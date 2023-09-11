@@ -235,8 +235,10 @@ compile_and_test_matrix("", "", [
         ("-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root, ""), 
         # Single-path code without dual-issue
         ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-singlepath-scheduler-equivalence-class=false", "-D ideal"), 
         # Single-path with dual-issue
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"),
+        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false -mpatmos-enable-singlepath-scheduler-equivalence-class=false", "-D ideal"),
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false -mpatmos-disable-permissive-dual-issue=false", "-D ideal --permissive-dual-issue"),
         # Constant execution time using opposite predicate compensation       
         ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=opposite", "-D lru2"),         

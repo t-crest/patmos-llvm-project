@@ -34,6 +34,12 @@ static cl::opt<std::string> SPSchedulerConfig(
     cl::desc("Configures the single-path scheduler (function-name,block-number,ignore-first-instructions-count,instructions-to-schedule-count). If block is -1, disables scheduling for all blocks in the function."),
     cl::Hidden);
 
+static cl::opt<bool> SPSchedulerEqClass(
+    "mpatmos-enable-singlepath-scheduler-equivalence-class",
+    cl::init(true),
+    cl::desc("Enables the Single-path scheduler to disregard dependencies between instructions of independent equivalence classes."),
+    cl::Hidden);
+
 STATISTIC(SPInstructions,     "Number of instruction bundles in single-path code (both single and double)");
 STATISTIC(SPLongInstructions,     "Number of instruction in single-path code that are long");
 STATISTIC(SPFirstSlotInstructions,     "Number of instruction in single-path code that can only use the first issue slot (counted before scheduling)");
@@ -483,7 +489,7 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
 
   auto class_predecessors = EquivalenceClasses::importClassPredecessorsFromModule(*mbb->getParent());
   auto is_dependent = [&](const MachineInstr* instr1,const MachineInstr* instr2){
-    return EquivalenceClasses::dependentClasses(instr1, instr1, class_predecessors);
+    return SPSchedulerEqClass? EquivalenceClasses::dependentClasses(instr1, instr1, class_predecessors) : true;
   };
 
   auto schedule = list_schedule(
