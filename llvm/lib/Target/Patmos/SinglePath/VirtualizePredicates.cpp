@@ -48,11 +48,21 @@ bool VirtualizePredicates::runOnMachineFunction(MachineFunction &MF) {
 			std::for_each(mbb.begin(), mbb.end(), [&](MachineInstr &instr){
 				for(auto &op: instr.operands()) {
 					if(op.isReg() && phys_to_virt.count(op.getReg())) {
-						if(instr.isCall() && !PatmosSinglePathInfo::isRootLike(*getCallTarget(&instr))
-								&& op.getReg() == Patmos::P7) {
-							// Don't rename the P7 register for calls (where it is used for enabling/disabling
-							// the whole function).
-							assert(op.isImplicit() && "Call instruction P7 argument isn't implicit");
+						if(instr.isCall()) {
+							if(op.getReg() == Patmos::P7) {
+								// Don't rename the P7 register for calls (where it is used for enabling/disabling
+								// the whole function).
+								assert(!PatmosSinglePathInfo::isRootLike(*getCallTarget(&instr))
+										&& "Call using P7 in pseudo-root");
+								assert(op.isImplicit() && "Call instruction P7 argument isn't implicit");
+							} else if(op.getReg() == Patmos::P1 || op.getReg() == Patmos::P2) {
+								// Don't rename P1 or P2 for Decrementing Counter Compensation call
+								assert(instr.getFlag(MachineInstr::FrameSetup)
+										&& "Call using P1 or P2 not for compensation function");
+								assert(op.isImplicit() && "Call instruction P1 pr P2 argument isn't implicit");
+							} else {
+								assert(false && "Unknown call using predicates");
+							}
 						} else {
 							op.setReg(phys_to_virt[op.getReg()]);
 						}

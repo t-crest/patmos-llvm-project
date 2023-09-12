@@ -509,8 +509,10 @@ unsigned MemoryAccessNormalization::compensateEnd(
 	  .addExternalSymbol(PatmosSinglePathInfo::getCompensationFunction())
 	  .addReg(Patmos::R23, RegState::ImplicitKill)
 	  .addReg(Patmos::R24, RegState::ImplicitKill)
+	  .addReg(Patmos::P1,  RegState::ImplicitDefine)
+	  .addReg(Patmos::P2,  RegState::ImplicitDefine)
 	  .addReg(Patmos::SRB, RegState::ImplicitDefine)
-	  .addReg(Patmos::SRO,  RegState::ImplicitDefine)
+	  .addReg(Patmos::SRO, RegState::ImplicitDefine)
 	  .setMIFlags(MachineInstr::FrameSetup); // Ensure never predicated
 	BB->insert(BB->getFirstTerminator(), call_instr);
 
