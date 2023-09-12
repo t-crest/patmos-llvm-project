@@ -129,6 +129,8 @@ std::set<std::shared_ptr<Node>> dependence_graph(
   auto instr_count = std::distance(instr_begin, instr_end);
   assert(instr_count >= 1 && "Cannot create DFG for empty block");
 
+  // Trach created nodes (in instruction order)
+  std::vector<std::shared_ptr<Node>> all_nodes;
   // Nodes that depend on no other nodes
   std::set<std::shared_ptr<Node>> roots;
   // Tracks nodes seen since the last conditional branch
@@ -154,55 +156,74 @@ std::set<std::shared_ptr<Node>> dependence_graph(
       node->preds[*last_branch] |= true;
     }
 
-    std::deque<std::shared_ptr<Node>> worklist(roots.begin(), roots.end());
-	std::set<std::shared_ptr<Node>> donelist;
+	Optional<std::shared_ptr<Node>> last_dep_mem_access;
+	std::map<Operand, std::shared_ptr<Node>> last_dep_read_after_write;
+	std::map<Operand, std::set<std::shared_ptr<Node>>> last_dep_reads;
+	std::map<Operand, std::shared_ptr<Node>> last_dep_write_after_write;
 
 	// Go through all preceding nodes and check for dependencies
-	while(worklist.size()>0) {
-		auto current = worklist.front();
-		worklist.pop_front();
-		donelist.insert(current);
+	for(auto current: all_nodes) {
 		auto current_instr = get_instr<Instruction>(current, instr_begin);
 
 		if(dependent_eq_classes(instr, current_instr)) {
 			// Memory access dependency
 			// Must not change the order of memory accesses
 			if(memory_access(instr) && memory_access(current_instr)) {
-				node->preds[current] |= false;
+				last_dep_mem_access = current;
 			}
 
 			// True dependencies (read must follow last write)
 			for(auto read_op : reads(instr)) {
-				if(!is_constant(read_op) && writes(current_instr).count(read_op)) {
-					node->preds[current] |= instr->isCall()? false : true;
+				if(!is_constant(read_op) && writes(current_instr).count(read_op) ) {
+					last_dep_read_after_write[read_op] = current;
 				}
 			}
 
-			// Anti-dependency (write must follow last read)
+			// Anti-dependency (write must follow preceding reads)
 			for(auto write_op : writes(instr)) {
+				if(is_constant(write_op)) continue;
 				if(reads(current_instr).count(write_op)) {
-					// Calls read in the called function, which runs after the call instruction
-					// executes. So can't let writes following the call be bundled with the call
-					// itself, as that would mean the writes execute before the function body.
-					node->preds[current] |=  current_instr->isCall()? true : false;
+					last_dep_reads[write_op].insert(current);
+				}
+				// If we see a write to the operand, we clear the dependency list
+				// since the operand is overwritten before getting to this instructions
+				// from the instruction previously in the list.
+				if(writes(current_instr).count(write_op)){
+					last_dep_reads[write_op] = {};
 				}
 			}
 
 			// Output dependency (write must follow last write)
 			for(auto write_op : writes(instr)) {
 				if(!is_constant(write_op) && writes(current_instr).count(write_op)) {
-					// Calls don't write immediately (their bodies do the writing)
-					// meaning we just need to ensure the call doesn't happen before a preceding write
-					node->preds[current] |=  instr->isCall()? false : true;
+					last_dep_write_after_write[write_op] = current;
 				}
 			}
 		}
+	}
 
-		for(auto succ: current->succs){
-			if(!donelist.count(succ)) {
-				worklist.push_back(succ);
-			}
+	// Assign dependencies
+	if(last_dep_mem_access) {
+		node->preds[*last_dep_mem_access] |= false;
+	}
+
+	for(auto dep_write: last_dep_read_after_write) {
+		node->preds[dep_write.second] |= instr->isCall()? false : true;
+	}
+
+	for(auto dep_read: last_dep_reads) {
+		for(auto dep_node: dep_read.second) {
+			// Calls read in the called function, which runs after the call instruction
+			// executes. So can't let writes following the call be bundled with the call
+			// itself, as that would mean the writes execute before the function body.
+			node->preds[dep_node] |= get_instr<Instruction>(dep_node, instr_begin)->isCall()? true : false;
 		}
+	}
+
+	for(auto dep_write: last_dep_write_after_write) {
+		// Calls don't write immediately (their bodies do the writing)
+		// meaning we just need to ensure the call doesn't happen before a preceding write
+		node->preds[dep_write.second] |= instr->isCall()? false : true;
 	}
 
     // if branch, it depends on all previous nodes (until previous branch)
@@ -224,10 +245,70 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     if(node->preds.size() == 0) {
       roots.insert(node);
     }
+    all_nodes.push_back(node);
   }
 
   return roots;
 }
+
+bool ineligible_for_second(std::shared_ptr<Node> node1, std::shared_ptr<Node> node2, void* enable_second_slot){
+  if(*((bool*)enable_second_slot)) {
+	  return !node1->may_second_slot && node2->may_second_slot;
+  } else {
+	  return false;
+  }
+};
+bool longer_instr(std::shared_ptr<Node> node1, std::shared_ptr<Node> node2, void* requesting_second_slot){
+  if(*((bool*)requesting_second_slot)) {
+	  return node1->is_long && !node2->is_long;
+  } else {
+	  return false;
+  }
+};
+bool longer_delay(std::shared_ptr<Node> node1, std::shared_ptr<Node> node2, void*){
+  return node1->latency > node2->latency;
+};
+bool more_successors(std::shared_ptr<Node> node1, std::shared_ptr<Node> node2, void*){
+  return node1->succs.size() > node2->succs.size();
+};
+bool earlier(std::shared_ptr<Node> node1, std::shared_ptr<Node> node2, void*){
+  return node1->idx < node2->idx;
+};
+
+/// Returns whether 'next' should be prioritized over 'previous' given
+/// a list of priority functions (predicates) and where to start in the list.
+///
+/// In order, checks each predicate and returns true if 'next' has priority and false if
+/// 'previous' has.
+/// If neither has priority, checks the next predicate.
+///
+/// Each predicate takes two instructions and a pointer to
+/// some extra value, if needed (otherwise nullptr). It should return whether the first
+/// instruction has higher priority than the second.
+/// Should not be able to return true for both combinations.
+bool prioritize(
+	std::shared_ptr<Node> next, std::shared_ptr<Node> previous,
+	int prio_idx,
+	std::vector<std::pair<bool(*)(std::shared_ptr<Node>, std::shared_ptr<Node>, void*), void*>> &priorities
+){
+  if(prio_idx < priorities.size()) {
+    auto predicate = priorities[prio_idx].first;
+    auto extra_arg = priorities[prio_idx].second;
+    if(predicate(next, previous, extra_arg)) {
+      assert(!predicate(previous, next, extra_arg) && "Both have priority");
+      // 'Next' has priority because of the predicate
+      return true;
+    } else if(predicate(previous, next, extra_arg)) {
+      // 'previous' has priority because of the predicate
+      return false;
+    } else {
+      // Neither has priority, so check the next predicate
+      return prioritize(next, previous, prio_idx+1, priorities);
+    }
+  } else {
+    return false;
+  }
+};
 
 /// Returns the next node in the ready set that can be scheduled.
 ///
@@ -314,23 +395,20 @@ Optional<std::shared_ptr<Node>> get_next_ready(
     dbgs() << "\n";
   );
 
+  bool use_longer_instr_prio = enable_second_slot && !requesting_second_slot;
+  // Set priority list
+  std::vector<std::pair<bool(*)(std::shared_ptr<Node>, std::shared_ptr<Node>, void*), void*>> priorities;
+  priorities.push_back(std::make_pair(ineligible_for_second, &enable_second_slot));
+  priorities.push_back(std::make_pair(longer_delay, nullptr));
+  priorities.push_back(std::make_pair(more_successors, nullptr));
+  priorities.push_back(std::make_pair(longer_instr, &use_longer_instr_prio));
+  priorities.push_back(std::make_pair(earlier, nullptr));
+
   Optional<std::shared_ptr<Node>> result = None;
   if(unpoisoned.size() != 0) {
-    // Choice priority:
-    // * Ineligibility for second slot (ineligible instructions first, only if using dual-issue)
-    // * Instruction length (long instruction before short, if first slot and only if using dual-issue)
-    // * Delay length (long delay before short)
-    // * Index (lowest index first)
     auto choice = unpoisoned.begin();
     for(auto unpoisoned_iter = std::next(unpoisoned.begin()); unpoisoned_iter != unpoisoned.end(); unpoisoned_iter++) {
-      if(
-        (enable_second_slot?!(*unpoisoned_iter)->may_second_slot && (*choice)->may_second_slot:false) ||
-        (*unpoisoned_iter)->latency > (*choice)->latency ||
-        ((*unpoisoned_iter)->latency == (*choice)->latency && (
-           (!requesting_second_slot && (*unpoisoned_iter)->is_long) ||
-           (*unpoisoned_iter)->idx < (*choice)->idx
-        ))
-      ) {
+	  if(prioritize(*unpoisoned_iter, *choice, 0, priorities)) {
         choice = unpoisoned_iter;
       }
     }

@@ -152,6 +152,10 @@ namespace llvm{
     bool isCall() const {
     	return attr.is_call;
     }
+
+    void dump() const{
+    	std::cerr << "Instr\n";
+    }
   };
 
   bool is_constant(Operand p) {
@@ -1346,6 +1350,147 @@ TEST(ListSchedulerTest, IndependentClassesIgnoreInputsOutputs){
         pair(2, 1),
         pair(1, 2),
         pair(3, 3),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PreferMoreSuccessors){
+  /* Tests prioritizes instructions with more successors in the dependency graph
+   */
+  block(mockMBB, arr({
+	// Has only 1 successor
+	MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple()),
+	// Has 2 successors, should go first
+	MockInstr({Operand::R0},{Operand::R2},InstrAttr::simple()),
+	// The rest have 0 successors, should maintain order
+    MockInstr({Operand::R1},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+        pair(2, 2),
+        pair(3, 3),
+        pair(4, 4),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+        pair(2, 2),
+        pair(3, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PreferFirstOnlyOverMoreSuccessors){
+  /* Tests prioritizes instructions that can only be in the first slot over More successors instructions
+   */
+  block(mockMBB, arr({
+	// Has 2 successors
+	MockInstr({Operand::R0},{Operand::R2},InstrAttr::simple()),
+	// Has only 1 successor but is long
+	MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple_first_only()),
+    MockInstr({Operand::R1},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+        pair(2, 2),
+        pair(3, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PreferMoreSuccessorsOverLongInstr){
+  /* Tests prioritizes more successors over long instructions
+   */
+  block(mockMBB, arr({
+	// Has only 1 successor but is long
+	MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple_long()),
+	// Has 2 successors
+	MockInstr({Operand::R0},{Operand::R2},InstrAttr::simple_first_only()),
+    MockInstr({Operand::R1},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(2, 0),
+        pair(0, 1),
+        pair(4, 2),
+        pair(5, 3),
+        pair(6, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PreferLongDelayOverMoreSuccessors){
+  /* Tests prioritizes instruction with longer delay over more successors
+   */
+  block(mockMBB, arr({
+	// Has 2 successors
+	MockInstr({Operand::R0},{Operand::R2},InstrAttr::simple()),
+	// Has only 1 successor, but long delay
+	MockInstr({Operand::R0},{Operand::R1},InstrAttr::simple(2)),
+    MockInstr({Operand::R1},{Operand::R1},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
+    MockInstr({Operand::R2},{Operand::R4},InstrAttr::simple()),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+        pair(3, 2),
+        pair(2, 3),
+        pair(4, 4),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+        pair(6, 2),
+        pair(2, 3),
+        pair(3, 4),
       })
   );
 }
