@@ -241,6 +241,10 @@ bool llvm::isControlFlowCFInst(unsigned opcode) {
   }
 }
 
+bool llvm::isMultiplyInst(unsigned opcode) {
+  return opcode == Patmos::MUL || opcode == Patmos::MULU;
+}
+
 
 bool llvm::isMainMemInst(unsigned opcode) {
   return isMainMemLoadInst(opcode) || isMainMemStoreInst(opcode) || isControlFlowCFInst(opcode) || isStackMgmtInst(opcode);

@@ -67,6 +67,9 @@ bool isControlFlowNonCFInst(unsigned opcode);
 /// Returns true if the given opcode represents a branch instruction with cache-fill.
 bool isControlFlowCFInst(unsigned opcode);
 
+/// Returns true if the given opcode represents a multiply.
+bool isMultiplyInst(unsigned opcode);
+
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_PATMOS_TARGETINFO_PATMOSTARGETINFO_H

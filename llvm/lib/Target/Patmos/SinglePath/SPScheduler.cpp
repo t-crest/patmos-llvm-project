@@ -245,13 +245,14 @@ bool is_long(const MachineInstr *instr) {
 }
 
 bool may_second_slot(const PatmosInstrInfo *TII, const MachineInstr *instr) {
+  auto opcode = instr->getOpcode();
   if(instr->isInlineAsm() || instr->isPseudo()) {
     // We don't want them to affect the scheduling,
     // so act as if they can't be in second slot
     return false;
   }
   if(PatmosSubtarget::usePermissiveDualIssue() && (
-    isLoadInst(instr->getOpcode()) || isStoreInst(instr->getOpcode()) || isControlFlowInst(instr->getOpcode())
+    isLoadInst(opcode) || isStoreInst(opcode) || isControlFlowInst(opcode) || isMultiplyInst(opcode)
   )){
     return true;
   } else {
@@ -282,7 +283,8 @@ bool may_bundle(const MachineInstr *instr1, const MachineInstr *instr2) {
 	is_combination(isLoadInst, isStoreInst) ||
 	is_combination(isStackInst, isStackInst) ||
 	is_combination(sp_scheduler_is_main_mem_instr, sp_scheduler_is_main_mem_instr) ||
-	is_combination(isControlFlowInst, isControlFlowInst)
+	is_combination(isControlFlowInst, isControlFlowInst) ||
+	is_combination(isMultiplyInst, isMultiplyInst)
   )) {
     return false;
   }

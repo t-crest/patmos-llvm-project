@@ -12,8 +12,8 @@ FunctionPass *llvm::createSinglePathInstructionCounter(const PatmosTargetMachine
   return new InstructionCounter(tm);
 }
 
-STATISTIC(SPInstructions, "Number of single instructions in single-path code");
-STATISTIC(SPInstructionSize, "Instruction bytes in single-path code");
+STATISTIC(SPInstructions, "Number of single instructions in single-path code (in final binary)");
+STATISTIC(SPInstructionSize, "Instruction bytes in single-path code (in final binary)");
 
 bool InstructionCounter::runOnMachineFunction(MachineFunction &MF) {
 	if (PatmosSinglePathInfo::isEnabled(MF)) {
