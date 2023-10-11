@@ -146,6 +146,45 @@ __patmos_main_mem_access_compensation8()
 }
 
 void
+__patmos_main_mem_access_compensation1_di() __attribute__((naked,noinline));
+void
+__patmos_main_mem_access_compensation1_di()
+{ 
+    __asm__ volatile (
+		"__patmos_main_mem_access_compensation1_di_loop:;"
+		"{ cmpneq $p1 = $r23, 1; cmpneq $p2 = $r24, 0 }"
+		"br ($p1) __patmos_main_mem_access_compensation1_di_loop; "
+		"lwm ($p2) $r0 = [$r0];"
+		"{ sub ($p2) $r24 = $r24, 1; sub ($p1) $r23 = $r23, 1 }"
+		"retnd;"
+		:
+		: 
+		: "r23", "r24"
+	);
+}
+
+void
+__patmos_main_mem_access_compensation2_di() __attribute__((naked,noinline));
+void
+__patmos_main_mem_access_compensation2_di()
+{
+    __asm__ volatile (
+		"__patmos_main_mem_access_compensation2_di_loop:;"
+		"{ cmpult $p2 = $r23, 2; cmpult $p1 = $r24, 2 }" 	// We want r3 >= 2, so negate p2 use
+															// We want r4 >= 2, so negate p1 use
+		"br (!$p2) __patmos_main_mem_access_compensation2_di_loop; "
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p1) $r24 = $r24, 2 }"
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p2) $r23 = $r23, 2 }"
+		"cmpult $p1 = $r0, $r24;"
+		"lwm ($p1) $r0 = [$r0];"
+		"retnd;"
+		:
+		: 
+		: "r23", "r24"
+	);
+}
+
+void
 __patmos_main_mem_access_compensation4_di() __attribute__((naked,noinline));
 void
 __patmos_main_mem_access_compensation4_di()
@@ -159,10 +198,44 @@ __patmos_main_mem_access_compensation4_di()
 		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p1) $r24 = $r24, 4 };"
 		"{ lwm (!$p1) $r0 = [$r0]; sub $r23 = $r23, 4 };"
 		
-		"cmpult $p1 = $r0, $r24;"
-		"{ lwm ($p1) $r0 = [$r0]; sub ($p1) $r24 =  $r24, 1 };"
-		"cmpult $p1 = $r0, $r24;"
-		"{ lwm ($p1) $r0 = [$r0]; sub ($p1) $r24 =  $r24, 1 };"
+		"{ cmpult $p1 = $r24, 3; cmpult $p2 = $r24, 2 }"
+		"{ lwm (!$p1) $r0 = [$r0]; cmpult $p1 = $r24, 1 };"
+		"lwm (!$p2) $r0 = [$r0];"
+		"lwm (!$p1) $r0 = [$r0];"
+		"retnd;"
+		:
+		: 
+		: "r23", "r24"
+	);
+}
+
+void
+__patmos_main_mem_access_compensation8_di() __attribute__((naked,noinline));
+void
+__patmos_main_mem_access_compensation8_di()
+{
+    __asm__ volatile (
+		"{ brnd __patmos_main_mem_access_compensation8_di_cond; pset $p1}"
+		"__patmos_main_mem_access_compensation8_di_loop:;"
+		"lwm (!$p1) $r0 = [$r0];"
+		"lwm (!$p1) $r0 = [$r0];"
+		"lwm (!$p1) $r0 = [$r0];"
+		"lwm (!$p1) $r0 = [$r0];"
+		"__patmos_main_mem_access_compensation8_di_cond:;"
+		"{ lwm (!$p1) $r0 = [$r0]; cmpult $p2 = $r23, 8 }"
+		"{ lwm (!$p1) $r0 = [$r0]; cmpult $p1 = $r24, 8 }"
+		"br (!$p2) __patmos_main_mem_access_compensation8_di_loop; "
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p2) $r23 = $r23, 8 }"
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p1) $r24 = $r24, 8 }"
+		// We might have decremented r3 to less than r4 (which is <8). 
+		// Therefore reset to max possible for r4
+		"li  $r23 = 7;" 
+		"__patmos_main_mem_access_compensation8_di2_loop:;"
+		"{ cmpult $p2 = $r23, 2; cmpult $p1 = $r24, 2 }"	// We want r3 >= 2, so negate p2 use
+															// We want r4 >= 2, so negate p1 use
+		"br (!$p2) __patmos_main_mem_access_compensation8_di2_loop; "
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p1) $r24 = $r24, 2 }"
+		"{ lwm (!$p1) $r0 = [$r0]; sub (!$p2) $r23 = $r23, 2 }"
 		"cmpult $p1 = $r0, $r24;"
 		"lwm ($p1) $r0 = [$r0];"
 		"retnd;"
