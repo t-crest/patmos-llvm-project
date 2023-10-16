@@ -209,55 +209,78 @@ def compile_and_test(llc_args, pasim_args):
                 throw_error("The execution of '", compiled, "' for execution arguments '", exec_arg, "' and '", i, "' weren't equivalent")
 
 # Compile and test all compinations in the given matrix
-# Each list in the matrix is a group of llc and pasim flags that each
-# should be compiled/tested with every element in the other groups.
+# The matrix is a list of either string pairs or nested matrices.
+# A string pair defines argument to pass to llc and pasim respectively.
+# If only 1 string is given, pasim's string is implicitly empty.
 #
-# The matrix arguments are added to the given arguments
+# For each pair, the string are appended to the given llc and pasim argument strings
+# and then if there are any matrices the resulting strings are used in a recursive call.
+#
+# string pairs in a matrix define independent test configs that are then each merged with any nested
+# matrices.
 def compile_and_test_matrix(llc_args, pasim_args, matrix):
-    if len(matrix) == 0:
-        compile_and_test(llc_args, pasim_args)
-    else:
-        for arg in matrix[0]:
-            if type(arg) is tuple:
-                arg_llc = arg[0]
-                arg_pasim = arg[1]
-            else:
-                arg_llc = arg
-                arg_pasim = ""
-            compile_and_test_matrix(llc_args + " " + arg_llc, pasim_args + " " + arg_pasim, matrix[1:])
+    # Collect strings and lists
+    options=[]
+    inner=[]
+    for arg in matrix:
+        if type(arg) is tuple:
+            options.append(arg)
+        elif type(arg) is str:
+            options.append((arg, ""))
+        elif type(arg) is list:
+            inner.append(arg)
+        else:
+            throw_error("Invalid matrix 1")
+    
+    for (llc_next, pasim_next) in options:
+        llc_merged = llc_args + " " + llc_next
+        pasim_merged = pasim_args + " " + pasim_next
+        if len(inner) == 0:
+            compile_and_test(llc_merged, pasim_merged)
+        else:
+            for inn in inner:
+                compile_and_test_matrix(llc_merged, pasim_merged, inn)
 
 compile_and_test_matrix("", "", [
-    [
-        # Traditional code
-        ("", ""), 
-        # Traditional code with PML output, just to make sure we can
-        # output it without errors. Testing the output is not done.
-        ("-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root, ""), 
-        # Single-path code without dual-issue
-        ("-mpatmos-singlepath=" + sp_root, "-D ideal"), 
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-singlepath-scheduler-equivalence-class=false", "-D ideal"), 
-        # Single-path with dual-issue
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false", "-D ideal"),
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false -mpatmos-enable-singlepath-scheduler-equivalence-class=false", "-D ideal"),
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-disable-vliw=false -mpatmos-disable-permissive-dual-issue=false", "-D ideal --permissive-dual-issue"),
-        # Constant execution time using opposite predicate compensation       
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=opposite", "-D lru2"),         
-        # Constant execution time using decrementing counter compensation
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=counter", "-D lru2"),
-        # Constant execution time using decrementing counter compensation with pointer
-        # to specific function
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=counter -mpatmos-cet-compensation-function=__patmos_comp_fun_for_testing", "-D lru2"),
-        # Constant execution time using heuristic choice between other algorithms
-        ("-mpatmos-singlepath=" + sp_root + " -mpatmos-enable-cet=hybrid", "-D lru2"),
-    ],
     # Optimization levels
+    "", "-O1", 
+    "-O2", "-O2 -mpatmos-disable-vliw=false",
+    # We try low subfuction size to ensure the splitter works too 
+    # (without needing to make tests with big functions)
+    "-O2 --mpatmos-max-subfunction-size=64", 
     [
-        "-O2", "", "-O1", "-O2 -mpatmos-disable-pseudo-roots", 
-        "-O2 -mpatmos-disable-countless-loops", 
-        # We try low subfuction size to ensure the splitter works too 
-        # (without needing to make tests with big functions)
-        "-O2 --mpatmos-max-subfunction-size=64",
-    ]
+        # We add this indirection so that commenting out the following line will remove all traditional tests
+        "",
+        [
+            #Traditional
+            "",
+            # Traditional code with PML output, just to make sure we can
+            # output it without errors. Testing the output is not done.
+            "-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root
+        ]
+    ],
+    [
+        # Single-Path
+        "-mpatmos-singlepath=" + sp_root,
+        [
+            "-mpatmos-disable-singlepath-scheduler-equivalence-class",
+            "", 
+            ("-mpatmos-enable-permissive-dual-issue", "--permissive-dual-issue"),
+            "-mpatmos-disable-pseudo-roots", "-mpatmos-disable-countless-loops",
+            [
+                ("", "-D ideal") # Ignore variability from data cache
+            ],
+            # Constant execution time
+            [
+                ("", "-D lru2"), # Non-ideal cache will give execution-time variability of code is not constant
+                [
+                    "-mpatmos-enable-cet=opposite",
+                    "-mpatmos-enable-cet=counter",
+                    "-mpatmos-enable-cet=hybrid",
+                ]
+            ],
+        ]
+    ],
 ])
 
 # Success

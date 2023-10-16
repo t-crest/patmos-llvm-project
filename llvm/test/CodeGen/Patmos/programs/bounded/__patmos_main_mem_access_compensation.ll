@@ -10,6 +10,7 @@
 ; __patmos_main_mem_access_compensation has a custom calling convention:
 ; it can only clobber r23(max),r24(remaining), p1, and p2.
 @__patmos_main_mem_access_compensation = alias void (), void ()* @__patmos_comp_fun_for_testing
+@__patmos_main_mem_access_compensation_di = alias void (), void ()* @__patmos_comp_fun_for_testing
 
 define void @__patmos_comp_fun_for_testing() #0 {  
 entry:

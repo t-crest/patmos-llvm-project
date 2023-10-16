@@ -19,9 +19,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "OppositePredicateCompensation.h"
+#include "EquivalenceClasses.h"
 #include "PatmosMachineFunctionInfo.h"
-#include "llvm/ADT/Statistic.h"
 #include "TargetInfo/PatmosTargetInfo.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
 
 #include <map>
@@ -78,24 +79,32 @@ void OppositePredicateCompensation::compensate(MachineFunction &MF)
 	    auto new_instr_builder = BuildMI(BB, *instr_iter, DebugLoc(), TII->get(Patmos::LWM), Patmos::R0);
         Register pred;
         unsigned neg_flag;
+        Optional<unsigned> add_eq_class;
         if(PatmosSinglePathInfo::useNewSinglePathTransform()) {
-        	// Simply negate the assigned predicate
-        	new_instr_builder.addReg(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()).getReg())
-        			.addImm(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()+1).getImm()==0? 1: 0);
+	      // Simply negate the assigned predicate
+	      new_instr_builder.addReg(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()).getReg())
+	        .addImm(instr_iter->getOperand(instr_iter->findFirstPredOperandIdx()+1).getImm()==0? 1: 0);
+
+	      // Assign the same equivalence class
+	      add_eq_class = EquivalenceClasses::getEqClassNr(&*instr_iter);
         } else {
-            auto *block = getAnalysis<PatmosSinglePathInfo>().getRootScope()->findBlockOf(&BB);
-            assert(block && "MBB is not associated with a PredicatedBlock");
-            auto old_pred = block->getInstructionPredicates()[&*instr_iter];
+	      auto *block = getAnalysis<PatmosSinglePathInfo>().getRootScope()->findBlockOf(&BB);
+	      assert(block && "MBB is not associated with a PredicatedBlock");
+	      auto old_pred = block->getInstructionPredicates()[&*instr_iter];
 
-        	// Predicates have yet to be to the instructions
-        	new_instr_builder.addReg(Patmos::NoRegister).addImm(0);
+	      // Predicates have yet to be applied to the instructions
+	      new_instr_builder.addReg(Patmos::NoRegister).addImm(0);
 
-            // Set the new instruction to use the negated predicate
-            block->setPredicateFor(new_instr_builder.getInstr(), old_pred.first, !old_pred.second);
+	      // Set the new instruction to use the negated predicate
+	      block->setPredicateFor(new_instr_builder.getInstr(), old_pred.first, !old_pred.second);
         }
 
         // We create a load using address 0 (r0), which is always a valid address.
         new_instr_builder.addReg(Patmos::R0).addImm(0);
+
+        if(add_eq_class) {
+          EquivalenceClasses::addClassMetaData(&*new_instr_builder,*add_eq_class);
+        }
 
         CompLoads++;
       }

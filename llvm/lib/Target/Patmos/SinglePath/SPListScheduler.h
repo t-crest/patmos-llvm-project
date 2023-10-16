@@ -113,6 +113,7 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     InstrIter instr_begin, InstrIter instr_end,
     std::set<Operand> (*reads)(const Instruction *),
     std::set<Operand> (*writes)(const Instruction *),
+    Optional<Operand> (*uses_predicate)(const Instruction *),
     bool (*poisons)(const Instruction *),
     bool (*memory_access)(const Instruction *),
     unsigned (*latency)(const Instruction *),
@@ -156,59 +157,99 @@ std::set<std::shared_ptr<Node>> dependence_graph(
       node->preds[*last_branch] |= true;
     }
 
-	Optional<std::shared_ptr<Node>> last_dep_mem_access;
-	std::map<Operand, std::shared_ptr<Node>> last_dep_read_after_write;
+	std::set<std::shared_ptr<Node>> last_dep_mem_accesses;
+	std::map<Operand, std::set<std::shared_ptr<Node>>> last_dep_reads_after_write;
 	std::map<Operand, std::set<std::shared_ptr<Node>>> last_dep_reads;
-	std::map<Operand, std::shared_ptr<Node>> last_dep_write_after_write;
+	std::map<Operand, std::set<std::shared_ptr<Node>>> last_dep_writes_after_write;
+
+	/// Removes any node in the set that depends on the given node
+	auto remove_dependents = [&](
+			std::set<std::shared_ptr<Node>> &in,
+			std::shared_ptr<Node> dep_on
+	){
+		auto dep_on_instr = get_instr<Instruction>(dep_on, instr_begin);
+		std::set<std::shared_ptr<Node>> removes;
+
+		for(auto other: in) {
+			auto other_instr = get_instr<Instruction>(other, instr_begin);
+			if(dependent_eq_classes(dep_on_instr, other_instr)) {
+				removes.insert(other);
+			}
+		}
+
+		for(auto rem: removes) {
+			in.erase(rem);
+		}
+	};
+
+	/// Replaces in the given set, any nodes that are dependent on the given node.
+	auto replace_dependents = [&](
+		std::set<std::shared_ptr<Node>> &in,
+		std::shared_ptr<Node> with
+	){
+		remove_dependents(in, with);
+		in.insert(with);
+	};
 
 	// Go through all preceding nodes and check for dependencies
 	for(auto current: all_nodes) {
 		auto current_instr = get_instr<Instruction>(current, instr_begin);
+		auto dependent = dependent_eq_classes(instr, current_instr);
 
-		if(dependent_eq_classes(instr, current_instr)) {
-			// Memory access dependency
-			// Must not change the order of memory accesses
-			if(memory_access(instr) && memory_access(current_instr)) {
-				last_dep_mem_access = current;
-			}
+		// Memory access dependency
+		// Must not change the order of memory accesses
+		if(dependent && memory_access(instr) && memory_access(current_instr)
+		) {
+			replace_dependents(last_dep_mem_accesses, current);
+		}
 
-			// True dependencies (read must follow last write)
+		// True dependencies (read must follow last write)
+		if(dependent) {
 			for(auto read_op : reads(instr)) {
 				if(!is_constant(read_op) && writes(current_instr).count(read_op) ) {
-					last_dep_read_after_write[read_op] = current;
+					replace_dependents(last_dep_reads_after_write[read_op], current);
 				}
 			}
+		}
 
-			// Anti-dependency (write must follow preceding reads)
-			for(auto write_op : writes(instr)) {
-				if(is_constant(write_op)) continue;
+		// Anti-dependency (write must follow preceding reads)
+		for(auto write_op : writes(instr)) {
+			if(is_constant(write_op)) continue;
+			if(dependent) {
 				if(reads(current_instr).count(write_op)) {
 					last_dep_reads[write_op].insert(current);
 				}
-				// If we see a write to the operand, we clear the dependency list
-				// since the operand is overwritten before getting to this instructions
-				// from the instruction previously in the list.
-				if(writes(current_instr).count(write_op)){
-					last_dep_reads[write_op] = {};
-				}
+			} else if(uses_predicate(current_instr) == write_op) {
+				last_dep_reads[write_op].insert(current);
 			}
 
-			// Output dependency (write must follow last write)
+			// If we see a write to the operand, we clear the dependency list
+			// since the operand is overwritten before getting to this instructions
+			// from the instruction previously in the list.
+			if(dependent && writes(current_instr).count(write_op)){
+				remove_dependents(last_dep_reads[write_op], current);
+			}
+		}
+
+		// Output dependency (write must follow last write)
+		if(dependent) {
 			for(auto write_op : writes(instr)) {
 				if(!is_constant(write_op) && writes(current_instr).count(write_op)) {
-					last_dep_write_after_write[write_op] = current;
+					replace_dependents(last_dep_writes_after_write[write_op], current);
 				}
 			}
 		}
 	}
 
 	// Assign dependencies
-	if(last_dep_mem_access) {
-		node->preds[*last_dep_mem_access] |= false;
+	for(auto dep_node: last_dep_mem_accesses) {
+		node->preds[dep_node] |= false;
 	}
 
-	for(auto dep_write: last_dep_read_after_write) {
-		node->preds[dep_write.second] |= instr->isCall()? false : true;
+	for(auto dep_writes: last_dep_reads_after_write) {
+		for(auto dep_node: dep_writes.second) {
+			node->preds[dep_node] |= instr->isCall()? false : true;
+		}
 	}
 
 	for(auto dep_read: last_dep_reads) {
@@ -220,10 +261,12 @@ std::set<std::shared_ptr<Node>> dependence_graph(
 		}
 	}
 
-	for(auto dep_write: last_dep_write_after_write) {
-		// Calls don't write immediately (their bodies do the writing)
-		// meaning we just need to ensure the call doesn't happen before a preceding write
-		node->preds[dep_write.second] |= instr->isCall()? false : true;
+	for(auto dep_write: last_dep_writes_after_write) {
+		for(auto dep_node: dep_write.second) {
+			// Calls don't write immediately (their bodies do the writing)
+			// meaning we just need to ensure the call doesn't happen before a preceding write
+			node->preds[dep_node] |= instr->isCall()? false : true;
+		}
 	}
 
     // if branch, it depends on all previous nodes (until previous branch)
@@ -398,8 +441,8 @@ Optional<std::shared_ptr<Node>> get_next_ready(
   bool use_longer_instr_prio = enable_second_slot && !requesting_second_slot;
   // Set priority list
   std::vector<std::pair<bool(*)(std::shared_ptr<Node>, std::shared_ptr<Node>, void*), void*>> priorities;
-  priorities.push_back(std::make_pair(ineligible_for_second, &enable_second_slot));
   priorities.push_back(std::make_pair(longer_delay, nullptr));
+  priorities.push_back(std::make_pair(ineligible_for_second, &enable_second_slot));
   priorities.push_back(std::make_pair(more_successors, nullptr));
   priorities.push_back(std::make_pair(longer_instr, &use_longer_instr_prio));
   priorities.push_back(std::make_pair(earlier, nullptr));
@@ -494,6 +537,7 @@ std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
   std::set<Operand> (*reads)(const Instruction *),
   std::set<Operand> (*writes)(const Instruction *),
+  Optional<Operand> (*uses_predicate)(const Instruction *),
   bool (*poisons)(const Instruction *),
   bool (*memory_access)(const Instruction *),
   unsigned (*latency)(const Instruction *),
@@ -513,7 +557,8 @@ std::map<unsigned, unsigned> list_schedule(
   }
 
   auto dependence_roots = dependence_graph(instr_begin, instr_end,
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,
+      reads, writes, uses_predicate, poisons, memory_access, latency,
+	  is_constant, conditional_branch, enable_dual_issue,
 	  dependent_eq_classes);
   LLVM_DEBUG(Node::dump_graph(dependence_roots, dbgs()));
 
@@ -706,6 +751,7 @@ std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
   std::set<Operand> (*reads)(const Instruction *),
   std::set<Operand> (*writes)(const Instruction *),
+  Optional<Operand> (*uses_predicate)(const Instruction *),
   bool (*poisons)(const Instruction *),
   bool (*memory_access)(const Instruction *),
   unsigned (*latency)(const Instruction *),
@@ -718,7 +764,7 @@ std::map<unsigned, unsigned> list_schedule(
     bool (*)(const Instruction *,const Instruction *)
   >> enable_dual_issue
 ) {
-	return list_schedule(instr_begin, instr_end, reads, writes, poisons, memory_access,
+	return list_schedule(instr_begin, instr_end, reads, writes, uses_predicate, poisons, memory_access,
 			latency, is_constant, conditional_branch, enable_dual_issue,
 			[](const Instruction*, const Instruction*){ return true;});
 }

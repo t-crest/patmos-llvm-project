@@ -18,7 +18,7 @@ typedef MockMBB<std::tuple<int,int,int>> MockMBB;
 typedef MockLoop<std::tuple<int,int,int>> MockLoop;
 typedef MockLoopInfo<std::tuple<int,int,int>> MockLoopInfo;
 
-#define mockMBB(name, accesses, min, max) mockMBBBase(name, std::make_tuple(accesses,min,max))
+#define mockMBB(name, accesses, loopbound_min, loopbound_max) mockMBBBase(name, std::make_tuple(accesses,loopbound_min,loopbound_max))
 #define pair(p1,p2) std::make_pair(p1,p2)
 #define pair_u(p1,p2) std::make_pair((unsigned)p1,(unsigned)p2)
 
@@ -837,6 +837,30 @@ TEST(MemoryAccessCompensationTest, TwoPredecessorsToNonEnd){
         pair(pair(&mockMBB2,&mockMBB4), 5),
         pair(pair(&mockMBB3,&mockMBB4), 6),
         pair(pair(&mockMBB4,&mockMBB5), 11),
+      })
+  );
+}
+
+TEST(MemoryAccessCompensationTest, TwoPredecessorToOptional){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,0,-1,-1);
+  mockMBB(mockMBB2,1,-1,-1);
+  mockMBB(mockMBB3,1,-1,-1);
+  mockMBB(mockMBB4,0,-1,-1);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2, &mockMBB3}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1}),arr({&mockMBB3,&mockMBB4}));
+  set_preds_succs(mockMBB3, arr({&mockMBB1,&mockMBB2}),arr({&mockMBB4}));
+  set_preds_succs(mockMBB4, arr({&mockMBB2,&mockMBB3}),arr({}));
+
+  auto result = memoryAccessCompensation(&mockMBB1, &LI, countAccess);
+
+  EXPECT_THAT(
+      result,
+      UnorderedElementsAreArray({
+        pair(pair(&mockMBB2,&mockMBB3), 1),
+        pair(pair(&mockMBB2,&mockMBB4), 1),
+        pair(pair(&mockMBB3,&mockMBB4), 1),
       })
   );
 }

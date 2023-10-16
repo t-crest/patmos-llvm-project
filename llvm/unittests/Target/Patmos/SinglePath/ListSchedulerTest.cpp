@@ -124,6 +124,9 @@ namespace llvm{
     /// Set of operands this instruction writes.
     std::set<Operand> writes;
 
+    /// The operand this instruction uses as a predicate.
+    Optional<Operand> predicate;
+
     /// Equivalence class of this instruction.
     Optional<unsigned> eq_class_nr;
 
@@ -137,12 +140,20 @@ namespace llvm{
       reads(reads), writes(writes), attr(attr), eq_class_nr(eq_class_nr)
     {}
 
+    MockInstr(std::set<Operand> reads, std::set<Operand> writes, Operand predicate, unsigned eq_class_nr, InstrAttr attr):
+      reads(reads), writes(writes), predicate(predicate), attr(attr), eq_class_nr(eq_class_nr)
+    {}
+
     bool is_read(Operand r) {
       return reads.count(r);
     }
 
     bool is_written(Operand r) {
       return writes.count(r);
+    }
+
+    bool is_predicate(Operand r) {
+    	return predicate? r == *predicate : false;
     }
 
     static MockInstr nop(){
@@ -168,6 +179,10 @@ namespace llvm{
 
   std::set<Operand> writes(const MockInstr* instr) {
     return instr->writes;
+  }
+
+  Optional<Operand> uses_predicate(const MockInstr* instr) {
+    return instr->predicate;
   }
 
   bool poisons(const MockInstr* instr) {
@@ -223,7 +238,10 @@ namespace llvm{
       bool (*)(const MockInstr *, const MockInstr *)
     >> enable_dual_issue = std::make_tuple((void*)nullptr, may_second_slot, is_long, may_bundle);
 
-  auto no_dependencies = [](auto instr1, auto instr2){
+  /// Returns whether the two instructions are dependent based only on their eq_class_nr
+  /// If classes are missing or the same they are dependent.
+  /// If classes are different numbers they are independent.
+  auto default_dependencies = [](auto instr1, auto instr2){
     std::set<std::pair<unsigned, unsigned>> class_deps;
     return dependent_eq_classes(instr1, instr2, class_deps);
   };
@@ -271,7 +289,7 @@ TEST(ListSchedulerTest, UnrelatedInstructions){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -284,7 +302,7 @@ TEST(ListSchedulerTest, UnrelatedInstructions){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -306,7 +324,7 @@ TEST(ListSchedulerTest, PoisonAddsNop){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -317,7 +335,7 @@ TEST(ListSchedulerTest, PoisonAddsNop){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -337,7 +355,7 @@ TEST(ListSchedulerTest, DelayAddsNop){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -348,7 +366,7 @@ TEST(ListSchedulerTest, DelayAddsNop){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -368,7 +386,7 @@ TEST(ListSchedulerTest, IndependentDelayIgnored){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule,
@@ -379,7 +397,7 @@ TEST(ListSchedulerTest, IndependentDelayIgnored){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule2,
@@ -400,7 +418,7 @@ TEST(ListSchedulerTest, FillDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -412,7 +430,7 @@ TEST(ListSchedulerTest, FillDelay){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -435,7 +453,7 @@ TEST(ListSchedulerTest, PreferLongDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -447,7 +465,7 @@ TEST(ListSchedulerTest, PreferLongDelay){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -474,7 +492,7 @@ TEST(ListSchedulerTest, MaintainMemAccessOrder){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -486,7 +504,7 @@ TEST(ListSchedulerTest, MaintainMemAccessOrder){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -508,8 +526,8 @@ TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
-	  no_dependencies
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+	  default_dependencies
   );
 
   EXPECT_THAT(
@@ -522,7 +540,7 @@ TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,default_dependencies);
 
   EXPECT_THAT(
       new_schedule2,
@@ -549,7 +567,7 @@ TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder2){
   };
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
 	  independent
   );
 
@@ -563,7 +581,7 @@ TEST(ListSchedulerTest, IgnoreIndependentMemAccessOrder2){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,independent);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,independent);
 
   EXPECT_THAT(
       new_schedule2,
@@ -584,7 +602,7 @@ TEST(ListSchedulerTest, ConstantsCantPoison){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -595,7 +613,7 @@ TEST(ListSchedulerTest, ConstantsCantPoison){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -615,7 +633,7 @@ TEST(ListSchedulerTest, ConstantsDontDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -626,7 +644,7 @@ TEST(ListSchedulerTest, ConstantsDontDelay){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -646,7 +664,7 @@ TEST(ListSchedulerTest, ConstantsDontMakeDependence){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -657,7 +675,7 @@ TEST(ListSchedulerTest, ConstantsDontMakeDependence){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -678,7 +696,7 @@ TEST(ListSchedulerTest, WeakDepInDelay){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -690,7 +708,7 @@ TEST(ListSchedulerTest, WeakDepInDelay){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -719,7 +737,7 @@ TEST(ListSchedulerTest, Branch){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -738,7 +756,7 @@ TEST(ListSchedulerTest, Branch){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -768,7 +786,7 @@ TEST(ListSchedulerTest, WritesToSameArentReordered){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -780,7 +798,7 @@ TEST(ListSchedulerTest, WritesToSameArentReordered){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -802,7 +820,7 @@ TEST(ListSchedulerTest, IndependentWritesToSameReordered){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule,
@@ -814,7 +832,7 @@ TEST(ListSchedulerTest, IndependentWritesToSameReordered){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule2,
@@ -823,6 +841,154 @@ TEST(ListSchedulerTest, IndependentWritesToSameReordered){
         pair(4, 1),
         pair(1, 2),
       })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentWritesToSameDependentRead){
+  /* Tests that if two independent writes preceding a read that is high-priority
+   * the read isn't reordered above any of the writes
+   */
+  block(mockMBB, arr({
+	// Two independent instructions writing to the same register
+	MockInstr({Operand::R0},{Operand::R2},1,InstrAttr::simple()),
+	MockInstr({Operand::R0},{Operand::R2},2,InstrAttr::simple()),
+	// Is dependent on the other two, but longer delay to ensure its not reordered
+    MockInstr({Operand::R2},{Operand::R1},InstrAttr::simple(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+	  UnorderedElementsAreArray({
+	    pair(0, 0),
+	    pair(1, 1),
+	    pair(2, 2),
+	  })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentWritesToSameDependentWrite){
+  /* Tests that if two independent writes preceding a write that is high-priority
+   * the last write isn't reordered above any of the other
+   */
+  block(mockMBB, arr({
+	// Two independent instructions writing to the same register
+	MockInstr({Operand::R0},{Operand::R2},1,InstrAttr::simple()),
+	MockInstr({Operand::R0},{Operand::R2},2,InstrAttr::simple()),
+	// Is dependent on the other two, but longer delay to ensure its not reordered
+    MockInstr({Operand::R0},{Operand::R2},InstrAttr::simple(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+	  UnorderedElementsAreArray({
+	    pair(0, 0),
+	    pair(1, 1),
+	    pair(2, 2),
+	  })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentMemsBeforeDependent){
+  /* Tests that if two independent memory accesses preceding another access that is high-priority
+   * the last access isn't reordered above any of the other
+   */
+  block(mockMBB, arr({
+	// Two independent memory instructions
+	MockInstr({Operand::R0},{},1,InstrAttr::mem_acc(0)),
+	MockInstr({Operand::R0},{},2,InstrAttr::mem_acc(0)),
+	// Is dependent on the other two, but longer delay to ensure its not reordered
+    MockInstr({Operand::R0},{Operand::R2},InstrAttr::mem_acc(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+	  UnorderedElementsAreArray({
+	    pair(0, 0),
+	    pair(2, 1),
+	    pair(4, 2),
+	  })
+  );
+}
+
+TEST(ListSchedulerTest, IndependentReadWriteBeforeDependentWrite){
+  /* Tests that if a read is followed by an independent write, both of which are followed by a
+   * write dependent on both, no reordering can be done
+   */
+  block(mockMBB, arr({
+	// Two independent read + write
+	MockInstr({Operand::R1},{},1,InstrAttr::simple()),
+	MockInstr({},{Operand::R1},2,InstrAttr::simple()),
+	// Is dependent on the other two, but longer delay to ensure its not reordered
+    MockInstr({},{Operand::R1},InstrAttr::simple(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+	  UnorderedElementsAreArray({
+	    pair(0, 0),
+	    pair(1, 1),
+	    pair(2, 2),
+	  })
   );
 }
 
@@ -838,14 +1004,14 @@ TEST(ListSchedulerTest, NoLongInSecondIssue){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
       UnorderedElementsAreArray({
-        pair(2, 0),
-        pair(0, 1),
-        pair(3, 2),
+        pair(0, 0),
+        pair(2, 1),
+        pair(1, 2),
         pair(4, 3),
       })
   );
@@ -861,7 +1027,7 @@ TEST(ListSchedulerTest, IneligibleSecondSlot){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -887,7 +1053,7 @@ TEST(ListSchedulerTest, FinalBranch){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -900,7 +1066,7 @@ TEST(ListSchedulerTest, FinalBranch){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -931,7 +1097,7 @@ TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -945,7 +1111,7 @@ TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -954,6 +1120,139 @@ TEST(ListSchedulerTest, MultipleReadersBeforeWrite){
         pair(2, 1),
         pair(3, 2),
         pair(0, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, MultipleReadersBeforeWrite2){
+  /* Tests that when a write is preceded by multiple reads (of differing dependency), the write cannot be
+   * move above any of the reads
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},2,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},2,InstrAttr::simple()),
+    // We give the write high latency to give check that it doesn't move above
+    // the reads anyway
+    MockInstr({Operand::R4},{Operand::R3},InstrAttr::simple(4)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+        pair(3, 3),
+        pair(4, 4),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+        pair(2, 2),
+        pair(3, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, MultipleReadersBeforeWrite3){
+  /* Tests that when a write is preceded by multiple reads (of differing dependency), the write cannot be
+   * move above any of the reads
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},1,InstrAttr::simple()),
+    MockInstr({Operand::R3},{Operand::R0},2,InstrAttr::simple()),
+    // We give the last read a latency of 1 so that it is moved above the other reads.
+    // If the schedule only tracks 1 read (the last), it would then move the write
+    // above the other reads (which it shouldn't).
+    MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple(1)),
+    // We give the write high latency to give check that it doesn't move above
+    // the reads anyway
+    MockInstr({Operand::R4},{Operand::R3},InstrAttr::simple(4)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(0, 3),
+        pair(4, 4),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(2, 1),
+        pair(3, 2),
+        pair(0, 3),
+        pair(4, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, MultipleReadersBeforeWrite4){
+  /* Tests that when a write is preceded by multiple reads (of differing dependency), the write cannot be
+   * move above any of the reads
+   */
+  block(mockMBB, arr({
+    MockInstr({Operand::R3},{Operand::R0},InstrAttr::simple()),
+	// We give the last reads a latency of 1 so that they are moved above.
+    MockInstr({Operand::R3},{Operand::R0},2,InstrAttr::simple(1)),
+    MockInstr({Operand::R3},{Operand::R0},2,InstrAttr::simple(1)),
+    MockInstr({Operand::R3},{Operand::R0},3,InstrAttr::simple(1)),
+    // We give the write high latency to give check that it doesn't move above
+    // the reads anyway
+    MockInstr({Operand::R4},{Operand::R3},InstrAttr::simple(4)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(3, 0),
+        pair(0, 1),
+        pair(1, 2),
+        pair(2, 3),
+        pair(4, 4),
+      })
+  );
+
+  auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+
+  EXPECT_THAT(
+      new_schedule2,
+      UnorderedElementsAreArray({
+        pair(3, 0),
+        pair(0, 1),
+        pair(1, 2),
+        pair(2, 3),
         pair(4, 4),
       })
   );
@@ -972,7 +1271,7 @@ TEST(ListSchedulerTest, WriteBeforeIndepedentReads){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule,
@@ -985,7 +1284,7 @@ TEST(ListSchedulerTest, WriteBeforeIndepedentReads){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1011,7 +1310,7 @@ TEST(ListSchedulerTest, CanFlipBundle){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1033,7 +1332,7 @@ TEST(ListSchedulerTest, CanFlipBundleAntiDep){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1056,7 +1355,7 @@ TEST(ListSchedulerTest, BundleWriteWithRead){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1079,7 +1378,7 @@ TEST(ListSchedulerTest, Call){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1091,7 +1390,7 @@ TEST(ListSchedulerTest, Call){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1115,7 +1414,7 @@ TEST(ListSchedulerTest, BundleCallWithSucc){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1128,7 +1427,7 @@ TEST(ListSchedulerTest, BundleCallWithSucc){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1152,7 +1451,7 @@ TEST(ListSchedulerTest, NotBundleCallWithReadSucc){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1176,7 +1475,7 @@ TEST(ListSchedulerTest, CallInputLatency){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1194,7 +1493,7 @@ TEST(ListSchedulerTest, CallInputLatency){
   }));
 
   auto new_schedule = list_schedule(mockMBB2.begin(), mockMBB2.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1206,7 +1505,7 @@ TEST(ListSchedulerTest, CallInputLatency){
   );
 
   auto new_schedule3 = list_schedule(mockMBB2.begin(), mockMBB2.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule3,
@@ -1223,14 +1522,14 @@ TEST(ListSchedulerTest, NotBundleCallWithWriteSucc){
    * it cannot be bundled with the call
    */
   block(mockMBB, arr({
-	    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
 		MockInstr({},{Operand::R1},InstrAttr::simple()),
+	    MockInstr({Operand::R2},{Operand::R3},InstrAttr::simple()),
 	    MockInstr({Operand::R3},{Operand::R1},InstrAttr::call()),
 	    MockInstr({Operand::R1},{},InstrAttr::simple()),
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1253,7 +1552,7 @@ TEST(ListSchedulerTest, CallPoison){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1264,7 +1563,7 @@ TEST(ListSchedulerTest, CallPoison){
   );
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1287,7 +1586,7 @@ TEST(ListSchedulerTest, DependentNonBundleable){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1311,7 +1610,7 @@ TEST(ListSchedulerTest, IndependentNonBundleable){
   }));
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, no_dependencies);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
 
   EXPECT_THAT(
       new_schedule2,
@@ -1336,7 +1635,7 @@ TEST(ListSchedulerTest, IndependentClassesIgnoreInputsOutputs){
 
 
   auto new_schedule2 = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue,
 	  [](auto instr1, auto instr2){
 	  	  std::set<std::pair<unsigned, unsigned>> class_deps;
 	  	  return dependent_eq_classes(instr1, instr2, class_deps);
@@ -1369,7 +1668,7 @@ TEST(ListSchedulerTest, PreferMoreSuccessors){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1383,7 +1682,7 @@ TEST(ListSchedulerTest, PreferMoreSuccessors){
   );
 
   new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1411,7 +1710,7 @@ TEST(ListSchedulerTest, PreferFirstOnlyOverMoreSuccessors){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1439,7 +1738,7 @@ TEST(ListSchedulerTest, PreferMoreSuccessorsOverLongInstr){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1467,7 +1766,7 @@ TEST(ListSchedulerTest, PreferLongDelayOverMoreSuccessors){
   }));
 
   auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1481,7 +1780,7 @@ TEST(ListSchedulerTest, PreferLongDelayOverMoreSuccessors){
   );
 
   new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
-      reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue);
 
   EXPECT_THAT(
       new_schedule,
@@ -1491,6 +1790,77 @@ TEST(ListSchedulerTest, PreferLongDelayOverMoreSuccessors){
         pair(6, 2),
         pair(2, 3),
         pair(3, 4),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PredicateUseThenIndependentWrite){
+  /* Tests if an instruction uses a predicate and a following instruction writes to the same register,
+   * the two instructions can't be reordered, even if they are independent.
+   *
+   * This is required because the write might enable the predicate, which would also enabled the first
+   * instruction if reordered. Since the instruction are independent, that they should never both be enabled.
+   */
+  block(mockMBB, arr({
+    // Uses r1 predicate
+    MockInstr({Operand::R1},{}, Operand::R1, 1, InstrAttr::simple()),
+    // Writes to r1 and is independent. Use high-latency to ensure it is still not reordered.
+    MockInstr({},{Operand::R1}, 2, InstrAttr::simple(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(0, 0),
+        pair(1, 1),
+      })
+  );
+}
+
+TEST(ListSchedulerTest, PredicateWriteThenIndependentUse){
+  /* Tests if an instruction writes to a register and a following instruction uses it as a predicate,
+   * the two instructions can be reordered, even if they are independent.
+   */
+  block(mockMBB, arr({
+    // Writes to r1
+    MockInstr({},{Operand::R1}, 1, InstrAttr::simple()),
+    // Uses r1 predicate and is independent. Use high-latency to ensure it is reordered.
+    MockInstr({Operand::R1},{}, Operand::R1, 2, InstrAttr::simple(2)),
+  }));
+
+  auto new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, disable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
+      })
+  );
+
+  new_schedule = list_schedule(mockMBB.begin(), mockMBB.end(),
+      reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue, default_dependencies);
+
+  EXPECT_THAT(
+      new_schedule,
+      UnorderedElementsAreArray({
+        pair(1, 0),
+        pair(0, 1),
       })
   );
 }

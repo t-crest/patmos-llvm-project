@@ -327,10 +327,11 @@ def PSEUDO_COUNTLESS_SPLOOP : PseudoInst<(outs),
 
 // For a single-path loop that doesn't use a counter, this instruction specifies
 // which predicate register should be used to check for when the unilatch
-// should exit the loop. Should only be in a unilatch.              
+// should exit the loop. Should only be in a unilatch.     
+// The second input is the equivalence class number that the unilatch
 let hasSideEffects = 1 in // To ensure it is not optimized away
 def PSEUDO_UNILATCH_EXIT_PRED : PseudoInst<(outs),
-                                    (ins PRegs:$ps),
+                                    (ins PRegs:$ps, i32imm:$imm),
                                     "#PSEUDO_UNILATCH_EXIT_PRED", "", []>;
 
 // Denotes loop bounds, i.e., how many times a loop will iterate at runtime. 

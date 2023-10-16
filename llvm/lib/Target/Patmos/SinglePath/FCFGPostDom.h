@@ -27,20 +27,14 @@ private:
 	/// FCFG doms of inner loops
 	std::vector<FCFGPostDom> inner_doms;
 
-	/// Returns the header of the outermost loop, containing the given loop,
-	/// within the current loop.
-	MachineBasicBlock* outermost_inner_loop_header(MachineLoop *inner);
-
-	/// Given a predecessor block in the raw CFG, returns the equivalent predecessor in the
-	/// FCFG (if any). Assumes the source block is in this loop.
-	Optional<MachineBasicBlock*> fcfg_predecessor(MachineBasicBlock *pred);
-
-	/// Given a successor block in the raw CFG, returns the equivalent successor in the
-	/// FCFG (if any). Assumes the source block is in this loop.
-	Optional<MachineBasicBlock*> fcfg_successor(MachineBasicBlock *succ);
-
 	/// Calculate the post dominators for this FCFG. Does not calculate for inner loops.
 	void calculate(std::set<MachineBasicBlock*> roots);
+
+	/// Returns (through 'dominees') the blocks that the given block post dominates in the FCFG.
+	/// This looks at inner loops too.
+	void get_post_dominees(MachineBasicBlock *dominator, std::set<MachineBasicBlock*> &dominees);
+
+public:
 
 	/// Create the FCFG post dominators for the given loop.
 	///
@@ -48,11 +42,6 @@ private:
 	/// for that, use the other constructor
 	FCFGPostDom(MachineLoop *l, MachineLoopInfo &LI);
 
-	/// Returns (through 'dominees') the blocks that the given block post dominates in the FCFG.
-	/// This looks at inner loops too.
-	void get_post_dominees(MachineBasicBlock *dominator, std::set<MachineBasicBlock*> &dominees);
-
-public:
 	/// Create the FCFG post dominators for the function
 	FCFGPostDom(MachineFunction &MF, MachineLoopInfo &LI);
 
@@ -71,6 +60,18 @@ public:
 			// Set of {Y->Z} control dependencies of X
 			std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>
 		> &deps);
+
+	/// Returns the header of the outermost loop, containing the given loop,
+	/// within the current loop.
+	MachineBasicBlock* outermost_inner_loop_header(MachineLoop *inner);
+
+	/// Given a predecessor block in the raw CFG, returns the equivalent predecessor in the
+	/// FCFG (if any). Assumes the source block is in this loop.
+	Optional<MachineBasicBlock*> fcfg_predecessor(MachineBasicBlock *pred);
+
+	/// Given a successor block in the raw CFG, returns the equivalent successor in the
+	/// FCFG (if any). Assumes the source block is in this loop.
+	Optional<MachineBasicBlock*> fcfg_successor(MachineBasicBlock *succ);
 
 };
 }

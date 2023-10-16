@@ -34,9 +34,9 @@ static cl::opt<std::string> SPSchedulerConfig(
     cl::desc("Configures the single-path scheduler (function-name,block-number,ignore-first-instructions-count,instructions-to-schedule-count). If block is -1, disables scheduling for all blocks in the function."),
     cl::Hidden);
 
-static cl::opt<bool> SPSchedulerEqClass(
-    "mpatmos-enable-singlepath-scheduler-equivalence-class",
-    cl::init(true),
+static cl::opt<bool> SPDisableSchedulerEqClass(
+    "mpatmos-disable-singlepath-scheduler-equivalence-class",
+    cl::init(false),
     cl::desc("Enables the Single-path scheduler to disregard dependencies between instructions of independent equivalence classes."),
     cl::Hidden);
 
@@ -170,6 +170,16 @@ std::set<Register> writes(const MachineInstr *instr){
     //Special case RSP and RFP
     result.insert(Patmos::RSP);
     result.insert(Patmos::RFP);
+  }
+
+  return result;
+}
+
+Optional<Register> uses_predicate(const MachineInstr *instr){
+  Optional<Register> result;
+
+  if(instr->isPredicable()) {
+  	result = instr->getOperand(instr->findFirstPredOperandIdx()).getReg();
   }
 
   return result;
@@ -317,18 +327,6 @@ bool SPScheduler::runOnMachineFunction(MachineFunction &mf){
   }
 
   LLVM_DEBUG( dbgs() << "Running SPScheduler on function '" <<  mf.getName() << "'\n");
-  LLVM_DEBUG(
-	auto eq_class_predecessors = EquivalenceClasses::importClassPredecessorsFromModule(mf);
-	dbgs() << "Equivalence class predecessors:\n";
-    for(auto entry: eq_class_predecessors) {
-    	dbgs() << entry.first << ": ";
-    	for(auto parent: entry.second) {
-    		dbgs() << parent << ", ";
-    	}
-    	dbgs() << "\n";
-    }
-    dbgs() << "\n";
-  );
 
   for(auto &mbb: mf){
     LLVM_DEBUG( dbgs() << "MBB before scheduling: \n"; mbb.dump());
@@ -489,14 +487,22 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     enable_dual_issue = None;
   }
 
-  auto class_predecessors = EquivalenceClasses::importClassPredecessorsFromModule(*mbb->getParent());
+  auto class_dependencies = EquivalenceClasses::importClassDependenciesFromModule(*mbb->getParent());
   auto is_dependent = [&](const MachineInstr* instr1,const MachineInstr* instr2){
-    return SPSchedulerEqClass? EquivalenceClasses::dependentClasses(instr1, instr1, class_predecessors) : true;
+	auto dep = SPDisableSchedulerEqClass ? true :
+			EquivalenceClasses::dependentInstructions(instr1, instr2,class_dependencies);
+	LLVM_DEBUG(
+		dbgs() << "Checking Instructions dependence:\n";
+		instr1->dump();
+		instr2->dump();
+		dbgs() << "Dependent: " << dep << "\n";
+	);
+	return dep;
   };
 
   auto schedule = list_schedule(
     mbb->instr_begin(), last_to_schedule,
-    reads, writes, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,
+    reads, writes, uses_predicate, poisons, memory_access, latency, is_constant, conditional_branch, enable_dual_issue,
 	is_dependent
   );
   LLVM_DEBUG(

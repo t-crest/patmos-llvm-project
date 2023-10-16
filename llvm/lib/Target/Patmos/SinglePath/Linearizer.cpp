@@ -84,9 +84,9 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 				});
 				assert(found_pseudo_pred != unilatch->instr_end());
 				auto exit_pred = found_pseudo_pred->getOperand(0).getReg();
+				auto exit_pred_class_nr = found_pseudo_pred->getOperand(1).getImm();
 				assert(exit_pred.isVirtual() && MF.getRegInfo().getRegClass(exit_pred) == &Patmos::PRegsRegClass);
-				auto eq_class = EquivalenceClasses::getEqClassNr(&*found_pseudo_pred);
-				assert(eq_class && "Unilatch exit pseudo-instr has no equivalence class metadata");
+
 				// Erase pseudo-instruction so it doesn't need to be handled elsewhere
 				unilatch->erase(found_pseudo_pred);
 
@@ -96,7 +96,7 @@ bool Linearizer::runOnMachineFunction(MachineFunction &MF) {
 					TII->get(Patmos::BR))
 					.addReg(exit_pred).addImm(0)
 					.addMBB(&header_mbb);
-				EquivalenceClasses::addClassMetaData(unilatch_exit_br, *eq_class);
+				EquivalenceClasses::addClassMetaData(unilatch_exit_br, exit_pred_class_nr);
 
 				// Remove the PSEUDO_COUNTLESS_SPLOOP instruction, since it is no longer needed
 				// and so we don't need to handle it in other passes

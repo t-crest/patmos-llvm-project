@@ -48,17 +48,8 @@ namespace llvm {
 			>
 		> classes;
 
-		// Returns for each equivalence class, which classes are the source
-		// of its dependence edges
-		std::map<unsigned, std::set<unsigned>> getAllClassPredecessors() const;
-
-		// Returns for the given equivalence class, which classes are the source
-		// of its dependence edges, recursively
-		static std::set<unsigned> getAllPredecessors(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree);
-
-		/// Returns for the given equivalence class, which classes are the source of its dependence edges, recursively.
-		/// Predecessors are added to 'result'.
-		static void getAllPredecessors(unsigned class_nr, std::map<unsigned, std::set<unsigned>> &parent_tree, std::set<unsigned> &result);
+		// Returns a map of which classes depend on which classes (including self-dependence)
+		std::map<unsigned, std::set<unsigned>> getAllClassDependencies() const;
 
 	public:
 		static char ID;
@@ -83,10 +74,10 @@ namespace llvm {
 
 		EqClass getClassFor(MachineBasicBlock*mbb) const;
 		// Exports the equivalence class predecessor relations as metadata connected to the given function
-		void exportClassPredecessorsToModule(MachineFunction &MF);
+		void exportClassDependenciesToModule(MachineFunction &MF);
 
 		// Imports the metadata representing the equivalence class predecessor relations connected to the given function
-		static std::map<unsigned, std::set<unsigned>> importClassPredecessorsFromModule(const MachineFunction &MF);
+		static std::map<unsigned, std::set<unsigned>> importClassDependenciesFromModule(const MachineFunction &MF);
 
 		// Adds the given class number, as a metadata operand, to the given instruction,
 		// signifying what equivalence class the instruction is predicated by
@@ -95,10 +86,10 @@ namespace llvm {
 		// Extracts the metadata operand signifying what equivalence class the instruction is predicated by
 		static Optional<unsigned> getEqClassNr(const MachineInstr* MI);
 
-		/// Returns whether the two given instructions have independent classes in the given class tree.
-		/// If two classes are dependent, it means they may be enabled at the same time.
+		/// Returns whether the two given instructions are independent.
+		/// If two instruction are dependent, it means they may be enabled at the same time.
 		/// E.g., an if-else statement's two alternatives will be mutually independent but dependent on the class surrounding them.
-		static bool dependentClasses(const MachineInstr* instr1,const MachineInstr* instr2, std::map<unsigned, std::set<unsigned>> &class_predecessors);
+		static bool dependentInstructions(const MachineInstr* instr1,const MachineInstr* instr2, std::map<unsigned, std::set<unsigned>> &class_predecessors);
 	};
 }
 

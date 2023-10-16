@@ -204,50 +204,58 @@ bool FCFGPostDom::post_dominates(MachineBasicBlock *dominator, MachineBasicBlock
 			[&](auto inner){ return inner.post_dominates(dominator, dominee);});
 }
 
-void FCFGPostDom::get_control_dependencies(std::map<
+void FCFGPostDom::get_control_dependencies(
+	std::map<
 		// X
 		MachineBasicBlock*,
 		// Set of {Y->Z} control dependencies of X
 		std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>
-	> &deps) {
+	> &deps
+) {
 	for(auto entry: post_doms) {
 		auto block = entry.first;
 
-		std::set<MachineBasicBlock*> dominees;
-		get_post_dominees(block, dominees);
-		// If mbb post-dominates a block, any of its predecessors that mbb does not dominate must therefore
-		// be a control dependency of mbb
-		for(auto dominee: dominees){
-			auto dominee_loop = LI.getLoopFor(dominee);
+		if(LI.isLoopHeader(block)) {
+			// headers can only be dependent on the loop entry
+			deps[block].insert(std::make_pair(None, block));
+		} else {
+			std::set<MachineBasicBlock*> dominees;
+			get_post_dominees(block, dominees);
+			// x is control dependent on (y->z) if x post-doms z but not y.
+			// 'block' is control dependent on ('pred'->'dominee') if 'block' post-doms 'dominee' but not 'pred'.
+			for(auto dominee: dominees){
+				// 'block' post-doms 'dominee'
+				auto dominee_loop = LI.getLoopFor(dominee);
 
-			if(dominee->pred_size() == 0 || (loop && loop->getHeader() == dominee)) {
-				// dominee is the entry to the loop (header).
-				// If you post dominate the entry, you are control dependent on the entry edge
-				deps[block].insert(std::make_pair(None, dominee));
-			} else {
-				std::for_each(dominee->pred_begin(), dominee->pred_end(), [&](auto pred){
-					auto fcfg_pred = fcfg_predecessor(pred);
-					assert(fcfg_pred && "Predecessor is header or entry");
+				if(dominee->pred_size() == 0 || (loop && loop->getHeader() == dominee)) {
+					// dominee is the entry to the loop (header).
+					// If you post dominate the entry, you are control dependent on the entry edge
+					deps[block].insert(std::make_pair(None, dominee));
+				} else {
+					std::for_each(dominee->pred_begin(), dominee->pred_end(), [&](auto pred){
+						auto fcfg_pred = fcfg_predecessor(pred);
+						assert(fcfg_pred && "Predecessor is header or entry");
 
-					if (!post_dominates(block, *fcfg_pred)) {
-						auto fcfg_predecessor_loop = LI.getLoopFor(*fcfg_pred);
+						if (!post_dominates(block, *fcfg_pred)) {
+							auto fcfg_predecessor_loop = LI.getLoopFor(*fcfg_pred);
 
-						if(fcfg_predecessor_loop != loop) {
-							// the predecessor is a loop header. Use the loop's exit edges as the dep edge
-							SmallVector<std::pair<MachineBasicBlock*, MachineBasicBlock*>> exits;
-							fcfg_predecessor_loop->getExitEdges(exits);
+							if(fcfg_predecessor_loop != loop) {
+								// the predecessor is a loop header. Use the loop's exit edges as the dep edge
+								SmallVector<std::pair<MachineBasicBlock*, MachineBasicBlock*>> exits;
+								fcfg_predecessor_loop->getExitEdges(exits);
 
-							for(auto exit: exits) {
-								if(exit.second == dominee) {
-									deps[block].insert(std::make_pair(exit.first, dominee));
+								for(auto exit: exits) {
+									if(exit.second == dominee) {
+										deps[block].insert(std::make_pair(exit.first, dominee));
+									}
 								}
+							} else {
+								assert(fcfg_pred);
+								deps[block].insert(std::make_pair(fcfg_pred, dominee));
 							}
-						} else {
-							assert(fcfg_pred);
-							deps[block].insert(std::make_pair(fcfg_pred, dominee));
 						}
-					}
-				});
+					});
+				}
 			}
 		}
 	}

@@ -62,8 +62,8 @@ static cl::opt<bool> DisableVLIW("mpatmos-disable-vliw",
 	             cl::init(true),
 		     cl::desc("Schedule instructions only in first slot."));
 
-static cl::opt<bool> DisablePermissiveDualIssue("mpatmos-disable-permissive-dual-issue",
-	             cl::init(true),
+static cl::opt<bool> PermissiveDualIssue("mpatmos-enable-permissive-dual-issue",
+	             cl::init(false),
 		     cl::desc("Allow loads, stores, and control flow instruction in second issue slot, "
 		    		 "as long as only one of each is enabled simultaneously."));
 
@@ -216,5 +216,5 @@ unsigned PatmosSubtarget::getAlignedStackFrameSize(unsigned frameSize) const {
 }
 
 bool PatmosSubtarget::usePermissiveDualIssue() {
-	return !DisablePermissiveDualIssue;
+	return PermissiveDualIssue;
 }

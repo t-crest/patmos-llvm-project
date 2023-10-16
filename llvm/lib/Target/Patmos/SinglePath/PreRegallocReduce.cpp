@@ -59,7 +59,7 @@ Register PreRegallocReduce::getVreg(EqClass &eq_class)
 }
 
 void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
-	EQ->exportClassPredecessorsToModule(*MF);
+	EQ->exportClassDependenciesToModule(*MF);
 
 	auto &C = MF->getFunction().getContext();
 
@@ -127,8 +127,6 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 				}
 
 				EquivalenceClasses::addClassMetaData(&*MI, eq_class.number);
-				assert(EquivalenceClasses::getEqClassNr(&*MI));
-				assert(EquivalenceClasses::getEqClassNr(&*MI) == eq_class.number);
 			}
 		}
 
@@ -138,10 +136,7 @@ void PreRegallocReduce::applyPredicates(MachineFunction *MF) {
 			auto unilatch = PatmosSinglePathInfo::getPreHeaderUnilatch(loop).second;
 			auto instr = BuildMI(*unilatch, unilatch->getFirstTerminator(), DebugLoc(),
 					TII->get(Patmos::PSEUDO_UNILATCH_EXIT_PRED))
-				.addReg(predVreg);
-			EquivalenceClasses::addClassMetaData(instr, eq_class.number);
-			assert(EquivalenceClasses::getEqClassNr(instr));
-			assert(EquivalenceClasses::getEqClassNr(instr) == eq_class.number);
+				.addReg(predVreg).addImm(eq_class.number);
 		}
 	}
 }

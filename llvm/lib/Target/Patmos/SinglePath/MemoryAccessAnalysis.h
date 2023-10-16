@@ -331,7 +331,7 @@ memoryAccessCompensation(
       }
     });
   }
-  worklist = {}; // Clear queue
+  worklist = {}; // Clear queue for reuse
 
   std::queue<const MachineBasicBlock*> header_worklist;
   std::set<const MachineBasicBlock*> done_headers;
