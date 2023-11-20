@@ -2661,4 +2661,98 @@ TEST(ConstantLoopDominatorsAnalysisTest, TwoNestedExistsToLatches){
 	})
   );
 }
+
+//    1
+//    |
+//    v
+//  +-2<-------+
+//  |  \       |
+//  |   \      |
+//  |    v     |
+//  | +->3->4--+
+//  | |  |  |  |
+//  | |  v  |  |
+//  | |  5<-+  |
+//  | |  |     |
+//  | |  v     |
+//  | +--6-----+
+//  v
+//  7
+TEST(ConstantLoopDominatorsAnalysisTest, NestedUnilatchDomHeadNonDom){
+  MockLoopInfo LI;
+
+  mockMBB(mockMBB1,false);
+  mockMBB(mockMBB2,true);
+  mockMBB(mockMBB3,true);
+  mockMBB(mockMBB4,false);
+  mockMBB(mockMBB5,false);
+  mockMBB(mockMBB6,false);
+  mockMBB(mockMBB7,false);
+  set_preds_succs(mockMBB1, arr({}), arr({&mockMBB2}));
+  set_preds_succs(mockMBB2, arr({&mockMBB1,&mockMBB4,&mockMBB6}),arr({&mockMBB3,&mockMBB7}));
+  set_preds_succs(mockMBB3, arr({&mockMBB2,&mockMBB6}),arr({&mockMBB4,&mockMBB5}));
+  set_preds_succs(mockMBB4, arr({&mockMBB3}),arr({&mockMBB2,&mockMBB5}));
+  set_preds_succs(mockMBB5, arr({&mockMBB3,&mockMBB4}),arr({&mockMBB6}));
+  set_preds_succs(mockMBB6, arr({&mockMBB5}),arr({&mockMBB2,&mockMBB3}));
+  set_preds_succs(mockMBB7, arr({&mockMBB2}),arr({}));
+
+  MockLoop mockLoop1(nullptr,
+      { &mockMBB2,&mockMBB3,&mockMBB4,&mockMBB5,&mockMBB6 },
+      { &mockMBB4,&mockMBB6 },
+      { &mockMBB2 }
+  );
+  MockLoop mockLoop2(&mockLoop1,
+      { &mockMBB3,&mockMBB4,&mockMBB5,&mockMBB6 },
+      { &mockMBB6 },
+      { &mockMBB4,&mockMBB6 }
+  );
+  LI.add_loop(&mockLoop1);
+  LI.add_loop(&mockLoop2);
+
+  auto result = constantLoopDominatorsAnalysis(&mockMBB1,&LI,constantBounds,false);
+
+  EXPECT_THAT(result, SizeIs(7));
+  EXPECT_THAT(
+	result[&mockMBB1],
+	UnorderedElementsAreArray({
+	  &mockMBB1
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB2],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB3],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB4],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB5],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB6],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3
+	})
+  );
+  EXPECT_THAT(
+	result[&mockMBB7],
+	UnorderedElementsAreArray({
+	  &mockMBB1, &mockMBB2, &mockMBB3, &mockMBB7
+	})
+  );
+}
 }

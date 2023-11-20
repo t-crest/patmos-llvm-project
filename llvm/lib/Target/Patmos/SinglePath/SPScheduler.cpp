@@ -487,10 +487,15 @@ void SPScheduler::runListSchedule(MachineBasicBlock *mbb) {
     enable_dual_issue = None;
   }
 
-  auto class_dependencies = EquivalenceClasses::importClassDependenciesFromModule(*mbb->getParent());
+
   auto is_dependent = [&](const MachineInstr* instr1,const MachineInstr* instr2){
-	auto dep = SPDisableSchedulerEqClass ? true :
-			EquivalenceClasses::dependentInstructions(instr1, instr2,class_dependencies);
+    bool dep;
+    if(!PatmosSinglePathInfo::useNewSinglePathTransform() || SPDisableSchedulerEqClass)  {
+    	dep = true;
+    } else {
+    	auto class_dependencies = EquivalenceClasses::importClassDependenciesFromModule(*mbb->getParent());
+    	dep = EquivalenceClasses::dependentInstructions(instr1, instr2,class_dependencies);
+    }
 	LLVM_DEBUG(
 		dbgs() << "Checking Instructions dependence:\n";
 		instr1->dump();
