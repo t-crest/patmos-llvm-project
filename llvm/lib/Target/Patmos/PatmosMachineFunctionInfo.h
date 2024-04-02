@@ -101,6 +101,9 @@ class PatmosMachineFunctionInfo : public MachineFunctionInfo {
   /// | LoopCnts | S0Spills | ExcessSpills |
   std::vector<int> SinglePathFIs;
 
+  /// FIs determined to be movable to stack cache
+  std::vector<int> StackCacheAnalysisFIs;
+
   // Index to the SinglePathFIs where the S0 spill slots start
   unsigned SPS0SpillOffset;
 
@@ -257,6 +260,21 @@ public:
 
   unsigned getSinglePathFICnt(void) const {
     return SinglePathFIs.size();
+  }
+
+  const std::vector<int>& getStackCacheAnalysisFIs(void) const {
+    return StackCacheAnalysisFIs;
+  }
+
+  void removeStackCacheAnalysisFIs(int fi) {
+    std::vector<int>::iterator position = std::find(StackCacheAnalysisFIs.begin(), StackCacheAnalysisFIs.end(), fi);
+
+    if (position != StackCacheAnalysisFIs.end()) // == myVector.end() means the element was not found
+      StackCacheAnalysisFIs.erase(position);
+  }
+
+  void addStackCacheAnalysisFI(int fi) {
+    StackCacheAnalysisFIs.push_back(fi);
   }
 
   PatmosAnalysisInfo &getAnalysisInfo() { return AnalysisInfo; }

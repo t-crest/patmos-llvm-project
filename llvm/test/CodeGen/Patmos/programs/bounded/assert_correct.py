@@ -243,11 +243,16 @@ def compile_and_test_matrix(llc_args, pasim_args, matrix):
 
 compile_and_test_matrix("", "", [
     # Optimization levels
-    "", "-O1", 
+    "", "-O1",
     "-O2", "-O2 -mpatmos-disable-vliw=false",
     # We try low subfuction size to ensure the splitter works too 
     # (without needing to make tests with big functions)
-    "-O2 --mpatmos-max-subfunction-size=64", 
+    "-O2 --mpatmos-max-subfunction-size=64",
+    [
+        "",
+        "--mpatmos-enable-stack-cache-promotion",
+        ["--mpatmos-enable-array-stack-cache-promotion"]
+    ],
     [
         # We add this indirection so that commenting out the following line will remove all traditional tests
         "",
@@ -264,7 +269,7 @@ compile_and_test_matrix("", "", [
         "-mpatmos-singlepath=" + sp_root,
         [
             "-mpatmos-disable-singlepath-scheduler-equivalence-class",
-            "", 
+            "",
             ("-mpatmos-enable-permissive-dual-issue", "--permissive-dual-issue"),
             "-mpatmos-disable-pseudo-roots", "-mpatmos-disable-countless-loops",
             [

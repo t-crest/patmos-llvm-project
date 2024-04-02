@@ -148,6 +148,8 @@ namespace {
     /// run passes immediately before register allocation. This should return
     /// true if -print-machineinstrs should print after these passes.
     void addPreRegAlloc() override {
+      addPass(createPatmosStackCachePromotionPass(getPatmosTargetMachine()));
+
       // For -O0, add a pass that removes dead instructions to avoid issues
       // with spill code in naked functions containing function calls with
       // unused return values.
@@ -177,6 +179,7 @@ namespace {
 	/// This method may be implemented by targets that want to run passes after
 	/// register allocation pass pipeline but before prolog-epilog insertion.
 	void addPostRegAlloc() override {
+
 		if(PatmosSinglePathInfo::isEnabled() && PatmosSinglePathInfo::useNewSinglePathTransform()) {
 			// The previous register allocation allocated the predicate registers too.
 			// We returns those predicate registers to virtual registers so that they

@@ -128,6 +128,12 @@ void PatmosFrameLowering::assignFIsToStackCache(MachineFunction &MF,
     // find all spill slots and locations for callee saved registers
     if (MFI.isSpillSlotObjectIndex(FI))
       SCFIs[FI] = true;
+
+
+    const std::vector<int> &StackCacheAllocatable = PMFI.getStackCacheAnalysisFIs();
+    for(unsigned i=0; i<StackCacheAllocatable.size(); i++) {
+      SCFIs[StackCacheAllocatable[i]] = true;
+    }
   }
 }
 
@@ -330,7 +336,6 @@ void PatmosFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &M
       MI->setFlag(MachineInstr::FrameSetup);
     }
   }
-
 }
 
 void PatmosFrameLowering::emitEpilogue(MachineFunction &MF,
