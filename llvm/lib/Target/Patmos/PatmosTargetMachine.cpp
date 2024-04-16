@@ -177,6 +177,8 @@ namespace {
 	/// This method may be implemented by targets that want to run passes after
 	/// register allocation pass pipeline but before prolog-epilog insertion.
 	void addPostRegAlloc() override {
+		addPass(createPatmosStackCachePromotionPass(getPatmosTargetMachine()));
+
 		if(PatmosSinglePathInfo::isEnabled() && PatmosSinglePathInfo::useNewSinglePathTransform()) {
 			// The previous register allocation allocated the predicate registers too.
 			// We returns those predicate registers to virtual registers so that they

@@ -41,6 +41,7 @@ namespace llvm {
   FunctionPass *createPatmosSPBundlingPass(const PatmosTargetMachine &tm);
   FunctionPass *createOppositePredicateCompensationPass(const PatmosTargetMachine &tm);
   FunctionPass *createDataCacheAccessEliminationPass(const PatmosTargetMachine &tm);
+  FunctionPass *createPatmosStackCachePromotionPass(const PatmosTargetMachine &tm);
   FunctionPass *createMemoryAccessNormalizationPass(const PatmosTargetMachine &tm);
   FunctionPass *createPatmosSPReducePass(const PatmosTargetMachine &tm);
   FunctionPass *createPreRegallocReduce(const PatmosTargetMachine &tm);

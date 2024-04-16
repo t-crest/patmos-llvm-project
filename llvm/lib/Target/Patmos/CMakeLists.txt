@@ -26,6 +26,7 @@ add_llvm_target(PatmosCodeGen
   PatmosSelectionDAGInfo.cpp
   PatmosAsmPrinter.cpp
   PatmosMCInstLower.cpp
+  PatmosStackCachePromotion.cpp
   PatmosDelaySlotFiller.cpp
   PatmosFunctionSplitter.cpp
   PatmosDelaySlotKiller.cpp
