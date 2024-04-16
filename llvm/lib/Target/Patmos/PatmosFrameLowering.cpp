@@ -331,6 +331,10 @@ void PatmosFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &M
     }
   }
 
+  /*PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
+  BitVector SCFI = PMFI.getStackCacheFIs();
+  PMFI.setStackCacheFIs(SCFI.set());*/
+  // TODO Allocate objects on stack cache instead of shadow stack
 }
 
 void PatmosFrameLowering::emitEpilogue(MachineFunction &MF,
