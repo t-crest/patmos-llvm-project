@@ -40,7 +40,6 @@ void PatmosStackCachePromotion::processMachineInstruction(
     MachineBasicBlock::iterator II) {
   // TODO Convert access to SC access
 
-  if (!II.isValid() || (II.getInstrIterator().getNodePtr()->isKnownSentinel())) return; // TODO Check why this is needed
   MachineInstr &MI = *II;
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MBB.getParent();
@@ -231,6 +230,7 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
          BB_iter != BB_iter_end; ++BB_iter) {
       for (auto instr_iter = startInstr, instr_iter_end = BB_iter->end();
            instr_iter != instr_iter_end; ++instr_iter) {
+        if (!instr_iter.isValid() || (instr_iter.getInstrIterator().getNodePtr()->isKnownSentinel())) break; // TODO Check why this is needed
         processMachineInstruction(instr_iter);
       }
     }
