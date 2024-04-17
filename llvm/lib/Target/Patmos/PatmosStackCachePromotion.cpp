@@ -11,9 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "PatmosStackCachePromotion.h"
+#include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 
 using namespace llvm;
 
@@ -42,12 +43,9 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
     // Calculate the amount of bytes to store on SC
     MachineFrameInfo &MFI = MF.getFrameInfo();
-    unsigned stackSize = 0;
-    for(unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
-      stackSize += MFI.getObjectSize(FI);
-    }
+    unsigned stackSize = MFI.estimateStackSize(MF);
 
-    LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd() << "MFIs resulting in " << stackSize << " bytes to SC\n");
+    LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd() << " MFIs resulting in " << stackSize << " bytes to SC\n");
 
     // Insert Reserve before function start
     auto startofblock = MF.begin();
@@ -61,6 +59,15 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
     startofblock->insert(startInstr, ensureInstr);
 
+
+    for(auto BB_iter = startofblock, BB_iter_end = MF.end(); BB_iter != BB_iter_end; ++BB_iter) {
+      for (auto instr_iter = startInstr, instr_iter_end = BB_iter->end();
+           instr_iter != instr_iter_end; ++instr_iter) {
+        if (llvm::isMainMemLoadInst(instr_iter->getOpcode()) || llvm::isMainMemStoreInst(instr_iter->getOpcode())) {
+          LLVM_DEBUG(dbgs() << "Instr " << TII->getName(instr_iter->getOpcode()) << " with operands " << instr_iter->getNumOperands() << "\n");
+        }
+      }
+    }
     // TODO Convert access to SC access
 
     // Insert Free after function End
