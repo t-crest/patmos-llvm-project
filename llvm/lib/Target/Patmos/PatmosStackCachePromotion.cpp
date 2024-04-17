@@ -40,23 +40,24 @@ void PatmosStackCachePromotion::processMachineInstruction(
     MachineBasicBlock::iterator II) {
   // TODO Convert access to SC access
 
+  if (!II.isValid() || (II.getInstrIterator().getNodePtr()->isKnownSentinel())) return; // TODO Check why this is needed
   MachineInstr &MI = *II;
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MBB.getParent();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
-  unsigned FIOperandNum;
 
-  if (llvm::isMainMemLoadInst(MI.getOpcode())) {
+  unsigned FIOperandNum;
+  int FrameIndex;
+  if (TII->isLoadFromStackSlot(MI, FrameIndex)) { // For some reason the FrameDisplacement operand [4] sometimes is not 0 here?
     FIOperandNum = 3;
-  } else if (llvm::isMainMemStoreInst(MI.getOpcode())) {
+  } else if (TII->isStoreToStackSlot(MI, FrameIndex)) { // For some reason the FrameDisplacement operand [3] sometimes is not 0 here?
     FIOperandNum = 2;
   } else {
     return;
   }
 
-  int FrameIndex        = MI.getOperand(FIOperandNum).getIndex();
-  int FrameOffset       = MFI.getObjectOffset(FrameIndex); // TODO This has to be computed somewhere before
+  int FrameOffset       = MFI.getObjectOffset(FrameIndex);
   int FrameDisplacement = MI.getOperand(FIOperandNum+1).getImm();
 
   int Offset = FrameOffset;
