@@ -46,6 +46,7 @@ public:
     return "Patmos StackCache-Promotion pass (machine code)";
   }
 
+  void processMachineInstruction(MachineBasicBlock::iterator II);
   bool runOnMachineFunction(MachineFunction &MF) override ;
 
 };

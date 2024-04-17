@@ -36,6 +36,58 @@ llvm::createPatmosStackCachePromotionPass(const PatmosTargetMachine &tm) {
   return new PatmosStackCachePromotion(tm);
 }
 
+void PatmosStackCachePromotion::processMachineInstruction(
+    MachineBasicBlock::iterator II) {
+  // TODO Convert access to SC access
+
+  MachineInstr &MI = *II;
+  MachineBasicBlock &MBB = *MI.getParent();
+  MachineFunction &MF = *MBB.getParent();
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  Register dataReg;
+  uint64_t basePtrReg;
+  uint64_t unknown1;
+  uint64_t offset;
+  uint64_t FrameDisplacement;
+
+  if (llvm::isMainMemLoadInst(MI.getOpcode())) {
+    basePtrReg = MI.getOperand(1).getReg();
+    dataReg = MI.getOperand(0).getReg();
+    offset = MFI.getObjectOffset(MI.getOperand(3).getIndex());
+    FrameDisplacement = MI.getOperand(4).getImm();
+    unknown1 = MI.getOperand(2).getImm();
+
+    auto dataRegName = TII->getRegisterInfo().getRegAsmName(dataReg);
+    auto basePtrRegName =
+        basePtrReg > 0 ? TII->getRegisterInfo().getRegAsmName(basePtrReg) : "?";
+
+    LLVM_DEBUG(dbgs() << TII->getName(MI.getOpcode()) << " " << dataRegName
+                      << " = "
+                      << "[" << basePtrRegName << " + " << offset << "]"
+                      << "\n");
+
+  } else if (llvm::isMainMemStoreInst(MI.getOpcode())) {
+    basePtrReg = MI.getOperand(0)
+                     .getReg(); // This is not known yet at this point in time
+    dataReg = MI.getOperand(4).getReg();
+    offset = MFI.getObjectOffset(
+        MI.getOperand(2)
+            .getIndex()); // This is not final yet at this point in time
+    FrameDisplacement = MI.getOperand(3).getImm(); // Always has to be zero
+    unknown1 = MI.getOperand(1).getImm();
+
+    auto dataRegName = TII->getRegisterInfo().getRegAsmName(dataReg);
+    auto basePtrRegName =
+        basePtrReg > 0 ? TII->getRegisterInfo().getRegAsmName(basePtrReg) : "?";
+
+    LLVM_DEBUG(dbgs() << TII->getName(MI.getOpcode()) << "[" << basePtrRegName
+                      << " + " << offset << "] = " << dataRegName << "\n");
+  } else {
+    return;
+  }
+}
+
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
   if (EnableStackCachePromotion) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
@@ -45,7 +97,9 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     MachineFrameInfo &MFI = MF.getFrameInfo();
     unsigned stackSize = MFI.estimateStackSize(MF);
 
-    LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd() << " MFIs resulting in " << stackSize << " bytes to SC\n");
+    LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd()
+                      << " MFIs resulting in " << stackSize
+                      << " bytes to SC\n");
 
     // Insert Reserve before function start
     auto startofblock = MF.begin();
@@ -59,16 +113,13 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
     startofblock->insert(startInstr, ensureInstr);
 
-
-    for(auto BB_iter = startofblock, BB_iter_end = MF.end(); BB_iter != BB_iter_end; ++BB_iter) {
+    for (auto BB_iter = startofblock, BB_iter_end = MF.end();
+         BB_iter != BB_iter_end; ++BB_iter) {
       for (auto instr_iter = startInstr, instr_iter_end = BB_iter->end();
            instr_iter != instr_iter_end; ++instr_iter) {
-        if (llvm::isMainMemLoadInst(instr_iter->getOpcode()) || llvm::isMainMemStoreInst(instr_iter->getOpcode())) {
-          LLVM_DEBUG(dbgs() << "Instr " << TII->getName(instr_iter->getOpcode()) << " with operands " << instr_iter->getNumOperands() << "\n");
-        }
+        processMachineInstruction(instr_iter);
       }
     }
-    // TODO Convert access to SC access
 
     // Insert Free after function End
     auto endofBlock = MF.rbegin();
