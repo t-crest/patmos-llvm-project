@@ -47,6 +47,7 @@ public:
   }
 
   void processMachineInstruction(MachineBasicBlock::iterator II);
+  void calcOffsets(MachineFunction& MF);
   bool runOnMachineFunction(MachineFunction &MF) override ;
 
 };

@@ -45,6 +45,87 @@ void PatmosStackCachePromotion::processMachineInstruction(
   MachineFunction &MF = *MBB.getParent();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
+  unsigned FIOperandNum;
+
+  if (llvm::isMainMemLoadInst(MI.getOpcode())) {
+    FIOperandNum = 3;
+  } else if (llvm::isMainMemStoreInst(MI.getOpcode())) {
+    FIOperandNum = 2;
+  } else {
+    return;
+  }
+
+  int FrameIndex        = MI.getOperand(FIOperandNum).getIndex();
+  int FrameOffset       = MFI.getObjectOffset(FrameIndex); // TODO This has to be computed somewhere before
+  int FrameDisplacement = MI.getOperand(FIOperandNum+1).getImm();
+
+  int Offset = FrameOffset;
+
+  unsigned opcode = MI.getOpcode();
+
+  // ensure that the offset fits the instruction
+  switch (opcode)
+  {
+  case Patmos::LWC: case Patmos::LWM:
+  case Patmos::SWC: case Patmos::SWM:
+  case Patmos::PSEUDO_PREG_SPILL:
+  case Patmos::PSEUDO_PREG_RELOAD:
+    // 9 bit
+    assert((Offset & 0x3) == 0);
+    Offset = (Offset >> 2) + FrameDisplacement;
+    break;
+  case Patmos::LHC: case Patmos::LHM:
+  case Patmos::LHUC: case Patmos::LHUM:
+  case Patmos::SHC: case Patmos::SHM:
+    // 8 bit
+    assert((Offset & 0x1) == 0);
+    Offset = (Offset >> 1) + FrameDisplacement;
+
+    break;
+  case Patmos::LBC: case Patmos::LBM:
+  case Patmos::LBUC: case Patmos::LBUM:
+  case Patmos::SBC: case Patmos::SBM:
+    // 7 bit
+    Offset += FrameDisplacement;
+    break;
+  case Patmos::ADDi:
+    // 12 bit
+    Offset += FrameDisplacement;
+    break;
+  case Patmos::ADDl:
+  case Patmos::DBG_VALUE:
+    // all should be fine
+    Offset += FrameDisplacement;
+    break;
+  default:
+    llvm_unreachable("Unexpected operation with FrameIndex encountered.");
+  }
+
+  switch (opcode)
+  {
+  case Patmos::LWC: case Patmos::LWM: opcode = Patmos::LWS; break;
+  case Patmos::LHC: case Patmos::LHM: opcode = Patmos::LHS; break;
+  case Patmos::LHUC: case Patmos::LHUM: opcode = Patmos::LHUS; break;
+  case Patmos::LBC: case Patmos::LBM: opcode = Patmos::LBS; break;
+  case Patmos::LBUC: case Patmos::LBUM: opcode = Patmos::LBUS; break;
+  case Patmos::SWC: case Patmos::SWM: opcode = Patmos::SWS; break;
+  case Patmos::SHC: case Patmos::SHM: opcode = Patmos::SHS; break;
+  case Patmos::SBC: case Patmos::SBM: opcode = Patmos::SBS; break;
+  case Patmos::ADDi: case Patmos::ADDl: case Patmos::DBG_VALUE:
+    break;
+  default:
+    llvm_unreachable("Unexpected operation with FrameIndex encountered.");
+  }
+
+  // Update Data Cache instr to use Stack Cache
+  const MCInstrDesc &newMCID = TII->get(opcode);
+  MI.setDesc(newMCID);
+
+  MI.getOperand(FIOperandNum).ChangeToRegister(Patmos::R0, false, false, false);
+  MI.getOperand(FIOperandNum+1).ChangeToImmediate(Offset);
+
+  /*
+
   Register dataReg;
   uint64_t basePtrReg;
   uint64_t unknown1;
@@ -85,6 +166,36 @@ void PatmosStackCachePromotion::processMachineInstruction(
                       << " + " << offset << "] = " << dataRegName << "\n");
   } else {
     return;
+  }*/
+}
+
+void PatmosStackCachePromotion::calcOffsets(MachineFunction& MF) {
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  SmallVector<int, 8> ObjectsToAllocate;
+
+  for (unsigned i = 0, e = MFI.getObjectIndexEnd(); i != e; ++i) {
+    if (MFI.isObjectPreAllocated(i) && MFI.getUseLocalStackAllocationBlock())
+      continue;
+    if (MFI.isDeadObjectIndex(i))
+      continue;
+
+    ObjectsToAllocate.push_back(i);
+  }
+
+
+  int64_t offset = 0;
+  Align maxalign = MFI.getMaxAlign();
+  for (auto &FrameIdx : ObjectsToAllocate) {
+    // AdjustStackOffset
+    Align Alignment = MFI.getObjectAlign(FrameIdx);
+
+    maxalign = std::max(maxalign, Alignment);
+    offset = alignTo(offset, Alignment);
+
+    MFI.setObjectOffset(FrameIdx, offset);
+    offset += MFI.getObjectSize(FrameIdx);
+
   }
 }
 
@@ -112,6 +223,8 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     ensureInstrBuilder.addImm(stackSize);
 
     startofblock->insert(startInstr, ensureInstr);
+
+    calcOffsets(MF);
 
     for (auto BB_iter = startofblock, BB_iter_end = MF.end();
          BB_iter != BB_iter_end; ++BB_iter) {
