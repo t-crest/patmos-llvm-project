@@ -25,7 +25,7 @@ STATISTIC(SavesConverted,
 
 static cl::opt<bool> EnableStackCachePromotion(
     "mpatmos-enable-stack-cache-promotion", cl::init(false),
-    cl::desc("Enable the compiler to promot data to the stack cache"));
+    cl::desc("Enable the compiler to promote data to the stack cache"));
 
 char PatmosStackCachePromotion::ID = 0;
 
@@ -207,6 +207,9 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     // Calculate the amount of bytes to store on SC
     MachineFrameInfo &MFI = MF.getFrameInfo();
     unsigned stackSize = MFI.estimateStackSize(MF);
+
+    if (!stackSize)
+      return true; // prevent sres 0
 
     LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd()
                       << " MFIs resulting in " << stackSize
