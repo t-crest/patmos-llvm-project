@@ -211,6 +211,9 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     if (!stackSize)
       return true; // prevent sres 0
 
+    if (stackSize > STC.getStackCacheSize())
+      return true; // TODO right now we simply abort and therefore push everything to the shadow stack, but only the exceeding data should be put on the shadow stack
+
     LLVM_DEBUG(dbgs() << "Storing " << MFI.getObjectIndexEnd()
                       << " MFIs resulting in " << stackSize
                       << " bytes to SC\n");
@@ -219,13 +222,13 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     auto startofblock = MF.begin();
     auto startInstr = startofblock->begin();
 
-    auto *ensureInstr = MF.CreateMachineInstr(TII->get(Patmos::SRESi),
+    auto *reserveInstr = MF.CreateMachineInstr(TII->get(Patmos::SRESi),
                                               startInstr->getDebugLoc());
-    MachineInstrBuilder ensureInstrBuilder(MF, ensureInstr);
-    AddDefaultPred(ensureInstrBuilder);
-    ensureInstrBuilder.addImm(stackSize);
+    MachineInstrBuilder reserveInstrBuilder(MF, reserveInstr);
+    AddDefaultPred(reserveInstrBuilder);
+    reserveInstrBuilder.addImm(stackSize);
 
-    startofblock->insert(startInstr, ensureInstr);
+    startofblock->insert(startInstr, reserveInstr);
 
     calcOffsets(MF);
 
@@ -249,6 +252,14 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     freeInstrBuilder.addImm(stackSize);
 
     endofBlock->insert(endInstr->getIterator(), freeInstr);
+
+    //auto *ensInstr = MF.CreateMachineInstr(TII->get(Patmos::SENSr),
+    //                                        endInstr->getDebugLoc());
+    //MachineInstrBuilder ensInstrBuilder(MF, ensInstr);
+    //AddDefaultPred(ensInstrBuilder);
+    //ensInstrBuilder.addImm(stackSize);
+
+    //endofBlock->insert(endInstr->getIterator(), ensInstr);
   }
   return true;
 }
