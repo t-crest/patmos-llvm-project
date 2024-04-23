@@ -128,6 +128,9 @@ void PatmosFrameLowering::assignFIsToStackCache(MachineFunction &MF,
     // find all spill slots and locations for callee saved registers
     if (MFI.isSpillSlotObjectIndex(FI))
       SCFIs[FI] = true;
+
+    if (!MFI.isFixedObjectIndex(FI))
+      SCFIs[FI] = true;
   }
 }
 

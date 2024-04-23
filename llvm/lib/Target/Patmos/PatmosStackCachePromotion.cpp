@@ -199,6 +199,7 @@ void PatmosStackCachePromotion::calcOffsets(MachineFunction& MF) {
 }
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
+  return false; // Disable for now, since we are using PatmosFrameLowering::assignFIsToStackCache instead for now
   if (EnableStackCachePromotion) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");

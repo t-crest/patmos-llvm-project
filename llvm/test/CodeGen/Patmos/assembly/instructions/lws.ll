@@ -9,8 +9,8 @@ entry:
   store i32 16, i32* %stack_var_2
   
   %asm_result = call { i32, i32 } asm "
-        lwc	$0	=	[$2]
-        lwc	$1	=	[$2 + 1]
+        lws	$0	=	[$2]
+        lws	$1	=	[$2 + 1]
 
         sres 8
 
