@@ -129,8 +129,11 @@ void PatmosFrameLowering::assignFIsToStackCache(MachineFunction &MF,
     if (MFI.isSpillSlotObjectIndex(FI))
       SCFIs[FI] = true;
 
-    if (!MFI.isFixedObjectIndex(FI))
-      SCFIs[FI] = true;
+
+    const std::vector<int> &StackCacheAllocatable = PMFI.getStackCacheAnalysisFIs();
+    for(unsigned i=0; i<StackCacheAllocatable.size(); i++) {
+      SCFIs[StackCacheAllocatable[i]] = true;
+    }
   }
 }
 
