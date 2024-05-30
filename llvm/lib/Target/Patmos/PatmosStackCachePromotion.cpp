@@ -80,11 +80,33 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
       if (op.isFI() &&
           std::any_of(PMFI.getStackCacheAnalysisFIs().begin(),
                       PMFI.getStackCacheAnalysisFIs().end(),
-                      [&op](auto elem) { return elem == op.isFI(); }))
+                      [&op](auto elem) { return elem == op.getIndex(); }))
         return true;
     }
   }
   return false;
+}
+
+void PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
+                       MachineFunction &MF) {
+  if (MI.getOpcode() == OPold) {
+    auto Dependencies = getDeps(MI, MF);
+    if (Dependencies.size() == 0)
+      return;
+
+    if (!hasFIonSC(Dependencies, MF))
+      return;
+
+    MI.setDesc(TII->get(OPnew));
+
+    MI.dump();
+    LLVM_DEBUG(dbgs() << "\tDepends on: \n");
+    for (auto &DMI : Dependencies) {
+      LLVM_DEBUG(dbgs() << *DMI);
+    }
+    LLVM_DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "\n");
+  }
 }
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
@@ -98,29 +120,13 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
       // if (!MFI.isFixedObjectIndex(FI) && !isFIusedInCall(MF, FI))
+      LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
       PMFI.addStackCacheAnalysisFI(FI);
     }
 
     for (auto &BB : MF) {
       for (auto &MI : BB) {
-        if (MI.getOpcode() == Patmos::LWC) {
-          auto Dependencies = getDeps(MI, MF);
-          if (Dependencies.size() == 0)
-            continue;
-
-          if (!hasFIonSC(Dependencies, MF))
-            continue;
-
-          MI.setDesc(TII->get(Patmos::LWS));
-
-          MI.dump();
-          LLVM_DEBUG(dbgs() << "\tDepends on: \n");
-          for (auto &DMI : Dependencies) {
-            LLVM_DEBUG(dbgs() << *DMI);
-          }
-          LLVM_DEBUG(dbgs() << "\n");
-          LLVM_DEBUG(dbgs() << "\n");
-        }
+        replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
       }
     }
 
