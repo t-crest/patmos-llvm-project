@@ -87,15 +87,15 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
   return false;
 }
 
-void PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
+bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
                        MachineFunction &MF) {
   if (MI.getOpcode() == OPold) {
     auto Dependencies = getDeps(MI, MF);
     if (Dependencies.size() == 0)
-      return;
+      return false;
 
     if (!hasFIonSC(Dependencies, MF))
-      return;
+      return false;
 
     MI.setDesc(TII->get(OPnew));
 
@@ -106,7 +106,9 @@ void PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
     }
     LLVM_DEBUG(dbgs() << "\n");
     LLVM_DEBUG(dbgs() << "\n");
+    return true;
   }
+  return false;
 }
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
@@ -124,9 +126,30 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
       PMFI.addStackCacheAnalysisFI(FI);
     }
 
+    const std::vector<std::pair<unsigned, unsigned>> mappings = {
+        {Patmos::LWC, Patmos::LWS},
+        /*{Patmos::LHC, Patmos::LHS},
+        {Patmos::LBC, Patmos::LBS},
+        {Patmos::LHUC, Patmos::LHUS},
+        {Patmos::LBUC, Patmos::LBUS},*/
+
+        /*{Patmos::SWC, Patmos::SWS},
+        {Patmos::SHC, Patmos::SHS},
+        {Patmos::SBC, Patmos::SBS},*/
+    };
+
     for (auto &BB : MF) {
       for (auto &MI : BB) {
-        replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
+        std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first, elem.second, MI, MF);});
+        /*replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
+        replaceOpcodeIfSC(Patmos::LHC, Patmos::LHS, MI, MF);
+        replaceOpcodeIfSC(Patmos::LBC, Patmos::LBS, MI, MF);
+        replaceOpcodeIfSC(Patmos::LHUC, Patmos::LHUS, MI, MF);
+        replaceOpcodeIfSC(Patmos::LBUC, Patmos::LBUS, MI, MF);
+
+        replaceOpcodeIfSC(Patmos::SWC, Patmos::SWS, MI, MF);
+        replaceOpcodeIfSC(Patmos::SHC, Patmos::SHS, MI, MF);
+        replaceOpcodeIfSC(Patmos::SBC, Patmos::SBS, MI, MF);*/
       }
     }
 

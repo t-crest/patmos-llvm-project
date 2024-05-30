@@ -50,7 +50,7 @@ public:
   void calcOffsets(MachineFunction& MF);
   bool runOnMachineFunction(MachineFunction &MF) override ;
 
-  void replaceOpcodeIfSC(unsigned int OPold, unsigned int OPnew,
+  bool replaceOpcodeIfSC(unsigned int OPold, unsigned int OPnew,
                          MachineInstr &MI, MachineFunction &MF);
 };
 
