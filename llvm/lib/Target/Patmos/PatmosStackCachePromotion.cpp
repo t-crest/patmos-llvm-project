@@ -108,7 +108,9 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
 
 bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
                        MachineFunction &MF) {
-
+  if (std::any_of(MI.operands_begin(), MI.operands_end(), [](auto element){return element.isFI();})) {
+    return false;
+  }
   if (MI.getOpcode() == OPold) {
     auto Dependencies = getDeps(MI, MF);
     if (Dependencies.size() == 0)
