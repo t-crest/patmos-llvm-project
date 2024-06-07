@@ -50,6 +50,27 @@ bool isFIusedInCall(MachineFunction &MF, unsigned FI) {
   return false;
 }
 
+void getDeps(MachineInstr* MI,
+             const MachineFunction &MF,
+             std::vector<MachineInstr *>& Dependencies) {
+  if (std::find(Dependencies.begin(), Dependencies.end(), MI) != Dependencies.end())
+    return;
+  Dependencies.push_back(MI);
+  const MachineRegisterInfo &MRI = MF.getRegInfo();
+  for (auto &MO : MI->operands()) {
+    if (MO.isReg() && MO.isUse()) {
+      unsigned Reg = MO.getReg();
+      if (Register::isVirtualRegister(Reg)) {
+        MachineInstr *DefMI = MRI.getVRegDef(Reg);
+        if (DefMI) {
+          getDeps(DefMI, MF, Dependencies);
+        }
+      }
+    }
+  }
+  return;
+}
+
 std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
                                     const MachineFunction &MF) {
   const MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -61,9 +82,7 @@ std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
       if (Register::isVirtualRegister(Reg)) {
         MachineInstr *DefMI = MRI.getVRegDef(Reg);
         if (DefMI) {
-          auto lower = getDeps(*DefMI, MF);
-          Dependencies.push_back(DefMI);
-          Dependencies.insert(Dependencies.end(), lower.begin(), lower.end());
+          getDeps(DefMI, MF, Dependencies);
         }
       }
     }
@@ -89,6 +108,7 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
 
 bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
                        MachineFunction &MF) {
+
   if (MI.getOpcode() == OPold) {
     auto Dependencies = getDeps(MI, MF);
     if (Dependencies.size() == 0)
@@ -128,14 +148,14 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
     const std::vector<std::pair<unsigned, unsigned>> mappings = {
         {Patmos::LWC, Patmos::LWS},
-        /*{Patmos::LHC, Patmos::LHS},
+        {Patmos::LHC, Patmos::LHS},
         {Patmos::LBC, Patmos::LBS},
         {Patmos::LHUC, Patmos::LHUS},
-        {Patmos::LBUC, Patmos::LBUS},*/
+        {Patmos::LBUC, Patmos::LBUS},
 
-        /*{Patmos::SWC, Patmos::SWS},
+        {Patmos::SWC, Patmos::SWS},
         {Patmos::SHC, Patmos::SHS},
-        {Patmos::SBC, Patmos::SBS},*/
+        {Patmos::SBC, Patmos::SBS},
     };
 
     for (auto &BB : MF) {
