@@ -1,3 +1,4 @@
+; RUN: LLC_ARGS="-mpatmos-enable-stack-cache-promotion"; \
 ; RUN: %test_no_runtime_execution
 
 define i32 @main() {
@@ -11,17 +12,7 @@ entry:
   %asm_result = call { i32, i32 } asm "
         lws	$0	=	[$2]
         lws	$1	=	[$2 + 1]
-
-        sres 8
-
-        sws [0] = $0
-        sws [1] = $1
-
-		lws	$0  =	[0]
-		lws	$1	=	[1]
-
-		sfree 8
-		nop
+        nop
 	", "=&r,=r,r"
 	(i32* %stack_var_1)
 	
