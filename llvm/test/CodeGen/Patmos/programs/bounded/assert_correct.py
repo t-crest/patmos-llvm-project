@@ -243,7 +243,7 @@ def compile_and_test_matrix(llc_args, pasim_args, matrix):
 
 compile_and_test_matrix("", "", [
     # Optimization levels
-    "", "-O1", 
+    "", "--mpatmos-enable-stack-cache-promotion", "-O1",
     "-O2", "-O2 -mpatmos-disable-vliw=false",
     # We try low subfuction size to ensure the splitter works too 
     # (without needing to make tests with big functions)
