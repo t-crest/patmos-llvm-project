@@ -90,6 +90,79 @@ std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
   return Dependencies;
 }
 
+const AllocaInst* findAllocaForValue(const Value *V) {
+  // Iterate through the users of the value
+  for (const User *U : V->users()) {
+    if (const StoreInst *SI = dyn_cast<StoreInst>(U)) {
+      if (SI->getValueOperand() == V) {
+        // Found a StoreInst using V, now check its pointer operand
+        const Value *Ptr = SI->getPointerOperand();
+        // Trace back the pointer operand
+        if (const AllocaInst *AI = dyn_cast<AllocaInst>(Ptr)) {
+          return AI;
+        } else {
+          // If not an AllocaInst, continue tracing back
+          return findAllocaForValue(Ptr);
+        }
+      }
+    }
+  }
+  return nullptr; // No matching AllocaInst found
+}
+
+bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF) {
+  // Get the frame information from the machine function
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Check if the frame index is valid
+  if (ObjectFI < 0 || ObjectFI >= MFI.getObjectIndexEnd()) {
+    llvm_unreachable("Invalid frame index!");
+  }
+
+  // Check if the frame index is associated with a fixed object
+  if (MFI.isFixedObjectIndex(ObjectFI)) {
+    return false;
+  }
+
+  const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
+  dbgs() << "AllocaInst: " << *AI << "\n";
+
+  const Function &F = MF.getFunction();
+  const Module *M = F.getParent();
+
+  std::vector<const StoreInst*> stores;
+
+  for (const BasicBlock &BB : F) {
+    for (const Instruction &I : BB) {
+      if (const auto *store = dyn_cast<StoreInst>(&I)) {
+        if (store->getPointerOperand() == AI) {
+          stores.push_back(store);
+        }
+      }
+    }
+  }
+
+  for (const auto& store : stores) {
+    dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n";
+  }
+
+
+  for (const GlobalVariable &GV : M->globals()) {
+    if (GV.hasExternalLinkage()) {
+      dbgs() << "GV: " << GV << "\n";
+      if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
+            // TODO This does not work
+            return store->getValueOperand() == &GV;
+          })) {
+        dbgs() << "store from: " << GV << "\n";
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 bool hasFIonSC(const std::vector<MachineInstr *> deps,
                const MachineFunction &MF) {
   const PatmosMachineFunctionInfo &PMFI =
@@ -99,7 +172,7 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
       if (op.isFI() &&
           std::any_of(PMFI.getStackCacheAnalysisFIs().begin(),
                       PMFI.getStackCacheAnalysisFIs().end(),
-                      [&op](auto elem) { return elem == op.getIndex(); }))
+                      [&op](auto elem) { return elem == op.getIndex(); }) && !isFIAPointerToExternalSymbol(op.getIndex(), MF))
         return true;
     }
   }
@@ -119,15 +192,16 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
     if (!hasFIonSC(Dependencies, MF))
       return false;
 
-    MI.setDesc(TII->get(OPnew));
 
-    MI.dump();
+    LLVM_DEBUG(dbgs() << MI);
     LLVM_DEBUG(dbgs() << "\tDepends on: \n");
     for (auto &DMI : Dependencies) {
       LLVM_DEBUG(dbgs() << *DMI);
     }
     LLVM_DEBUG(dbgs() << "\n");
     LLVM_DEBUG(dbgs() << "\n");
+
+    MI.setDesc(TII->get(OPnew));
     return true;
   }
   return false;
