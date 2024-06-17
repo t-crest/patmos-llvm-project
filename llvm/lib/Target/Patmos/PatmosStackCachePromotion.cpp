@@ -113,7 +113,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
 
   // Check if the frame index is valid
   if (ObjectFI < 0 || ObjectFI >= MFI.getObjectIndexEnd()) {
-    llvm_unreachable("Invalid frame index!");
+    return false;
   }
 
   // Check if the frame index is associated with a fixed object
@@ -171,10 +171,11 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
       *MF.getInfo<PatmosMachineFunctionInfo>();
   for (const auto MI : deps) {
     for (const auto &op : MI->operands()) {
+      if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) return false;
       if (op.isFI() &&
           std::any_of(PMFI.getStackCacheAnalysisFIs().begin(),
                       PMFI.getStackCacheAnalysisFIs().end(),
-                      [&op](auto elem) { return elem == op.getIndex(); }) && !isFIAPointerToExternalSymbol(op.getIndex(), MF))
+                      [&op](auto elem) { return elem == op.getIndex(); }))
         return true;
     }
   }
@@ -186,22 +187,32 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   if (std::any_of(MI.operands_begin(), MI.operands_end(), [](auto element){return element.isFI();})) {
     return false;
   }
+
   if (MI.getOpcode() == OPold) {
+    LLVM_DEBUG(dbgs() << MI);
+
     auto Dependencies = getDeps(MI, MF);
+
+    LLVM_DEBUG(dbgs() << "\tDepends on: \n");
+    for (auto &DMI : Dependencies) {
+      LLVM_DEBUG(dbgs() << "\t" << *DMI);
+    }
+    LLVM_DEBUG(dbgs() << "\n");
+
     if (Dependencies.size() == 0)
       return false;
 
     if (!hasFIonSC(Dependencies, MF))
       return false;
+    LLVM_DEBUG(dbgs() << "Updating op...\n");
 
 
-    LLVM_DEBUG(dbgs() << MI);
-    LLVM_DEBUG(dbgs() << "\tDepends on: \n");
+    /*LLVM_DEBUG(dbgs() << "\tDepends on: \n");
     for (auto &DMI : Dependencies) {
       LLVM_DEBUG(dbgs() << *DMI);
     }
     LLVM_DEBUG(dbgs() << "\n");
-    LLVM_DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "\n");*/
 
     MI.setDesc(TII->get(OPnew));
     return true;
