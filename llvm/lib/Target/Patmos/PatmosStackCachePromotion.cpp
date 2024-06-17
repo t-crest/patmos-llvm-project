@@ -90,24 +90,21 @@ std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
   return Dependencies;
 }
 
-const AllocaInst* findAllocaForValue(const Value *V) {
-  // Iterate through the users of the value
-  for (const User *U : V->users()) {
-    if (const StoreInst *SI = dyn_cast<StoreInst>(U)) {
-      if (SI->getValueOperand() == V) {
-        // Found a StoreInst using V, now check its pointer operand
-        const Value *Ptr = SI->getPointerOperand();
-        // Trace back the pointer operand
-        if (const AllocaInst *AI = dyn_cast<AllocaInst>(Ptr)) {
-          return AI;
-        } else {
-          // If not an AllocaInst, continue tracing back
-          return findAllocaForValue(Ptr);
-        }
-      }
+const GlobalVariable* findGlobalVariable(const Value *V) {
+  if (auto *AI = dyn_cast<GlobalVariable>(V))
+    return AI;
+
+  if (auto *BCI = dyn_cast<BitCastInst>(V))
+    return findGlobalVariable(BCI->getOperand(0));
+  if (auto *GEP = dyn_cast<GetElementPtrInst>(V))
+    return findGlobalVariable(GEP->getPointerOperand());
+  if (auto *CE = dyn_cast<ConstantExpr>(V)) {
+    if (CE->getOpcode() == Instruction::BitCast) {
+      return findGlobalVariable(CE->getOperand(0));
     }
   }
-  return nullptr; // No matching AllocaInst found
+
+  return nullptr;
 }
 
 bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF) {
@@ -142,17 +139,22 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
     }
   }
 
-  for (const auto& store : stores) {
+  /*for (const auto& store : stores) {
     dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n";
-  }
+    // Trace back to find the AllocaInst
+    if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
+      dbgs() << "AI: " << *(AI) << "\n";
+    }
+  }*/
 
 
   for (const GlobalVariable &GV : M->globals()) {
     if (GV.hasExternalLinkage()) {
-      dbgs() << "GV: " << GV << "\n";
       if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
-            // TODO This does not work
-            return store->getValueOperand() == &GV;
+        if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
+          return AI == &GV;
+        }
+        return false;
           })) {
         dbgs() << "store from: " << GV << "\n";
         return true;
