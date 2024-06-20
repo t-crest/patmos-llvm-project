@@ -178,6 +178,7 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
                const MachineFunction &MF) {
   const PatmosMachineFunctionInfo &PMFI =
       *MF.getInfo<PatmosMachineFunctionInfo>();
+
   for (const auto MI : deps) {
     for (const auto &op : MI->operands()) {
       if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) return false;
@@ -191,13 +192,21 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
   return false;
 }
 
-bool instructionDependsOnGlobal(const MachineInstr &MI) {
+bool instructionDependsOnGlobal(const MachineInstr &MI, const MachineFunction& MF) {
   for (const MachineOperand &MO : MI.operands()) {
     if (MO.isGlobal()) {
       const GlobalValue *GV = MO.getGlobal();
       if (isa<GlobalVariable>(GV)) {
         return true;
       }
+    } else if (MO.isFI()) {
+      //if (isFIAPointerToExternalSymbol(MO.getIndex(), MF)) return true;
+      const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+      const AllocaInst *AI = MFI.getObjectAllocation(MO.getIndex());
+      if (!AI && !MFI.isFixedObjectIndex(MO.getIndex()))
+        return true;
+      //if (isFIAPointerToExternalSymbol(, MF)) return true;
     }
   }
   return false;
@@ -224,7 +233,7 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
       return false;
 
     for (const auto& dep : Dependencies) {
-      if (instructionDependsOnGlobal(*dep)) return false;
+      if (instructionDependsOnGlobal(*dep, MF)) return false;
     }
 
     if (!hasFIonSC(Dependencies, MF))
