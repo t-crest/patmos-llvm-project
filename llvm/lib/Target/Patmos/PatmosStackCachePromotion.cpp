@@ -147,20 +147,29 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
     }
   }
 
+  if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
+      return store->getValueOperand()->getType()->isPointerTy();
+    })) {
+    return true;
+  }
+
 
   for (const GlobalVariable &GV : M->globals()) {
-    //if (GV.hasExternalLinkage()) {
-      if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
-        if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
-          return AI == &GV;
-        }
-        return false;
-          })) {
-        LLVM_DEBUG(dbgs() << "store from: " << GV << "\n");
-        return true;
+    if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
+      if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
+        return AI == &GV;
       }
+      return false;
+        })) {
+      LLVM_DEBUG(dbgs() << "store from: " << GV << "\n");
+      return true;
     }
-  //}
+  }
+
+  /*for (const Argument& arg : F.args()) {
+
+  }*/
+
 
   return false;
 }
