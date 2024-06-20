@@ -139,13 +139,13 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
     }
   }
 
-  /*for (const auto& store : stores) {
-    dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n";
+  for (const auto& store : stores) {
+    LLVM_DEBUG(dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n");
     // Trace back to find the AllocaInst
     if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
-      dbgs() << "AI: " << *(AI) << "\n";
+      LLVM_DEBUG(dbgs() << "AI: " << *(AI) << "\n");
     }
-  }*/
+  }
 
 
   for (const GlobalVariable &GV : M->globals()) {
