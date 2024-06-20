@@ -160,7 +160,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
         return true;
       }
     }
-  }
+  //}
 
   return false;
 }
