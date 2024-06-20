@@ -221,7 +221,7 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
 }
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
-  if (EnableStackCachePromotion && MF.getFunction().hasFnAttribute("stack_cache")) {
+  if (EnableStackCachePromotion && MF.getFunction().hasFnAttribute("annotate") && MF.getFunction().getFnAttribute("annotatet").getValueAsString() == "stack_cache") {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");
 
