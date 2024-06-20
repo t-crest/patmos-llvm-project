@@ -149,7 +149,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
 
 
   for (const GlobalVariable &GV : M->globals()) {
-    if (GV.hasExternalLinkage()) {
+    //if (GV.hasExternalLinkage()) {
       if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
         if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
           return AI == &GV;
