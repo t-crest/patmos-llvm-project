@@ -122,7 +122,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
   }
 
   const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
-  dbgs() << "AllocaInst: " << *AI << "\n";
+  LLVM_DEBUG(dbgs() << "AllocaInst: " << *AI << "\n");
 
   const Function &F = MF.getFunction();
   const Module *M = F.getParent();
@@ -156,7 +156,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
         }
         return false;
           })) {
-        dbgs() << "store from: " << GV << "\n";
+        LLVM_DEBUG(dbgs() << "store from: " << GV << "\n");
         return true;
       }
     }
@@ -220,8 +220,9 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   return false;
 }
 
+
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
-  if (EnableStackCachePromotion && MF.getFunction().hasFnAttribute("annotate") && MF.getFunction().getFnAttribute("annotate").getValueAsString() == "stack_cache") {
+  if (EnableStackCachePromotion && shouldInstrumentFunc(MF.getFunction())) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");
 
