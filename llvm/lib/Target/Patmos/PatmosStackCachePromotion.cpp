@@ -72,7 +72,7 @@ void getDeps(MachineInstr* MI,
 }
 
 std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
-                                    const MachineFunction &MF, bool isStore) {
+                                    const MachineFunction &MF) {
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   std::vector<MachineInstr *> Dependencies;
 
@@ -219,7 +219,7 @@ bool instructionDependsOnGlobal(const MachineInstr &MI, const MachineFunction& M
   return false;
 }
 
-bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, bool isStore, MachineInstr& MI,
+bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
                        MachineFunction &MF) {
   if (std::any_of(MI.operands_begin(), MI.operands_end(), [](auto element){return element.isFI();})) {
     return false;
@@ -228,7 +228,7 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   if (MI.getOpcode() == OPold) {
     LLVM_DEBUG(dbgs() << MI);
 
-    auto Dependencies = getDeps(MI, MF, isStore);
+    auto Dependencies = getDeps(MI, MF);
 
     LLVM_DEBUG(dbgs() << "\tDepends on: \n");
     for (auto &DMI : Dependencies) {
@@ -278,21 +278,21 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
       }
     }
 
-    const std::vector<std::pair<std::pair<unsigned, bool>, unsigned>> mappings = {
-        {{Patmos::LWC, false}, Patmos::LWS},
-        {{Patmos::LHC, false}, Patmos::LHS},
-        {{Patmos::LBC, false}, Patmos::LBS},
-        {{Patmos::LHUC, false}, Patmos::LHUS},
-        {{Patmos::LBUC, false}, Patmos::LBUS},
+    const std::vector<std::pair<unsigned, unsigned>> mappings = {
+        {Patmos::LWC, Patmos::LWS},
+        {Patmos::LHC, Patmos::LHS},
+        {Patmos::LBC, Patmos::LBS},
+        {Patmos::LHUC, Patmos::LHUS},
+        {Patmos::LBUC, Patmos::LBUS},
 
-        {{Patmos::SWC, true}, Patmos::SWS},
-        {{Patmos::SHC, true}, Patmos::SHS},
-        {{Patmos::SBC, true}, Patmos::SBS},
+        {Patmos::SWC, Patmos::SWS},
+        {Patmos::SHC, Patmos::SHS},
+        {Patmos::SBC, Patmos::SBS},
     };
 
     for (auto &BB : MF) {
       for (auto &MI : BB) {
-        std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first.first, elem.second, elem.first.second, MI, MF);});
+        std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first, elem.second, MI, MF);});
         /*replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
         replaceOpcodeIfSC(Patmos::LHC, Patmos::LHS, MI, MF);
         replaceOpcodeIfSC(Patmos::LBC, Patmos::LBS, MI, MF);
