@@ -58,7 +58,7 @@ void getDeps(MachineInstr* MI,
   Dependencies.push_back(MI);
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   for (auto &MO : MI->operands()) {
-    if (MO.isReg() && MO.isUse()) {
+    if (MO.isReg()) {
       unsigned Reg = MO.getReg();
       if (Register::isVirtualRegister(Reg)) {
         MachineInstr *DefMI = MRI.getVRegDef(Reg);
@@ -72,12 +72,13 @@ void getDeps(MachineInstr* MI,
 }
 
 std::vector<MachineInstr *> getDeps(const MachineInstr &MI,
-                                    const MachineFunction &MF) {
+                                    const MachineFunction &MF, bool isStore) {
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   std::vector<MachineInstr *> Dependencies;
 
-  for (auto &MO : MI.operands()) {
-    if (MO.isReg() && MO.isUse()) {
+  for (unsigned i = 0; i < MI.getNumOperands(); ++i) {
+    auto &MO = MI.getOperand(i);
+    if (MO.isReg() && (MI.mayStore() ? MO.isUse() && i == 2 : MO.isUse())) {
       unsigned Reg = MO.getReg();
       if (Register::isVirtualRegister(Reg)) {
         MachineInstr *DefMI = MRI.getVRegDef(Reg);
@@ -112,7 +113,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Check if the frame index is valid
-  if (ObjectFI < 0 || ObjectFI >= MFI.getObjectIndexEnd()) {
+  if (ObjectFI < MFI.getObjectIndexBegin() || ObjectFI >= MFI.getObjectIndexEnd()) {
     return false;
   }
 
@@ -175,21 +176,27 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
 }
 
 bool hasFIonSC(const std::vector<MachineInstr *> deps,
-               const MachineFunction &MF) {
-  const PatmosMachineFunctionInfo &PMFI =
+               MachineFunction &MF) {
+  PatmosMachineFunctionInfo &PMFI =
       *MF.getInfo<PatmosMachineFunctionInfo>();
 
+  bool onSC = false;
   for (const auto MI : deps) {
+    LLVM_DEBUG(dbgs() << "Checking MI: " << *MI);
     for (const auto &op : MI->operands()) {
-      if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) return false;
+      if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) {
+        LLVM_DEBUG(dbgs() << "Removing FI from SC: " << *MI);
+        PMFI.removeStackCacheAnalysisFIs(op.getIndex());
+        return false;
+      }
       if (op.isFI() &&
           std::any_of(PMFI.getStackCacheAnalysisFIs().begin(),
                       PMFI.getStackCacheAnalysisFIs().end(),
                       [&op](auto elem) { return elem == op.getIndex(); }))
-        return true;
+        onSC |= true;
     }
   }
-  return false;
+  return onSC;
 }
 
 bool instructionDependsOnGlobal(const MachineInstr &MI, const MachineFunction& MF) {
@@ -212,7 +219,7 @@ bool instructionDependsOnGlobal(const MachineInstr &MI, const MachineFunction& M
   return false;
 }
 
-bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
+bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, bool isStore, MachineInstr& MI,
                        MachineFunction &MF) {
   if (std::any_of(MI.operands_begin(), MI.operands_end(), [](auto element){return element.isFI();})) {
     return false;
@@ -221,7 +228,7 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   if (MI.getOpcode() == OPold) {
     LLVM_DEBUG(dbgs() << MI);
 
-    auto Dependencies = getDeps(MI, MF);
+    auto Dependencies = getDeps(MI, MF, isStore);
 
     LLVM_DEBUG(dbgs() << "\tDepends on: \n");
     for (auto &DMI : Dependencies) {
@@ -265,26 +272,27 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
 
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
-      // if (!MFI.isFixedObjectIndex(FI) && !isFIusedInCall(MF, FI))
-      LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
-      PMFI.addStackCacheAnalysisFI(FI);
+      if (!MFI.isFixedObjectIndex(FI)) {
+        LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
+        PMFI.addStackCacheAnalysisFI(FI);
+      }
     }
 
-    const std::vector<std::pair<unsigned, unsigned>> mappings = {
-        {Patmos::LWC, Patmos::LWS},
-        {Patmos::LHC, Patmos::LHS},
-        {Patmos::LBC, Patmos::LBS},
-        {Patmos::LHUC, Patmos::LHUS},
-        {Patmos::LBUC, Patmos::LBUS},
+    const std::vector<std::pair<std::pair<unsigned, bool>, unsigned>> mappings = {
+        {{Patmos::LWC, false}, Patmos::LWS},
+        {{Patmos::LHC, false}, Patmos::LHS},
+        {{Patmos::LBC, false}, Patmos::LBS},
+        {{Patmos::LHUC, false}, Patmos::LHUS},
+        {{Patmos::LBUC, false}, Patmos::LBUS},
 
-        {Patmos::SWC, Patmos::SWS},
-        {Patmos::SHC, Patmos::SHS},
-        {Patmos::SBC, Patmos::SBS},
+        {{Patmos::SWC, true}, Patmos::SWS},
+        {{Patmos::SHC, true}, Patmos::SHS},
+        {{Patmos::SBC, true}, Patmos::SBS},
     };
 
     for (auto &BB : MF) {
       for (auto &MI : BB) {
-        std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first, elem.second, MI, MF);});
+        std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first.first, elem.second, elem.first.second, MI, MF);});
         /*replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
         replaceOpcodeIfSC(Patmos::LHC, Patmos::LHS, MI, MF);
         replaceOpcodeIfSC(Patmos::LBC, Patmos::LBS, MI, MF);

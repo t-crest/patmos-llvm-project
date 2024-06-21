@@ -266,6 +266,13 @@ public:
     return StackCacheAnalysisFIs;
   }
 
+  void removeStackCacheAnalysisFIs(int fi) {
+    std::vector<int>::iterator position = std::find(StackCacheAnalysisFIs.begin(), StackCacheAnalysisFIs.end(), fi);
+
+    if (position != StackCacheAnalysisFIs.end()) // == myVector.end() means the element was not found
+      StackCacheAnalysisFIs.erase(position);
+  }
+
   void addStackCacheAnalysisFI(int fi) {
     StackCacheAnalysisFIs.push_back(fi);
   }
