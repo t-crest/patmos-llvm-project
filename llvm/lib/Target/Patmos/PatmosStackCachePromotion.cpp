@@ -219,6 +219,19 @@ bool instructionDependsOnGlobal(const MachineInstr &MI, const MachineFunction& M
   return false;
 }
 
+void removeDepFIs(std::vector<MachineInstr *>& deps, MachineFunction &MF) {
+  PatmosMachineFunctionInfo &PMFI =
+      *MF.getInfo<PatmosMachineFunctionInfo>();
+
+  for (const auto MI : deps) {
+    for (const auto &op : MI->operands()) {
+      if (op.isFI()) {
+        PMFI.removeStackCacheAnalysisFIs(op.getIndex());
+      }
+    }
+  }
+}
+
 bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew, MachineInstr& MI,
                        MachineFunction &MF) {
   if (std::any_of(MI.operands_begin(), MI.operands_end(), [](auto element){return element.isFI();})) {
@@ -240,11 +253,16 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
       return false;
 
     for (const auto& dep : Dependencies) {
+      removeDepFIs(Dependencies, MF);
       if (instructionDependsOnGlobal(*dep, MF)) return false;
     }
 
-    if (!hasFIonSC(Dependencies, MF))
+    if (!hasFIonSC(Dependencies, MF)) {
+      removeDepFIs(Dependencies, MF);
       return false;
+    }
+    //removeDepFIs(Dependencies, MF);
+    return true;
     LLVM_DEBUG(dbgs() << "Updating op...\n");
 
 
@@ -308,6 +326,10 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     // Iterate over every Instr x
     // For each x -> find instrs y that x depends on && transitively
     // for each y -> if has FI && Is on SC -> convert to L.S/S.S
+
+    for (const int FI : PMFI.getStackCacheAnalysisFIs()) {
+      LLVM_DEBUG(dbgs() << "FI on Stack Cache: " << FI << "\n");
+    }
   }
   return true;
 }
