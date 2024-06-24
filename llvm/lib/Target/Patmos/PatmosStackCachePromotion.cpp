@@ -185,7 +185,7 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
     //LLVM_DEBUG(dbgs() << "Checking MI: " << *MI);
     for (const auto &op : MI->operands()) {
       if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) {
-        LLVM_DEBUG(dbgs() << "Removing FI from SC: " << *MI);
+        LLVM_DEBUG(dbgs() << "Removing FI from SC: " << op.getIndex());
         PMFI.removeStackCacheAnalysisFIs(op.getIndex());
         return false;
       }
@@ -314,6 +314,22 @@ void printFIInfo(MachineFunction& MF, int FI) {
   }
 }
 
+bool isFrameIndexUsedAsPointer(MachineFunction &MF, int FI) {
+  for (MachineFunction::iterator MBB = MF.begin(), MBBE = MF.end(); MBB != MBBE; ++MBB) {
+    for (MachineBasicBlock::iterator MI = MBB->begin(), MIE = MBB->end(); MI != MIE; ++MI) {
+      for (unsigned i = 0; i < MI->getNumOperands(); ++i) {
+        MachineOperand &MO = MI->getOperand(i);
+        if (MO.isFI() && MO.getIndex() == FI) {
+          // Check if the instruction uses the frame index as a pointer
+          if (MI->mayLoad() || MI->mayStore()) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
   /*LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
@@ -327,15 +343,15 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
 
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
-      printFIInfo(MF, FI);
+      //printFIInfo(MF, FI);
 
-      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI)) {
+      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI) && !isFrameIndexUsedAsPointer(MF, FI)) {
         LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
         PMFI.addStackCacheAnalysisFI(FI);
       }
     }
 
-    const std::vector<std::pair<unsigned, unsigned>> mappings = {
+    /*const std::vector<std::pair<unsigned, unsigned>> mappings = {
         {Patmos::LWC, Patmos::LWS},
         {Patmos::LHC, Patmos::LHS},
         {Patmos::LBC, Patmos::LBS},
@@ -350,24 +366,15 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     for (auto &BB : MF) {
       for (auto &MI : BB) {
         std::any_of(mappings.begin(), mappings.end(), [&MI, &MF, this](auto elem){return replaceOpcodeIfSC(elem.first, elem.second, MI, MF);});
-        /*replaceOpcodeIfSC(Patmos::LWC, Patmos::LWS, MI, MF);
-        replaceOpcodeIfSC(Patmos::LHC, Patmos::LHS, MI, MF);
-        replaceOpcodeIfSC(Patmos::LBC, Patmos::LBS, MI, MF);
-        replaceOpcodeIfSC(Patmos::LHUC, Patmos::LHUS, MI, MF);
-        replaceOpcodeIfSC(Patmos::LBUC, Patmos::LBUS, MI, MF);
-
-        replaceOpcodeIfSC(Patmos::SWC, Patmos::SWS, MI, MF);
-        replaceOpcodeIfSC(Patmos::SHC, Patmos::SHS, MI, MF);
-        replaceOpcodeIfSC(Patmos::SBC, Patmos::SBS, MI, MF);*/
       }
-    }
+    }*/
 
     // Iterate over every Instr x
     // For each x -> find instrs y that x depends on && transitively
     // for each y -> if has FI && Is on SC -> convert to L.S/S.S
 
     for (const int FI : PMFI.getStackCacheAnalysisFIs()) {
-      LLVM_DEBUG(dbgs() << "FI on Stack Cache: " << FI << "\n");
+      dbgs() << "FI on Stack Cache: " << FI << "\n";
     }
   }
   return true;
