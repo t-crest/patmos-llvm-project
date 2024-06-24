@@ -316,8 +316,8 @@ void printFIInfo(MachineFunction& MF, int FI) {
 
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
-  LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
-                    << MF.getFunction().getName() << "\n");
+  /*LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
+                    << MF.getFunction().getName() << "\n");*/
   if (EnableStackCachePromotion /*&& shouldInstrumentFunc(MF.getFunction())*/) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");
@@ -329,7 +329,7 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
       printFIInfo(MF, FI);
 
-      if (!MFI.isFixedObjectIndex(FI) && !MFI.isVariableSizedObjectIndex(FI)) {
+      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI)) {
         LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
         PMFI.addStackCacheAnalysisFI(FI);
       }
