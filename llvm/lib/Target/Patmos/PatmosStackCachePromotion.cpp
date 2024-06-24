@@ -123,7 +123,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
   }
 
   const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
-  LLVM_DEBUG(dbgs() << "AllocaInst: " << *AI << "\n");
+  //LLVM_DEBUG(dbgs() << "AllocaInst: " << *AI << "\n");
 
   const Function &F = MF.getFunction();
   const Module *M = F.getParent();
@@ -140,13 +140,13 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
     }
   }
 
-  for (const auto& store : stores) {
+  /*for (const auto& store : stores) {
     LLVM_DEBUG(dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n");
     // Trace back to find the AllocaInst
     if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
       LLVM_DEBUG(dbgs() << "AI: " << *(AI) << "\n");
     }
-  }
+  }*/
 
   if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
       return store->getValueOperand()->getType()->isPointerTy();
@@ -162,7 +162,7 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
       }
       return false;
         })) {
-      LLVM_DEBUG(dbgs() << "store from: " << GV << "\n");
+      //LLVM_DEBUG(dbgs() << "store from: " << GV << "\n");
       return true;
     }
   }
@@ -182,7 +182,7 @@ bool hasFIonSC(const std::vector<MachineInstr *> deps,
 
   bool onSC = false;
   for (const auto MI : deps) {
-    LLVM_DEBUG(dbgs() << "Checking MI: " << *MI);
+    //LLVM_DEBUG(dbgs() << "Checking MI: " << *MI);
     for (const auto &op : MI->operands()) {
       if (op.isFI() && isFIAPointerToExternalSymbol(op.getIndex(), MF)) {
         LLVM_DEBUG(dbgs() << "Removing FI from SC: " << *MI);
@@ -239,15 +239,15 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   }
 
   if (MI.getOpcode() == OPold) {
-    LLVM_DEBUG(dbgs() << MI);
+    //LLVM_DEBUG(dbgs() << MI);
 
     auto Dependencies = getDeps(MI, MF);
 
-    LLVM_DEBUG(dbgs() << "\tDepends on: \n");
+    /*LLVM_DEBUG(dbgs() << "\tDepends on: \n");
     for (auto &DMI : Dependencies) {
       LLVM_DEBUG(dbgs() << "\t" << *DMI);
     }
-    LLVM_DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "\n");*/
 
     if (Dependencies.size() == 0)
       return false;
@@ -279,11 +279,46 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   return false;
 }
 
+void printFIInfo(MachineFunction& MF, int FI) {
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  if (MFI.isFixedObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is a fixed-sized object.\n";
+  }
+  if (MFI.isVariableSizedObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is a variable-sized object.\n";
+  }
+  if (MFI.isSpillSlotObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is a spill slot object.\n";
+  }
+  if (MFI.isDeadObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is a dead object.\n";
+  }
+  if (MFI.isAliasedObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is an aliased object.\n";
+  }
+  if (MFI.isStatepointSpillSlotObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is a statepoint spill slot object.\n";
+  }
+  if (MFI.isImmutableObjectIndex(FI)) {
+    errs() << "Frame index " << FI << " is an immutable ObjectIndex.\n";
+  }
+  if (MFI.isObjectPreAllocated(FI)) {
+    errs() << "Frame index " << FI << " is pre allocated.\n";
+  }
+  if (MFI.isObjectSExt(FI)) {
+    errs() << "Frame index " << FI << " is ObjectSExt.\n";
+  }
+  if (MFI.isObjectZExt(FI)) {
+    errs() << "Frame index " << FI << " is ObjectZExt.\n";
+  }
+}
+
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
                     << MF.getFunction().getName() << "\n");
-  if (EnableStackCachePromotion && shouldInstrumentFunc(MF.getFunction()) && !MF.getFunction().getName().startswith("__")) {
+  if (EnableStackCachePromotion /*&& shouldInstrumentFunc(MF.getFunction())*/) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");
 
@@ -292,7 +327,9 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
 
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
-      if (!MFI.isFixedObjectIndex(FI)) {
+      printFIInfo(MF, FI);
+
+      if (!MFI.isFixedObjectIndex(FI) && !MFI.isVariableSizedObjectIndex(FI)) {
         LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
         PMFI.addStackCacheAnalysisFI(FI);
       }
