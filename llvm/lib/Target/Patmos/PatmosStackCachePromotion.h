@@ -66,6 +66,12 @@ private:
       return true;
     }
 
+    // Additional heuristic: Check for specific function names that are commonly found in libraries
+    StringRef FunctionName = F.getName();
+    if (FunctionName.startswith("_Z") || FunctionName.startswith("__") || FunctionName.startswith("llvm.")) {
+      return false;
+    }
+
     // Additional module-level checks
     const Module *M = F.getParent();
     if (M) {
@@ -73,12 +79,6 @@ private:
       // Example: Functions from standard libraries often have specific module identifiers
       StringRef ModuleIdentifier = M->getModuleIdentifier();
       if (ModuleIdentifier.endswith(".so") || ModuleIdentifier.endswith(".a") || ModuleIdentifier.contains("lib")) {
-        return false;
-      }
-
-      // Additional heuristic: Check for specific function names that are commonly found in libraries
-      StringRef FunctionName = F.getName();
-      if (FunctionName.startswith("_Z") || FunctionName.startswith("__") || FunctionName.startswith("llvm.")) {
         return false;
       }
     }
