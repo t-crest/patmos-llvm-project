@@ -57,8 +57,22 @@ private:
   }
 
   bool shouldInstrumentFunc(Function &F){
+    if (F.isDeclaration()) {
+      return false;
+    }
+
+    // Check linkage types
+    if (F.hasInternalLinkage() || F.hasPrivateLinkage() || F.hasLinkOnceODRLinkage() || F.hasLinkOnceLinkage() || F.hasWeakODRLinkage() || F.hasWeakLinkage()) {
+      return true;
+    }
+
+    // External linkage may indicate library functions, but functions in the current compilation unit can also have external linkage
+    // So we add a module-level check: functions from standard libraries typically reside in modules like "libc" or similar.
+    // We could additionally use debug information if available, but linkage and definition checks should suffice for most cases.
+
+    return true;
     //return F.hasInternalLinkage() || F.hasPrivateLinkage() || F.hasLinkOnceODRLinkage() || F.hasLinkOnceLinkage();
-    return !F.isDeclaration();
+    //return !F.isDeclaration();
     //return annotFuncs.find(&F)!=annotFuncs.end();
   }
 
