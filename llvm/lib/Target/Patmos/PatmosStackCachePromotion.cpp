@@ -17,6 +17,8 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/IR/InstIterator.h"
+#include <unordered_set>
 
 using namespace llvm;
 
@@ -331,6 +333,60 @@ bool isFrameIndexUsedAsPointer(MachineFunction &MF, int FI) {
   return false;
 }
 
+void collectPointerUses(const Value *V, std::unordered_set<const Instruction*> &Visited) {
+  for (const User *U : V->users()) {
+    if (const Instruction *Inst = dyn_cast<Instruction>(U)) {
+      if (Visited.insert(Inst).second) {
+        // Recursively track uses through bitcasts, phis, selects, etc.
+        if (isa<BitCastInst>(Inst) || isa<PHINode>(Inst) || isa<SelectInst>(Inst)) {
+          collectPointerUses(Inst, Visited);
+        } else if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst) || isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
+          Visited.insert(Inst);
+        }
+      }
+    }
+  }
+}
+
+bool isAllocaUsedAsPointer(const AllocaInst *AI) {
+  std::unordered_set<const Instruction*> Visited;
+  collectPointerUses(AI, Visited);
+
+  for (const Instruction *Inst : Visited) {
+    if (/*isa<LoadInst>(Inst) || isa<StoreInst>(Inst) || */isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool isFrameIndexUsedAsPointer2(MachineFunction &MF, int ObjectFI) {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Check if the frame index is valid
+  if (ObjectFI < MFI.getObjectIndexBegin() || ObjectFI >= MFI.getObjectIndexEnd()) {
+    return true;
+  }
+
+  const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
+  if (!AI) return true;
+
+  //const Function &F = MF.getFunction();
+  return isAllocaUsedAsPointer(AI);
+
+  /*for (const BasicBlock &BB : F) {
+    for (const Instruction &I : BB) {
+      if (const auto *gep = dyn_cast<GetElementPtrInst>(&I)) {
+        if (gep->getPointerOperand() == AI) {
+          return true;
+        }
+      }
+    }
+  }*/
+
+  return false;
+}
+
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
   /*LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
                     << MF.getFunction().getName() << "\n");*/
@@ -345,7 +401,7 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
       //printFIInfo(MF, FI);
 
-      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI) && !isFrameIndexUsedAsPointer(MF, FI)) {
+      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI) && !isFrameIndexUsedAsPointer2(MF, FI)) {
         LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
         PMFI.addStackCacheAnalysisFI(FI);
       }
