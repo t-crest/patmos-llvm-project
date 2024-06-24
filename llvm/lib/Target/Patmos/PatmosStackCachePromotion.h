@@ -61,11 +61,6 @@ private:
       return false;
     }
 
-    // Check linkage types
-    if (F.hasInternalLinkage() || F.hasPrivateLinkage() || F.hasLinkOnceODRLinkage() || F.hasLinkOnceLinkage() || F.hasWeakODRLinkage() || F.hasWeakLinkage()) {
-      return true;
-    }
-
     // Additional heuristic: Check for specific function names that are commonly found in libraries
     StringRef FunctionName = F.getName();
     if (FunctionName.startswith("_Z") || FunctionName.startswith("__") || FunctionName.startswith("llvm.")) {
