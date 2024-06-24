@@ -35,23 +35,6 @@ llvm::createPatmosStackCachePromotionPass(const PatmosTargetMachine &tm) {
   return new PatmosStackCachePromotion(tm);
 }
 
-bool isFIusedInCall(MachineFunction &MF, unsigned FI) {
-  for (const auto &MBB : MF) {
-    for (const auto &MI : MBB) {
-      if (MI.isCall()) {
-        for (const MachineOperand &MO : MI.operands()) {
-          if (MO.isFI()) {
-            int FrameIndex = MO.getIndex();
-            if (FrameIndex == FI)
-              return true;
-          }
-        }
-      }
-    }
-  }
-  return false;
-}
-
 void getDeps(MachineInstr* MI,
              const MachineFunction &MF,
              std::vector<MachineInstr *>& Dependencies) {
@@ -142,14 +125,6 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
     }
   }
 
-  /*for (const auto& store : stores) {
-    LLVM_DEBUG(dbgs() << "Store VO: " << *(store->getValueOperand()) << "\n");
-    // Trace back to find the AllocaInst
-    if (const GlobalVariable *AI = findGlobalVariable(store->getValueOperand())) {
-      LLVM_DEBUG(dbgs() << "AI: " << *(AI) << "\n");
-    }
-  }*/
-
   if (std::any_of(stores.begin(), stores.end(), [&](const StoreInst* store){
       return store->getValueOperand()->getType()->isPointerTy();
     })) {
@@ -168,11 +143,6 @@ bool isFIAPointerToExternalSymbol(const int ObjectFI, const MachineFunction &MF)
       return true;
     }
   }
-
-  /*for (const Argument& arg : F.args()) {
-
-  }*/
-
 
   return false;
 }
@@ -281,58 +251,6 @@ bool PatmosStackCachePromotion::replaceOpcodeIfSC(unsigned OPold, unsigned OPnew
   return false;
 }
 
-void printFIInfo(MachineFunction& MF, int FI) {
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-
-  if (MFI.isFixedObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is a fixed-sized object.\n";
-  }
-  if (MFI.isVariableSizedObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is a variable-sized object.\n";
-  }
-  if (MFI.isSpillSlotObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is a spill slot object.\n";
-  }
-  if (MFI.isDeadObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is a dead object.\n";
-  }
-  if (MFI.isAliasedObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is an aliased object.\n";
-  }
-  if (MFI.isStatepointSpillSlotObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is a statepoint spill slot object.\n";
-  }
-  if (MFI.isImmutableObjectIndex(FI)) {
-    errs() << "Frame index " << FI << " is an immutable ObjectIndex.\n";
-  }
-  if (MFI.isObjectPreAllocated(FI)) {
-    errs() << "Frame index " << FI << " is pre allocated.\n";
-  }
-  if (MFI.isObjectSExt(FI)) {
-    errs() << "Frame index " << FI << " is ObjectSExt.\n";
-  }
-  if (MFI.isObjectZExt(FI)) {
-    errs() << "Frame index " << FI << " is ObjectZExt.\n";
-  }
-}
-
-bool isFrameIndexUsedAsPointer(MachineFunction &MF, int FI) {
-  for (MachineFunction::iterator MBB = MF.begin(), MBBE = MF.end(); MBB != MBBE; ++MBB) {
-    for (MachineBasicBlock::iterator MI = MBB->begin(), MIE = MBB->end(); MI != MIE; ++MI) {
-      for (unsigned i = 0; i < MI->getNumOperands(); ++i) {
-        MachineOperand &MO = MI->getOperand(i);
-        if (MO.isFI() && MO.getIndex() == FI) {
-          // Check if the instruction uses the frame index as a pointer
-          if (MI->mayLoad() || MI->mayStore()) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-  return false;
-}
-
 void collectPointerUses(const Value *V, std::unordered_set<const Instruction*> &Visited) {
   for (const User *U : V->users()) {
     if (const Instruction *Inst = dyn_cast<Instruction>(U)) {
@@ -353,14 +271,14 @@ bool isAllocaUsedAsPointer(const AllocaInst *AI) {
   collectPointerUses(AI, Visited);
 
   for (const Instruction *Inst : Visited) {
-    if (/*isa<LoadInst>(Inst) || isa<StoreInst>(Inst) || */isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
+    if (isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
       return true;
     }
   }
   return false;
 }
 
-bool isFrameIndexUsedAsPointer2(MachineFunction &MF, int ObjectFI) {
+bool isFrameIndexUsedAsPointer(MachineFunction &MF, int ObjectFI) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Check if the frame index is valid
@@ -371,39 +289,23 @@ bool isFrameIndexUsedAsPointer2(MachineFunction &MF, int ObjectFI) {
   const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
   if (!AI) return true;
 
-  //const Function &F = MF.getFunction();
   return isAllocaUsedAsPointer(AI);
-
-  /*for (const BasicBlock &BB : F) {
-    for (const Instruction &I : BB) {
-      if (const auto *gep = dyn_cast<GetElementPtrInst>(&I)) {
-        if (gep->getPointerOperand() == AI) {
-          return true;
-        }
-      }
-    }
-  }*/
-
-  return false;
 }
 
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
-  /*LLVM_DEBUG(dbgs() << "Checking Stack Cache promotion for: "
-                    << MF.getFunction().getName() << "\n");*/
-  if (EnableStackCachePromotion /*&& shouldInstrumentFunc(MF.getFunction())*/) {
+  if (EnableStackCachePromotion) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
                       << MF.getFunction().getName() << "\n");
 
-    // Calculate the amount of bytes to store on SC
     MachineFrameInfo &MFI = MF.getFrameInfo();
     PatmosMachineFunctionInfo &PMFI = *MF.getInfo<PatmosMachineFunctionInfo>();
 
+    std::unordered_set<unsigned> stillPossibleFIs;
     for (unsigned FI = 0, FIe = MFI.getObjectIndexEnd(); FI != FIe; FI++) {
-      //printFIInfo(MF, FI);
-
-      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI) && !isFrameIndexUsedAsPointer2(MF, FI)) {
-        LLVM_DEBUG(dbgs() << "Adding FI to Stack Cache: " << FI << "\n");
+      if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI) && !isFrameIndexUsedAsPointer(MF, FI)) {
         PMFI.addStackCacheAnalysisFI(FI);
+      } else {
+        stillPossibleFIs.insert(FI);
       }
     }
 
@@ -430,7 +332,7 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     // for each y -> if has FI && Is on SC -> convert to L.S/S.S
 
     for (const int FI : PMFI.getStackCacheAnalysisFIs()) {
-      dbgs() << "FI on Stack Cache: " << FI << "\n";
+      LLVM_DEBUG(dbgs() << "FI on Stack Cache: " << FI << "\n");
     }
   }
   return true;
