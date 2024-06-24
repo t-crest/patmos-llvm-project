@@ -66,10 +66,24 @@ private:
       return true;
     }
 
-    // External linkage may indicate library functions, but functions in the current compilation unit can also have external linkage
-    // So we add a module-level check: functions from standard libraries typically reside in modules like "libc" or similar.
-    // We could additionally use debug information if available, but linkage and definition checks should suffice for most cases.
+    // Additional module-level checks
+    const Module *M = F.getParent();
+    if (M) {
+      // Optionally check the module name to see if it matches common library patterns
+      // Example: Functions from standard libraries often have specific module identifiers
+      StringRef ModuleIdentifier = M->getModuleIdentifier();
+      if (ModuleIdentifier.endswith(".so") || ModuleIdentifier.endswith(".a") || ModuleIdentifier.contains("lib")) {
+        return false;
+      }
 
+      // Additional heuristic: Check for specific function names that are commonly found in libraries
+      StringRef FunctionName = F.getName();
+      if (FunctionName.startswith("_Z") || FunctionName.startswith("__") || FunctionName.startswith("llvm.")) {
+        return false;
+      }
+    }
+
+    // By default, assume the function is defined in the current compilation unit
     return true;
     //return F.hasInternalLinkage() || F.hasPrivateLinkage() || F.hasLinkOnceODRLinkage() || F.hasLinkOnceLinkage();
     //return !F.isDeclaration();
