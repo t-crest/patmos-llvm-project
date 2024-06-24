@@ -57,7 +57,9 @@ private:
   }
 
   bool shouldInstrumentFunc(Function &F){
-    return annotFuncs.find(&F)!=annotFuncs.end();
+    //return F.hasInternalLinkage() || F.hasPrivateLinkage() || F.hasLinkOnceODRLinkage() || F.hasLinkOnceLinkage();
+    return !F.isDeclaration();
+    //return annotFuncs.find(&F)!=annotFuncs.end();
   }
 
 public:
