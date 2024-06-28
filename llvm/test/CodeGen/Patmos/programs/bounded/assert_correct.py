@@ -250,7 +250,8 @@ compile_and_test_matrix("", "", [
     "-O2 --mpatmos-max-subfunction-size=64",
     [
         "",
-        "--mpatmos-enable-stack-cache-promotion"
+        "--mpatmos-enable-stack-cache-promotion",
+        ["--mpatmos-enable-array-stack-cache-promotion"]
     ],
     [
         # We add this indirection so that commenting out the following line will remove all traditional tests

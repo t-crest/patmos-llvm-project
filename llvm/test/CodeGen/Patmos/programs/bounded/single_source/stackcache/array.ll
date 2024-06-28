@@ -28,6 +28,7 @@ entry:
 for.cond:                                         ; preds = %for.inc, %entry
   %1 = load i32, i32* %i, align 4
   %cmp = icmp ult i32 %1, 3
+  call void @llvm.loop.bound(i32 0, i32 3)
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
@@ -59,6 +60,7 @@ for.end:                                          ; preds = %for.cond
 
 ; Function Attrs: argmemonly nofree nosync nounwind willreturn
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8* noalias nocapture writeonly, i8* noalias nocapture readonly, i32, i1 immarg) #1
+declare void @llvm.loop.bound(i32, i32)
 
 attributes #0 = { noinline nounwind optnone "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { argmemonly nofree nosync nounwind willreturn }

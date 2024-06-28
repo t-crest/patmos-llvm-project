@@ -62,7 +62,7 @@ bool isAllocaUsedAsPointer(const AllocaInst *AI) {
   collectPointerUses(AI, Visited);
 
   for (const Instruction *Inst : Visited) {
-    if (isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
+    if (isa<GetElementPtrInst>(Inst) || (isa<CallInst>(Inst) && !(dyn_cast<CallInst>(Inst)->isInlineAsm()))) {
       return true;
     }
   }

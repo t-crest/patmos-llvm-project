@@ -3,23 +3,17 @@
 
 define i32 @main() {
 entry:    
-  %stack_var = alloca [2 x i32]
-  %stack_var_1 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 0
-  store i32 15, i32* %stack_var_1
-  %stack_var_2 = getelementptr [2 x i32], [2 x i32]* %stack_var, i32 0, i32 1
-  store i32 16, i32* %stack_var_2
-  
-  %asm_result = call { i32, i32 } asm "
-        lws	$0	=	[$2]
-        lws	$1	=	[$2 + 1]
-        nop
-	", "=&r,=r,r"
-	(i32* %stack_var_1)
-	
+  %stack_var = alloca i32, align 4
+  store i32 15, i32* %stack_var, align 4
+  %stack_var_2 = alloca i32, align 4
+  store i32 16, i32* %stack_var_2, align 4
+
   ; Extract results
-  %result_1 = extractvalue { i32, i32 } %asm_result, 0
-  %result_2 = extractvalue { i32, i32 } %asm_result, 1
-  
+  %result_1 = call i32 asm "lws $0 = [$1]", "=r,r" (i32* %stack_var)
+  %result_2 = call i32 asm "lws $0 = [$1]
+  nop", "=r,r" (i32* %stack_var_2)
+	
+
   ; Check correctness
   %correct_1 = icmp eq i32 %result_1, 15
   %correct_2 = icmp eq i32 %result_2, 16
