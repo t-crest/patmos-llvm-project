@@ -170,7 +170,6 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
     }
 
     if (EnableArrayStackCachePromotion) {
-
       // Logic for handling arrays on SC
       const std::unordered_map<unsigned, unsigned> Mappings = {
           {Patmos::LWC, Patmos::LWS},   {Patmos::LHC, Patmos::LHS},
