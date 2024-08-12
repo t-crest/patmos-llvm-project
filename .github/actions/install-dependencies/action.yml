@@ -8,7 +8,7 @@ runs:
       name: Install GNU-tar as 'tar'
       shell: bash
       run: |
-        brew install gnu-tar
+        brew install gnu-tar texinfo
         # Set gtar to be available as 'tar'
         echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
     - name: Create Installation Directory

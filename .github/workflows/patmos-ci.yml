@@ -69,9 +69,6 @@ jobs:
           - platform: ubuntu-20.04
             cc: gcc
             cxx: g++
-          - platform: macos-latest
-            cc: clang
-            cxx: clang++
           - platform: macos-latest # ARM
             cc: clang
             cxx: clang++
@@ -114,9 +111,6 @@ jobs:
           - platform: ubuntu-20.04
             cc: gcc
             cxx: g++
-          - platform: macos-latest
-            cc: clang
-            cxx: clang++
           - platform: macos-latest # ARM
             cc: clang
             cxx: clang++

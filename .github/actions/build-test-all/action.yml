@@ -167,7 +167,7 @@ runs:
     - name: Download Newlib
       if: inputs.enable-package == 'true'
       env:
-        NEWLIB_COMMIT: 4a74fe0ca51e6f462999446f8adbfd8f6b8c91e5
+        NEWLIB_COMMIT: 408f6eec21fb0fe5cb66c0691922451c20c1b938
       shell: bash
       run: |
         git clone https://github.com/t-crest/patmos-newlib ${{env.NEWLIB_PATH}}
@@ -180,7 +180,7 @@ runs:
       working-directory: ${{env.NEWLIB_BUILD_PATH}}
       shell: bash
       run: |
-        $GITHUB_WORKSPACE/$NEWLIB_PATH/configure --target=patmos-unknown-unknown-elf AR_FOR_TARGET=ar CC_FOR_TARGET="$GITHUB_WORKSPACE/$BUILD_PATH/bin/clang" CFLAGS_FOR_TARGET="-target patmos-unknown-unknown-elf -O2 -D__GLIBC_USE\(...\)=0" RANLIB_FOR_TARGET=ranlib LD_FOR_TARGET="$GITHUB_WORKSPACE/$BUILD_PATH/bin/clang"
+        $GITHUB_WORKSPACE/$NEWLIB_PATH/configure MKDIR_P="/bin/mkdir -p" --target=patmos-unknown-unknown-elf AR_FOR_TARGET=ar CC_FOR_TARGET="$GITHUB_WORKSPACE/$BUILD_PATH/bin/clang" CFLAGS_FOR_TARGET="-target patmos-unknown-unknown-elf -O2 -D__GLIBC_USE\(...\)=0" RANLIB_FOR_TARGET=ranlib LD_FOR_TARGET="$GITHUB_WORKSPACE/$BUILD_PATH/bin/clang"
         make $J
         rm -rf *
     # Build newlib properly to LLVM-IR
