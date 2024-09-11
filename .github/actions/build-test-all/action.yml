@@ -167,10 +167,10 @@ runs:
     - name: Download Newlib
       if: inputs.enable-package == 'true'
       env:
-        NEWLIB_COMMIT: 4a74fe0ca51e6f462999446f8adbfd8f6b8c91e5
+        NEWLIB_COMMIT: 79b0b16dfc224c2d63b31e5c314bc2a5c430f01e
       shell: bash
       run: |
-        git clone https://github.com/t-crest/patmos-newlib ${{env.NEWLIB_PATH}}
+        git clone https://github.com/R3freshReload/patmos-newlib.git ${{env.NEWLIB_PATH}}
         cd ${{env.NEWLIB_PATH}}
         git checkout $NEWLIB_COMMIT
     # Builds newlib to Patmos assembly (instead of bitcode)
