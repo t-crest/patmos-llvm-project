@@ -69,10 +69,16 @@ jobs:
           - platform: ubuntu-20.04
             cc: gcc
             cxx: g++
-          - platform: macos-latest
+          - platform: macos-latest # ARM
             cc: clang
             cxx: clang++
-          - platform: macos-12
+          - platform: macos-14 # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-13 # x86
+            cc: clang
+            cxx: clang++
+          - platform: macos-12 # x86
             cc: clang
             cxx: clang++
           
@@ -105,10 +111,16 @@ jobs:
           - platform: ubuntu-20.04
             cc: gcc
             cxx: g++
-          - platform: macos-latest
+          - platform: macos-latest # ARM
             cc: clang
             cxx: clang++
-          - platform: macos-12
+          - platform: macos-14 # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-13 # x86
+            cc: clang
+            cxx: clang++
+          - platform: macos-12 # x86
             cc: clang
             cxx: clang++
     needs: [package-patmos]     
