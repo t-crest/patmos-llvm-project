@@ -388,7 +388,7 @@ bool patmos::PatmosBaseTool::ConstructOptJob(const Tool &Creator,
       OptExec, OptArgs, Inputs, Output));
   return true;
 }
-#include <iostream>
+
 void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     Compilation &C, const JobAction &JA,
     const InputInfo &Output, const InputInfoList &Inputs,
@@ -478,6 +478,12 @@ void patmos::PatmosBaseTool::ConstructLLCJob(const Tool &Creator,
     if(!const_exec_enabled) {
       LLCArgs.push_back("--mpatmos-enable-cet");
     }
+  }
+  auto serialize_path = Args.getLastArg(options::OPT_mserialize_pml);
+  if(serialize_path) {
+	  auto& path = serialize_path->getValues();
+	  LLCArgs.push_back(Args.MakeArgString(Twine("-mserialize-pml=") + path[0]));
+	  assert(path.size()==1);
   }
 
   //----------------------------------------------------------------------------

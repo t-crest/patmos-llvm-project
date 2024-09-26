@@ -256,7 +256,7 @@ compile_and_test_matrix("", "", [
             "",
             # Traditional code with PML output, just to make sure we can
             # output it without errors. Testing the output is not done.
-            "-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root
+            "-mserialize-pml=" + compiled + ".pml -mserialize-pml-functions=" + sp_root
         ]
     ],
     [

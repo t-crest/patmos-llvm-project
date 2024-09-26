@@ -3176,6 +3176,8 @@ def mimplicit_float : Flag<["-"], "mimplicit-float">, Group<m_Group>;
 def mrecip : Flag<["-"], "mrecip">, Group<m_Group>;
 def mrecip_EQ : CommaJoined<["-"], "mrecip=">, Group<m_Group>, Flags<[CC1Option]>,
   MarshallingInfoStringVector<CodeGenOpts<"Reciprocals">>;
+def mserialize_pml : Joined<["-"], "mserialize-pml=">, Group<m_Group>, Flags<[CC1Option]>,
+  MarshallingInfoString<CodeGenOpts<"SerializePmlPath">>, HelpText<"Serialize assembly into .pml file for WCET analysis with Platin.">;
 def mpatmos_enable_cet : Flag<["-"], "mpatmos-enable-cet">, Group<m_Group>, Flags<[CC1Option]>,
   MarshallingInfoFlag<CodeGenOpts<"PatmosEnableCet">>, HelpText<"Enable constant execution time code generation.">;
 def mpatmos_cet_functions : CommaJoined<["-"], "mpatmos-cet-functions=">, Group<m_Group>, Flags<[CC1Option]>,

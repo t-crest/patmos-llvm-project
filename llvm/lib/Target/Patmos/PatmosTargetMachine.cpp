@@ -64,10 +64,10 @@ namespace {
       cl::desc("Disable if-converter for Patmos."),
       cl::Hidden);
   static cl::opt<std::string> SerializeMachineCode(
-      "mpatmos-serialize",
+      "mserialize-pml",
       cl::init(""),
       cl::desc("Export PML specification of generated machine code to FILE"));
-  static cl::list<std::string>SerializeRoots("mpatmos-serialize-functions",
+  static cl::list<std::string>SerializeRoots("mserialize-pml-functions",
      cl::desc("Export only given method (default: 'main') and those reachable from them"),
      cl::CommaSeparated);
 
@@ -88,8 +88,8 @@ namespace {
               "requires the 'mpatmos-singlepath' option to also be set.");
       }
       if( !SerializeRoots.empty() && SerializeMachineCode=="" ){
-        report_fatal_error("The 'mpatmos-serialize-functions' option "
-            "requires the 'mpatmos-serialize' option to also be set.");
+        report_fatal_error("The 'mserialize-pml-functions' option "
+            "requires the 'mserialize-pml' option to also be set.");
       }
 
       // Enable preRA MI scheduler.
