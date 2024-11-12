@@ -172,7 +172,7 @@ git branch -f upstream llvmorg-12.0.1
 ```sh
 git checkout upstream
 git push t-crest +upstream
-git push llvmorg-12.0.1
+git push t-crest llvmorg-12.0.1
 ```
 
 * Create a diff of the difference between Patmos HEAD and `llvmorg-11.1.0`, which will then contain all Patmos-specific code/changes:
@@ -191,12 +191,23 @@ Go through the project and apply rejected code manually and deleting the `*.rej`
 To check whether you applied the diff correctly, you can print out the changes (`git diff > post-apply-patmos-diff.patch`) and compare it with the original diff (`diff post-apply-patmos-diff.patch patmos-diff.patch`). 
 The differences should be minor and only in non-patmos code.
 
+* Add all the relevant files to next commit. Customize this command to fit the situation: 
+```sh
+git add .github/ README-Patmos.MD clang/ llvm/ lld/ compiler-rt/
+```
+
 * Commit: `git commit -m "Merged Patmos HEAD with llvmorg-12.0.1"`
 
 * Rewrite git history, to show that the last Patmos commit is also a parent of the new one (to make it look like we merged it with `llvmorg-12.0.1`):
 ```sh
+# Make a replacement commit which has both llvmorg-12.0.1 and master as parents
 git replace --graft tempbranch llvmorg-12.0.1 master
-git filter-branch llvmorg-12.0.1..tempbranch
+# Move to llvmorg-12.0.1 temporarily to be able to move tempbranch
+git checkout llvmorg-12.0.1
+# Move the branch head to the replacement commit
+git branch -f tempbranch $(git rev-parse replace/$(git rev-parse tempbranch))
+# Move back to tempbranch
+git checkout tempbranch
 ```
 
 * Change `master` to point to the new commit, delete the temporary branch, and push to T-CREST reposity:
@@ -204,7 +215,7 @@ git filter-branch llvmorg-12.0.1..tempbranch
 git branch -f master tempbranch
 git checkout master
 git branch -D tempbranch
-git push origin +master
+git push origin master
 ```
 
 You have now effectively merged the old Patmos head with the new LLVM release tag.
