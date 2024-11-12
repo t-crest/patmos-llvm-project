@@ -223,7 +223,7 @@ runs:
     # Upload Package artifact
     - name: Upload Package Artifact
       if: inputs.enable-package == 'true'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{inputs.artifact-name}}
         path: ${{env.BUILD_PATH}}/patmos-unknown-unknown-elf/package-temp/patmos-llvm-*.tar.gz

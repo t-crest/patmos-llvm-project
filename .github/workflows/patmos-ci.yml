@@ -37,7 +37,7 @@ jobs:
       CC: gcc
       CXX: g++
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/build-test-all
         with:
@@ -87,7 +87,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/install-dependencies
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/build-test-all
@@ -129,7 +129,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/install-dependencies
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/test-benchmarks
@@ -164,7 +164,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/install-dependencies
       - name: Build LLVM, Compiler-RT, Newlib, and Package
         uses: ./.github/actions/build-test-all
