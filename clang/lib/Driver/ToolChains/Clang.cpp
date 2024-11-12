@@ -24,6 +24,7 @@
 #include "Hexagon.h"
 #include "MSP430.h"
 #include "PS4CPU.h"
+#include "Patmos.h"
 #include "clang/Basic/CLWarnings.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/CodeGenOptions.h"
@@ -1332,6 +1333,7 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
   case llvm::Triple::ppc64le:
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64:
+  case llvm::Triple::patmos:
   case llvm::Triple::systemz:
   case llvm::Triple::xcore:
     return false;
@@ -5081,6 +5083,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (Failure || Version < 7)
       D.Diag(diag::err_target_unsupported_arch) << Triple.getArchName()
                                                 << TripleStr;
+  }
+
+  if(Triple.isPatmos()) {
+    Args.AddLastArg(CmdArgs, options::OPT_mpatmos_enable_cet);
+    Args.AddLastArg(CmdArgs, options::OPT_mpatmos_cet_functions);
   }
 
   // Push all default warning arguments that are specific to

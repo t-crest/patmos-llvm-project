@@ -981,6 +981,50 @@ template <typename LoopStmt> static bool hasEmptyLoopBody(const LoopStmt &S) {
   return false;
 }
 
+void CodeGenFunction::EmitLoopBounds(
+   llvm::BasicBlock *BB,
+   const ArrayRef<const Attr *> &Attrs,
+   bool one_higher
+) {
+  auto *F = BB->getParent();
+  auto &Context = BB->getContext();
+  auto is_bound = [](auto attr){ return dyn_cast<LoopBoundAttr>(attr); };
+
+  assert(std::count_if(Attrs.begin(), Attrs.end(), is_bound) <= 1 &&
+      "We don't support multiple bounds on the same loop");
+
+  // Look for any loopbound attribute
+  auto foundLB = std::find_if(Attrs.begin(), Attrs.end(), is_bound);
+  if( foundLB != Attrs.end() ) {
+    auto *LB = dyn_cast<LoopBoundAttr>(*foundLB); // Guaranteed to work
+
+    auto min = one_higher ? LB->getMin() : LB->getMin()-1;
+    auto max = LB->getMax() - LB->getMin();
+
+    llvm::Value *MinVal = llvm::ConstantInt::get(Int32Ty, min);
+    llvm::Value *MaxVal = llvm::ConstantInt::get(Int32Ty, max);
+
+    auto *loop_bound_fn = F->getParent()->getFunction("llvm.loop.bound");
+    std::vector<llvm::Type*> BoundTypes(2, llvm::Type::getInt32Ty(Context));
+    auto *FT = llvm::FunctionType::get(llvm::Type::getVoidTy(Context), BoundTypes, false);
+    if(!loop_bound_fn){
+      loop_bound_fn = llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
+           "llvm.loop.bound", F->getParent());
+      // We add attributes that ensure optimizations don't mess with the bounds
+      loop_bound_fn->addFnAttr(llvm::Attribute::Convergent);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoDuplicate);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoInline);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoRecurse);
+      loop_bound_fn->addFnAttr(llvm::Attribute::NoMerge);
+      loop_bound_fn->addFnAttr(llvm::Attribute::OptimizeNone);
+    }
+    auto *call_inst = llvm::CallInst::Create(FT, loop_bound_fn, {MinVal, MaxVal});
+
+    // Emit before terminator
+    BB->getInstList().insertAfter(std::prev(BB->end(),2), call_inst);
+  }
+}
+
 void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
                                     ArrayRef<const Attr *> WhileAttrs) {
   // Emit the header for the loop, which will also become
@@ -1084,6 +1128,9 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   // Emit the exit block.
   EmitBlock(LoopExit.getBlock(), true);
 
+  // Attach metadata to loop header
+  EmitLoopBounds(LoopHeader.getBlock(), WhileAttrs, true);
+
   // The LoopHeader typically is just a branch if we skipped emitting
   // a branch, try to erase it.
   if (!EmitBoolCondBranch)
@@ -1125,6 +1172,8 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     EmitStmt(S.getBody());
   }
 
+  EmitLoopBounds(LoopBody, DoAttrs, false);
+
   EmitBlock(LoopCond.getBlock());
   // When single byte coverage mode is enabled, add a counter to loop condition.
   if (llvm::EnableSingleByteCoverage)
@@ -1154,7 +1203,7 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
   // As long as the condition is true, iterate the loop.
   if (EmitBoolCondBranch) {
     uint64_t BackedgeCount = getProfileCount(S.getBody()) - ParentCount;
-    Builder.CreateCondBr(
+      Builder.CreateCondBr(
         BoolCondVal, LoopBody, LoopExit.getBlock(),
         createProfileWeightsForLoop(S.getCond(), BackedgeCount));
   }
@@ -1257,8 +1306,11 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
       BoolCondVal = emitCondLikelihoodViaExpectIntrinsic(
           BoolCondVal, Stmt::getLikelihood(S.getBody()));
 
-    Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
+    llvm::BranchInst *CondBr =
+      Builder.CreateCondBr(BoolCondVal, ForBody, ExitBlock, Weights);
 
+	EmitLoopBounds(CondBlock, ForAttrs, true);
+	
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);
       EmitBranchThroughCleanup(LoopExit);

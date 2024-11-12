@@ -1319,6 +1319,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "elf32-loongarch";
     case ELF::EM_XTENSA:
       return "elf32-xtensa";
+    case ELF::EM_PATMOS:
+      return "elf32-patmos";
     default:
       return "elf32-unknown";
     }
@@ -1445,6 +1447,8 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
       return Triple::loongarch32;
     case ELF::ELFCLASS64:
       return Triple::loongarch64;
+    case ELF::EM_PATMOS:
+      return Triple::patmos;
     default:
       report_fatal_error("Invalid ELFCLASS!");
     }

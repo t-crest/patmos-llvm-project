@@ -469,6 +469,7 @@ static std::pair<ELFKind, uint16_t> parseBfdName(StringRef s) {
       .Case("elf64-loongarch", {ELF64LEKind, EM_LOONGARCH})
       .Case("elf64-s390", {ELF64BEKind, EM_S390})
       .Cases("elf32-hexagon", "elf32-littlehexagon", {ELF32LEKind, EM_HEXAGON})
+	  .Case("elf32-patmos", {ELF32BEKind, EM_PATMOS})
       .Default({ELFNoneKind, EM_NONE});
 }
 

@@ -38,6 +38,7 @@
 #include "ToolChains/NetBSD.h"
 #include "ToolChains/OHOS.h"
 #include "ToolChains/OpenBSD.h"
+#include "ToolChains/Patmos.h"
 #include "ToolChains/PPCFreeBSD.h"
 #include "ToolChains/PPCLinux.h"
 #include "ToolChains/PS4CPU.h"
@@ -6499,6 +6500,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
               std::make_unique<toolchains::RISCVToolChain>(*this, Target, Args);
         else
           TC = std::make_unique<toolchains::BareMetal>(*this, Target, Args);
+        break;
+      case llvm::Triple::patmos:
+        TC = std::make_unique<toolchains::PatmosToolChain>(*this, Target, Args);
         break;
       case llvm::Triple::ve:
         TC = std::make_unique<toolchains::VEToolChain>(*this, Target, Args);
