@@ -239,7 +239,7 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
   }
 
   case llvm::Triple::patmos:
-    return return createPatmosTargetCodeGenInfo(CGM);
+    return createPatmosTargetCodeGenInfo(CGM);
 
   case llvm::Triple::systemz: {
     bool SoftFloat = CodeGenOpts.FloatABI == "soft";

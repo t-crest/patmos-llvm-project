@@ -44,7 +44,7 @@ namespace llvm {
 		}
 
 		void getAnalysisUsage(AnalysisUsage &AU) const override {
-			AU.addRequired<MachineLoopInfo>();
+			AU.addRequired<MachineLoopInfoWrapperPass>();
 			MachineFunctionPass::getAnalysisUsage(AU);
 		}
 

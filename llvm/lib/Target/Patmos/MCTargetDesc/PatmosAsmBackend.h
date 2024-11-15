@@ -15,7 +15,7 @@
 #define LLVM_LIB_TARGET_PATMOS_MCTARGETDESC_PATMOSASMBACKEND_H
 
 #include "MCTargetDesc/PatmosFixupKinds.h"
-#include "llvm/ADT/Triple.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/MC/MCAsmBackend.h"
 
 namespace llvm {
@@ -31,7 +31,7 @@ class PatmosAsmBackend : public MCAsmBackend {
 public:
   PatmosAsmBackend(const Target &T, const MCRegisterInfo &MRI, const Triple &TT,
                    StringRef CPU)
-      : MCAsmBackend(support::big), TheTriple(TT) {}
+      : MCAsmBackend(llvm::endianness::big), TheTriple(TT) {}
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override;
@@ -60,17 +60,8 @@ public:
     return false;
   }
 
-  /// fixupNeedsRelaxation - Target specific predicate for whether a given
-  /// fixup requires the associated instruction to be relaxed.
-  bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
-                            const MCRelaxableFragment *DF,
-                            const MCAsmLayout &Layout) const override {
-    // FIXME.
-    llvm_unreachable("RelaxInstruction() unimplemented");
-    return false;
-  }
-
-  bool writeNopData(raw_ostream &OS, uint64_t Count) const override;
+  bool writeNopData(raw_ostream &OS, uint64_t Count,
+          const MCSubtargetInfo *STI) const override;
 
 }; // class PatmosAsmBackend
 

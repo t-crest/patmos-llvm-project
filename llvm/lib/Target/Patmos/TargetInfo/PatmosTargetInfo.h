@@ -31,7 +31,7 @@ void getMBBIRName(const MachineBasicBlock *MBB,
 ///
 /// The first element is the minimum iteration count.
 /// The second element is the maximum iteration count.
-Optional<std::pair<uint64_t, uint64_t>> getLoopBounds(const MachineBasicBlock * MBB);
+std::optional<std::pair<uint64_t, uint64_t>> getLoopBounds(const MachineBasicBlock * MBB);
 
 const Function *getCallTarget(const MachineInstr *MI);
 

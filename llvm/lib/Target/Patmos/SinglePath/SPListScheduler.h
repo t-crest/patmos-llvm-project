@@ -113,13 +113,13 @@ std::set<std::shared_ptr<Node>> dependence_graph(
     InstrIter instr_begin, InstrIter instr_end,
     std::set<Operand> (*reads)(const Instruction *),
     std::set<Operand> (*writes)(const Instruction *),
-    Optional<Operand> (*uses_predicate)(const Instruction *),
+	std::optional<Operand> (*uses_predicate)(const Instruction *),
     bool (*poisons)(const Instruction *),
     bool (*memory_access)(const Instruction *),
     unsigned (*latency)(const Instruction *),
     bool (*is_constant)(Operand),
     bool (*conditional_branch)(const Instruction *),
-    Optional<std::tuple<
+	std::optional<std::tuple<
         MAY_SECOND_SLOT_EXTRA,
         bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
         bool (*)(const Instruction *),
@@ -137,7 +137,7 @@ std::set<std::shared_ptr<Node>> dependence_graph(
   // Tracks nodes seen since the last conditional branch
   std::set<std::shared_ptr<Node>> last_non_branch;
   // Tracks the last seen conditional branch
-  Optional<std::shared_ptr<Node>> last_branch = None;
+  std::optional<std::shared_ptr<Node>> last_branch = std::nullopt;
 
   for(unsigned i = 0; i != instr_count; i++) {
     auto *instr = &(*std::next(instr_begin, i));
@@ -364,7 +364,7 @@ template<
   typename Bundleable,
   typename Independent
 >
-Optional<std::shared_ptr<Node>> get_next_ready(
+std::optional<std::shared_ptr<Node>> get_next_ready(
     InstrIter instr_begin, InstrIter instr_end,
     std::set<std::shared_ptr<Node>> &ready,
     std::map<std::shared_ptr<Node>, std::pair<unsigned, std::set<Operand>>> executing,
@@ -447,7 +447,7 @@ Optional<std::shared_ptr<Node>> get_next_ready(
   priorities.push_back(std::make_pair(longer_instr, &use_longer_instr_prio));
   priorities.push_back(std::make_pair(earlier, nullptr));
 
-  Optional<std::shared_ptr<Node>> result = None;
+  std::optional<std::shared_ptr<Node>> result = std::nullopt;
   if(unpoisoned.size() != 0) {
     auto choice = unpoisoned.begin();
     for(auto unpoisoned_iter = std::next(unpoisoned.begin()); unpoisoned_iter != unpoisoned.end(); unpoisoned_iter++) {
@@ -537,13 +537,13 @@ std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
   std::set<Operand> (*reads)(const Instruction *),
   std::set<Operand> (*writes)(const Instruction *),
-  Optional<Operand> (*uses_predicate)(const Instruction *),
+  std::optional<Operand> (*uses_predicate)(const Instruction *),
   bool (*poisons)(const Instruction *),
   bool (*memory_access)(const Instruction *),
   unsigned (*latency)(const Instruction *),
   bool (*is_constant)(Operand),
   bool (*conditional_branch)(const Instruction *),
-  Optional<std::tuple<
+  std::optional<std::tuple<
     MAY_SECOND_SLOT_EXTRA,
     bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
     bool (*)(const Instruction *),
@@ -679,7 +679,7 @@ std::map<unsigned, unsigned> list_schedule(
     };
 
     auto next = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
-        enable_dual_issue.hasValue(), false, true, [](auto instr){ return true;},
+        enable_dual_issue.has_value(), false, true, [](auto instr){ return true;},
     	[](auto instr){ return true;}
     );
     if(next) {
@@ -688,7 +688,7 @@ std::map<unsigned, unsigned> list_schedule(
       if(enable_dual_issue && !(*next)->is_long) {
         ready = ready_nodes();
         auto next2 = get_next_ready(instr_begin, instr_end, ready, executing, reads, writes,
-          enable_dual_issue.hasValue(), !(*next)->may_second_slot, false,
+          enable_dual_issue.has_value(), !(*next)->may_second_slot, false,
           [&](auto instr){
             if(enable_dual_issue) {
               return std::get<3>(*enable_dual_issue)(
@@ -751,13 +751,13 @@ std::map<unsigned, unsigned> list_schedule(
   InstrIter instr_begin, InstrIter instr_end,
   std::set<Operand> (*reads)(const Instruction *),
   std::set<Operand> (*writes)(const Instruction *),
-  Optional<Operand> (*uses_predicate)(const Instruction *),
+  std::optional<Operand> (*uses_predicate)(const Instruction *),
   bool (*poisons)(const Instruction *),
   bool (*memory_access)(const Instruction *),
   unsigned (*latency)(const Instruction *),
   bool (*is_constant)(Operand),
   bool (*conditional_branch)(const Instruction *),
-  Optional<std::tuple<
+  std::optional<std::tuple<
     MAY_SECOND_SLOT_EXTRA,
     bool (*)(MAY_SECOND_SLOT_EXTRA, const Instruction *),
     bool (*)(const Instruction *),

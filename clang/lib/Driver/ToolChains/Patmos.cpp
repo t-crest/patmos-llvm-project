@@ -9,7 +9,7 @@
 #include "Patmos.h"
 #include "CommonArgs.h"
 #include "Clang.h"
-#include "InputInfo.h"
+#include "clang/Driver/InputInfo.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Options.h"
 #include "llvm/Option/ArgList.h"
@@ -40,7 +40,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
@@ -57,7 +56,7 @@ PatmosToolChain::PatmosToolChain(const Driver &D, const llvm::Triple &Triple,
                                const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   // Get install path to find tools and libraries
-  std::string Path(D.getInstalledDir());
+  std::string Path(D.Dir);
   // tools?
   getProgramPaths().push_back(Path);
   if (llvm::sys::fs::exists(Path + "/bin/"))
@@ -166,7 +165,7 @@ Arg* patmos::PatmosBaseTool::GetOptLevel(const ArgList &Args, char &Lvl) const {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
     std::string Opt = A->getAsString(Args);
     if (Opt.length() != 3) {
-      llvm::report_fatal_error("Unsupported optimization option: " + Opt);
+      llvm::report_fatal_error(llvm::StringRef(std::string("Unsupported optimization option: ") + Opt));
     }
     Lvl = Opt[2];
     return A;
@@ -265,7 +264,7 @@ void patmos::PatmosBaseTool::PrepareLink4Inputs(
 
 static std::string get_patmos_tool(const ToolChain &TC, StringRef ToolName)
 {
-  std::string InstallPath(TC.getDriver().getInstalledDir());
+  std::string InstallPath(TC.getDriver().Dir);
   if(TC.getDriver().Name.rfind("patmos-", 0) == 0) {
     // Driver is named "patmos-xxxx"
     // therefore, look for programs using that prefix

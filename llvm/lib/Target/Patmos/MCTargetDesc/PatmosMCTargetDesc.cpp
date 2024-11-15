@@ -20,7 +20,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 
 #define GET_INSTRINFO_MC_DESC
 #include "PatmosGenInstrInfo.inc"
@@ -79,14 +79,13 @@ static MCInstPrinter *createPatmosMCInstPrinter(const Triple &T,
 
 static MCTargetStreamer *createPatmosAsmTargetStreamer(MCStreamer &S,
                                                        formatted_raw_ostream &OS,
-                                                       MCInstPrinter *InstPrint,
-                                                       bool isVerboseAsm) {
+                                                       MCInstPrinter *InstPrint) {
   return new PatmosTargetAsmStreamer(S, OS);
 }
 
 static MCTargetStreamer *
 createPatmosObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
-  return new PatmosTargetELFStreamer(S);
+  return new PatmosTargetELFStreamer(S, STI);
 }
 
 bool llvm::canIssueInSlotForUnits(unsigned Slot, llvm::InstrStage::FuncUnits &units)

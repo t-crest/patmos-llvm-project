@@ -28,7 +28,7 @@ MachineBasicBlock* FCFGPostDom::outermost_inner_loop_header(MachineLoop *inner) 
 	return inner->getHeader();
 }
 
-Optional<MachineBasicBlock*> FCFGPostDom::fcfg_predecessor(MachineBasicBlock *pred) {
+std::optional<MachineBasicBlock*> FCFGPostDom::fcfg_predecessor(MachineBasicBlock *pred) {
 	auto *pred_loop = LI.getLoopFor(pred);
 
 	if(pred_loop == loop) {
@@ -38,11 +38,11 @@ Optional<MachineBasicBlock*> FCFGPostDom::fcfg_predecessor(MachineBasicBlock *pr
 		return outermost_inner_loop_header(pred_loop);
 	} else {
 		/// Predecessor is in outer loop
-		return None;
+		return std::nullopt;
 	}
 }
 
-Optional<MachineBasicBlock*> FCFGPostDom::fcfg_successor(MachineBasicBlock *succ) {
+std::optional<MachineBasicBlock*> FCFGPostDom::fcfg_successor(MachineBasicBlock *succ) {
 	auto *succ_loop = LI.getLoopFor(succ);
 
 	if(succ_loop == loop) {
@@ -52,7 +52,7 @@ Optional<MachineBasicBlock*> FCFGPostDom::fcfg_successor(MachineBasicBlock *succ
 		return outermost_inner_loop_header(succ_loop);
 	} else {
 		/// Successor is in outer loop
-		return None;
+		return std::nullopt;
 	}
 }
 
@@ -209,7 +209,7 @@ void FCFGPostDom::get_control_dependencies(
 		// X
 		MachineBasicBlock*,
 		// Set of {Y->Z} control dependencies of X
-		std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>
+		std::set<std::pair<std::optional<MachineBasicBlock*>,MachineBasicBlock*>>
 	> &deps
 ) {
 	for(auto entry: post_doms) {
@@ -217,7 +217,7 @@ void FCFGPostDom::get_control_dependencies(
 
 		if(LI.isLoopHeader(block)) {
 			// headers can only be dependent on the loop entry
-			deps[block].insert(std::make_pair(None, block));
+			deps[block].insert(std::make_pair(std::nullopt, block));
 		} else {
 			std::set<MachineBasicBlock*> dominees;
 			get_post_dominees(block, dominees);
@@ -230,7 +230,7 @@ void FCFGPostDom::get_control_dependencies(
 				if(dominee->pred_size() == 0 || (loop && loop->getHeader() == dominee)) {
 					// dominee is the entry to the loop (header).
 					// If you post dominate the entry, you are control dependent on the entry edge
-					deps[block].insert(std::make_pair(None, dominee));
+					deps[block].insert(std::make_pair(std::nullopt, dominee));
 				} else {
 					std::for_each(dominee->pred_begin(), dominee->pred_end(), [&](auto pred){
 						auto fcfg_pred = fcfg_predecessor(pred);

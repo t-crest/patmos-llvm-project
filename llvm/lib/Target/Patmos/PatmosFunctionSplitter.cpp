@@ -1568,7 +1568,7 @@ namespace llvm {
           if (opcode == Patmos::BRCF || opcode == Patmos::BRCFu) {
             AddDefaultPred(BuildMI(MBB, II, DebugLoc(), PII.get(Patmos::LIl), Patmos::RTR))
               .add(BR->getOperand(BR->getNumExplicitOperands()-1));
-            BR->RemoveOperand(BR->getNumExplicitOperands()-1);
+            BR->removeOperand(BR->getNumExplicitOperands()-1);
             BR->addOperand(*MF, MachineOperand::CreateReg(Patmos::RTR, false, false, true));
          
             opcode = opcode == Patmos::BRCF ? Patmos::BRCFR : Patmos::BRCFRu;
@@ -2180,10 +2180,10 @@ namespace llvm {
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
-      AU.addRequired<MachineDominatorTree>();
-      AU.addRequired<MachinePostDominatorTree>();
-      AU.addPreserved<MachineDominatorTree>();
-      AU.addPreserved<MachinePostDominatorTree>();
+      AU.addRequired<MachineDominatorTreeWrapperPass>();
+      AU.addRequired<MachinePostDominatorTreeWrapperPass>();
+      AU.addPreserved<MachineDominatorTreeWrapperPass>();
+      AU.addPreserved<MachinePostDominatorTreeWrapperPass>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
 
@@ -2230,8 +2230,8 @@ namespace llvm {
       unsigned total_size = 0;
       bool blocks_splitted = false;
 
-      MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
-      MachinePostDominatorTree &MPDT = getAnalysis<MachinePostDominatorTree>();
+      MachineDominatorTree &MDT = getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
+      MachinePostDominatorTree &MPDT = getAnalysis<MachinePostDominatorTreeWrapperPass>().getPostDomTree();
 
       for(MachineFunction::iterator i(MF.begin()), ie(MF.end()); i != ie; i++) {
         unsigned bb_size = agraph::getBBSize(&*i, PTM);

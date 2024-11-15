@@ -25,6 +25,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/EndianStream.h"
 
 using namespace llvm;
 
@@ -37,13 +38,12 @@ class PatmosMCCodeEmitter : public MCCodeEmitter {
   MCContext &Ctx;
 
 public:
-  PatmosMCCodeEmitter(const MCInstrInfo &mcii, const MCRegisterInfo &MRI, 
-                      MCContext &ctx) :
+  PatmosMCCodeEmitter(const MCInstrInfo &mcii, MCContext &ctx) :
             MCII(mcii) , Ctx(ctx) {}
 
   ~PatmosMCCodeEmitter() override {}
 
-  void encodeInstruction(const MCInst &MI, raw_ostream &OS,
+  void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 
@@ -71,15 +71,12 @@ public:
 
   /****** Helper functions to emit binary code ******/
 
-  void EmitByte(unsigned char C, raw_ostream &OS) const {
-    OS << (char)C;
-  }
-
-  void EmitInstruction(uint64_t Val, unsigned Size, raw_ostream &OS) const {
+  void EmitInstruction(uint64_t Val, unsigned Size, SmallVectorImpl<char> &CB) const {
     // Output the instruction encoding in big endian byte order.
+
     for (unsigned i = 0; i < Size; ++i) {
       unsigned Shift = (Size - 1 - i) * 8;
-      EmitByte((Val >> Shift) & 0xff, OS);
+      support::endian::write<char>(CB, (Val >> Shift) & 0xff, llvm::endianness::big);
     }
   }
 
@@ -96,17 +93,16 @@ public:
 }  // namespace
 
 MCCodeEmitter *llvm::createPatmosMCCodeEmitter(const MCInstrInfo &MCII,
-                                         const MCRegisterInfo &MRI,
                                          MCContext &Ctx)
 {
-  return new PatmosMCCodeEmitter(MCII, MRI, Ctx);
+  return new PatmosMCCodeEmitter(MCII, Ctx);
 }
 
 
 /// EncodeInstruction - Emit the instruction.
 /// Size the instruction (currently only 4 bytes
 void PatmosMCCodeEmitter::
-encodeInstruction(const MCInst &MI, raw_ostream &OS,
+encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                   SmallVectorImpl<MCFixup> &Fixups,
                   const MCSubtargetInfo &STI) const
 {
@@ -139,7 +135,13 @@ encodeInstruction(const MCInst &MI, raw_ostream &OS,
     }
   }
 
-  EmitInstruction(Binary, Size, OS);
+  if(Size == 32) {
+    support::endian::write<uint32_t>(CB, (uint32_t)Binary, llvm::endianness::little);
+  } else if(Size == 64) {
+    support::endian::write<uint64_t>(CB, Binary, llvm::endianness::little);
+  } else {
+    llvm_unreachable("Pseudo opcode found in EncodeInstruction()");
+  }
 }
 
 /// getMachineOpValue - Return binary encoding of operand. If the machine
@@ -181,9 +183,10 @@ PatmosMCCodeEmitter::getImmediateEncoding(const MCInst &MI, const MCOperand& MO,
                                   SmallVectorImpl<MCFixup> &Fixups) const {
   if (MO.isImm()) {
     return static_cast<unsigned>(MO.getImm());
-  } else if (MO.isFPImm()) {
-    return static_cast<unsigned>(APFloat(MO.getFPImm())
-        .bitcastToAPInt().getHiBits(32).getLimitedValue());
+  } else if (MO.isSFPImm()) {
+    return static_cast<unsigned>(APInt(32, MO.getSFPImm()).getLimitedValue(UINT32_MAX));
+  } else if (MO.isDFPImm()) {
+    return static_cast<unsigned>(APInt(64, MO.getDFPImm()).getLimitedValue(UINT32_MAX));
   }
 
   // MO must be an Expr.

@@ -40,7 +40,7 @@ namespace {
     const PatmosSubtarget &Subtarget;
 
   public:
-    PatmosDAGToDAGISel(PatmosTargetMachine &TM, CodeGenOpt::Level OL)
+    PatmosDAGToDAGISel(PatmosTargetMachine &TM, CodeGenOptLevel OL)
       : SelectionDAGISel(TM, OL),
         Subtarget(*TM.getSubtargetImpl()) { }
 
@@ -64,7 +64,7 @@ namespace {
 /// Patmos-specific DAG, ready for instruction scheduling.
 ///
 FunctionPass *llvm::createPatmosISelDag(PatmosTargetMachine &TM,
-                                  llvm::CodeGenOpt::Level OptLevel) {
+                                  llvm::CodeGenOptLevel OptLevel) {
   return new PatmosDAGToDAGISel(TM, OptLevel);
 }
 

@@ -332,8 +332,8 @@ namespace {
 } // namespace
 
 static Reloc::Model getEffectiveRelocModel(bool JIT,
-                                           Optional<Reloc::Model> RM) {
-  if (!RM.hasValue() || JIT)
+                                           std::optional<Reloc::Model> RM) {
+  if (!RM.has_value() || JIT)
     return Reloc::Static;
   return *RM;
 }
@@ -343,9 +343,9 @@ PatmosTargetMachine::PatmosTargetMachine(const Target &T,
                                          StringRef CPU,
                                          StringRef FS,
                                          const TargetOptions &Options,
-                                         Optional<Reloc::Model> RM,
-                                         Optional<CodeModel::Model> CM,
-                                         CodeGenOpt::Level L, bool JIT)
+										 std::optional<Reloc::Model> RM,
+										 std::optional<CodeModel::Model> CM,
+										 CodeGenOptLevel L, bool JIT)
   : LLVMTargetMachine(
       T,
       // Keep this in sync with clang/lib/Basic/Targets.cpp and

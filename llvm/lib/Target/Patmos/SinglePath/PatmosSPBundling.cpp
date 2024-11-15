@@ -34,7 +34,7 @@ FunctionPass *llvm::createPatmosSPBundlingPass(const PatmosTargetMachine &tm) {
 
 bool PatmosSPBundling::runOnMachineFunction(MachineFunction &MF) {
   PSPI = &getAnalysis<PatmosSinglePathInfo>();
-  PostDom = &getAnalysis<MachinePostDominatorTree>();
+  PostDom = &getAnalysis<MachinePostDominatorTreeWrapperPass>().getPostDomTree();
     
   // only convert function if marked
   if ( PSPI->isConverting(MF) && PatmosSubtarget::enableBundling()

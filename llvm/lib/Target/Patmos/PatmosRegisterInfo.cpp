@@ -161,7 +161,7 @@ PatmosRegisterInfo::computeLargeFIOffset(MachineRegisterInfo &MRI,
 
 
 
-void
+bool
 PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
                                           int offset, unsigned basePtr,
                                           bool isOnStackCache) const {
@@ -216,10 +216,11 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
 
   // remove the pseudo instruction
   MBB.erase(&PseudoMI);
+  return true,
 }
 
 
-void
+bool
 PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                         int SPAdj, unsigned FIOperandNum,
                                         RegScavenger *RS) const
@@ -340,8 +341,7 @@ PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // special handling of pseudo instructions: expand
   if ( opcode==Patmos::PSEUDO_PREG_SPILL ||
        opcode==Patmos::PSEUDO_PREG_RELOAD ) {
-      expandPseudoPregInstr(II, Offset, BasePtr, isOnStackCache);
-      return;
+      return expandPseudoPregInstr(II, Offset, BasePtr, isOnStackCache);
   }
 
   // do we need to rewrite the instruction opcode?
@@ -369,6 +369,7 @@ PatmosRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // update the instruction's operands
   MI.getOperand(FIOperandNum).ChangeToRegister(BasePtr, false, false, computedLargeOffset);
   MI.getOperand(FIOperandNum+1).ChangeToImmediate(Offset);
+  return false;
 }
 
 Register PatmosRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
@@ -435,10 +436,6 @@ int PatmosRegisterInfo::getS0Index(unsigned RegNo) const
     default: break;
   }
   return res;
-}
-
-bool PatmosRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
-  return PhysReg == Patmos::R0 || PhysReg == Patmos::P0;
 }
 
 raw_ostream &llvm::operator<< (raw_ostream &OS, const llvm::PrintReg &P) {

@@ -62,10 +62,10 @@ namespace llvm {
 		MachineBasicBlock* get_header_of(EqClass &eq_class);
 
 		/// If the class contains the header, returns it.
-		Optional<MachineBasicBlock*> get_header_in_class(EqClass &eq_class);
+		std::optional<MachineBasicBlock*> get_header_in_class(EqClass &eq_class);
 
 		/// Returns whether this edge exits any loop
-		bool is_exit_edge(std::pair<Optional<MachineBasicBlock*>, MachineBasicBlock*> edge);
+		bool is_exit_edge(std::pair<std::optional<MachineBasicBlock*>, MachineBasicBlock*> edge);
 
 		Register getVreg(EqClass &eq_class);
 
@@ -93,8 +93,8 @@ namespace llvm {
 		void getAnalysisUsage(AnalysisUsage &AU) const override {
 			AU.addRequired<EquivalenceClasses>();
 			AU.addPreserved<EquivalenceClasses>();
-			AU.addRequired<MachineLoopInfo>();
-			AU.addPreserved<MachineLoopInfo>();
+			AU.addRequired<MachineLoopInfoWrapperPass>();
+			AU.addPreserved<MachineLoopInfoWrapperPass>();
 			MachineFunctionPass::getAnalysisUsage(AU);
 		}
 

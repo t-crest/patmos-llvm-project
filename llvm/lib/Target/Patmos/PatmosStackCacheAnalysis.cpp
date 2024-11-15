@@ -2320,8 +2320,8 @@ namespace llvm {
       auto progName = sys::findProgramByName(Solve_ilp);
     if (progName && sys::ExecuteAndWait(StringRef(*progName),
                               llvm::ArrayRef<StringRef>(args),
-                              llvm::None,
-                              llvm::ArrayRef<Optional<StringRef>>(),
+							  std::nullopt,
+                              llvm::ArrayRef<std::optional<StringRef>>(),
                               0,0,&ErrMsg)) {
         report_fatal_error("calling ILP solver (" + Solve_ilp + "): " + ErrMsg);
       }

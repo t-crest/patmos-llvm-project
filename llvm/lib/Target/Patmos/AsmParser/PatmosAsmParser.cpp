@@ -13,8 +13,9 @@
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCParser/MCAsmLexer.h"
 
 using namespace llvm;
 
@@ -64,7 +65,7 @@ public:
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
                                 OperandVector &Operands) override;
 
-  bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
+  bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
 
   bool ParseDirective(AsmToken DirectiveID) override;
 
@@ -73,8 +74,8 @@ public:
        MCStreamer &Out, uint64_t &ErrorInfo,
        bool MatchingInlineAsm) override;
 
-  OperandMatchResultTy
-  tryParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
+  ParseStatus
+  tryParseRegister(MCRegister &Re, SMLoc &StartLoc, SMLoc &EndLoc) override;
 
   void EatToEndOfStatement();
 
@@ -87,7 +88,7 @@ private:
   bool ParseRegister(OperandVector &Operands, bool EmitError = true);
 
   /// ParseRegister - This version does not lex the last token so the end token can be retrieved
-  bool ParseRegister(unsigned &RegNo, bool Required);
+  bool ParseRegister(MCRegister &Reg, bool Required);
 
   bool ParseMemoryOperand(OperandVector &Operands);
 
@@ -174,7 +175,7 @@ struct PatmosOperand : public MCParsedAsmOperand {
     /// getEndLoc - Get the location of the last token of this operand.
     SMLoc getEndLoc() const { return EndLoc; }
 
-    unsigned getReg() const {
+    MCRegister getReg() const override {
       assert(Kind == Register && "Invalid access!");
       return Reg.RegNum;
     }
@@ -480,18 +481,18 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   llvm_unreachable("Implement any new match types added!");
 }
 
-OperandMatchResultTy
-PatmosAsmParser::tryParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) {
-  if (ParseRegister(RegNo, StartLoc, EndLoc)) {
+ParseStatus
+PatmosAsmParser::tryParseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) {
+  if (parseRegister(Reg, StartLoc, EndLoc)) {
     // syntax error
-    return OperandMatchResultTy::MatchOperand_ParseFail;
+    return ParseStatus::Failure;
   }
-  if (RegNo == 0) {
+  if (!Reg) {
     // missing register
-    return OperandMatchResultTy::MatchOperand_ParseFail;
+    return ParseStatus::Failure;
   }
 
-  return OperandMatchResultTy::MatchOperand_Success;
+  return ParseStatus::Success;
 }
 
 bool PatmosAsmParser::
@@ -499,12 +500,12 @@ ParseRegister(OperandVector &Operands, bool EmitError) {
   MCAsmLexer &Lexer = getLexer();
   SMLoc S = Lexer.getLoc();
 
-  unsigned RegNo = 0;
-  if (ParseRegister(RegNo, false)) {
+  MCRegister Reg;
+  if (ParseRegister(Reg, false)) {
     // syntax error
     return true;
   }
-  if (RegNo == 0) {
+  if (Reg == 0) {
     // missing register
     return !EmitError || Error(S, "Missing register name");
   }
@@ -512,14 +513,14 @@ ParseRegister(OperandVector &Operands, bool EmitError) {
   SMLoc E = Lexer.getLoc();
   Lexer.Lex();
 
-  Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateReg(RegNo, S, E)));
+  Operands.push_back(std::unique_ptr<MCParsedAsmOperand>(PatmosOperand::CreateReg(Reg, S, E)));
 
   return false;
 }
 
 bool PatmosAsmParser::
-ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) {
-  if (ParseRegister(RegNo, false)) {
+parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) {
+  if (ParseRegister(Reg, false)) {
     return true;
   }
   getLexer().Lex();
@@ -527,7 +528,7 @@ ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) {
 }
 
 bool PatmosAsmParser::
-ParseRegister(unsigned &RegNo, bool Required) {
+ParseRegister(MCRegister &Reg, bool Required) {
   MCAsmLexer &Lexer = getLexer();
 
   if (Lexer.getKind() == AsmToken::Dollar) {
@@ -537,11 +538,11 @@ ParseRegister(unsigned &RegNo, bool Required) {
   }
   if (Lexer.getKind() == AsmToken::Identifier) {
     StringRef RegName = Lexer.getTok().getIdentifier();
-    RegNo = MatchRegisterName(RegName);
+    Reg = MatchRegisterName(RegName);
 
     // Handle alternative register names
-    if (!RegNo) {
-      RegNo = StringSwitch<unsigned>(RegName)
+    if (!Reg) {
+      Reg = StringSwitch<unsigned>(RegName)
         .Case("sl", Patmos::SL)
         .Case("sh", Patmos::SH)
         .Case("ss", Patmos::SS)
@@ -554,7 +555,7 @@ ParseRegister(unsigned &RegNo, bool Required) {
     }
 
     // If name does not match after $ prefix, this is always an error
-    return (RegNo == 0) && Error(Lexer.getLoc(), "register name not valid");
+    return (Reg == 0) && Error(Lexer.getLoc(), "register name not valid");
   }
   // Syntax error: $ and no identifier is always an error
   return Error(Lexer.getLoc(), "register prefix $ is not followed by a register name");

@@ -36,7 +36,7 @@ bool EquivalenceClasses::runOnMachineFunction(MachineFunction &MF) {
 		MF.dump();
 	);
 
-	auto &LI = getAnalysis<MachineLoopInfo>();
+	auto &LI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
 
 	FCFGPostDom doms(MF, LI);
 	LLVM_DEBUG(doms.print(dbgs()));
@@ -45,7 +45,7 @@ bool EquivalenceClasses::runOnMachineFunction(MachineFunction &MF) {
 		// X
 		MachineBasicBlock*,
 		// Set of {Y->Z} control dependencies
-		std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>
+		std::set<std::pair<std::optional<MachineBasicBlock*>,MachineBasicBlock*>>
 	>  deps;
 	doms.get_control_dependencies(deps);
 
@@ -279,15 +279,15 @@ void EquivalenceClasses::addClassMetaData(MachineInstr* MI, unsigned class_nr) {
 	MI->addOperand(*MF, MachineOperand::CreateMetadata(unsigned_md(class_nr, C)));
 }
 
-Optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI) {
+std::optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI) {
 	if(!MI->isPredicable() ||
 		MI->getOperand(MI->findFirstPredOperandIdx()).getReg() == Patmos::P0
 	){
 		// Ignore class if instruction is unpredicated
-		return None;
+		return std::nullopt;
 	}
 
-	Optional<unsigned> idx;
+	std::optional<unsigned> idx;
 	for(int i = 0; i<MI->getNumOperands(); i++){
 		if(MI->getOperand(i).isMetadata()){
 			auto &md = MI->getOperand(i).getMetadata()->getOperand(0);
@@ -303,7 +303,7 @@ Optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI) {
 		assert(MI->getOperand(*idx).isMetadata());
 		return cast<ConstantInt>(dyn_cast<ConstantAsMetadata>(dyn_cast<MDNode>(MI->getOperand(*idx).getMetadata())->getOperand(0))->getValue())->getSExtValue();
 	} else {
-		return None;
+		return std::nullopt;
 	}
 }
 

@@ -209,8 +209,8 @@ bool PatmosSinglePathInfo::doFinalization(Module &M) {
 }
 
 void PatmosSinglePathInfo::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<MachineLoopInfo>();
-  AU.addRequired<MachineDominatorTree>();
+  AU.addRequired<MachineLoopInfoWrapperPass>();
+  AU.addRequired<MachineDominatorTreeWrapperPass>();
   AU.setPreservesAll();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
@@ -240,7 +240,7 @@ void PatmosSinglePathInfo::analyzeFunction(MachineFunction &MF) {
   // we could use a custom algorithm (e.g. Havlak's algorithm)
   // that also checks irreducibility.
   // build the SPScope tree
-  Root = SPScope::createSPScopeTree(MF, getAnalysis<MachineLoopInfo>(), TII);
+  Root = SPScope::createSPScopeTree(MF, getAnalysis<MachineLoopInfoWrapperPass>().getLI(), TII);
 
   LLVM_DEBUG( print(dbgs()) );
 
@@ -251,7 +251,7 @@ void PatmosSinglePathInfo::analyzeFunction(MachineFunction &MF) {
 
 void PatmosSinglePathInfo::checkIrreducibility(MachineFunction &MF) const {
   // Get dominator information
-  MachineDominatorTree &DT = getAnalysis<MachineDominatorTree>();
+  MachineDominatorTree &DT = getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
 
   struct BackedgeChecker {
     MachineDominatorTree &DT;

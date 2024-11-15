@@ -5085,7 +5085,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                                                 << TripleStr;
   }
 
-  if(Triple.isPatmos()) {
+  if(Triple.getArch() == llvm::Triple::patmos) {
     Args.AddLastArg(CmdArgs, options::OPT_mpatmos_enable_cet);
     Args.AddLastArg(CmdArgs, options::OPT_mpatmos_cet_functions);
   }

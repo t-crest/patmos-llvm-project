@@ -38,9 +38,9 @@ public:
                       StringRef CPU,
                       StringRef FS,
                       const TargetOptions &Options,
-                      Optional<Reloc::Model> RM,
-                      Optional<CodeModel::Model> CM,
-                      CodeGenOpt::Level L, bool JIT);
+					  std::optional<Reloc::Model> RM,
+					  std::optional<CodeModel::Model> CM,
+					  CodeGenOptLevel L, bool JIT);
 
   const PatmosInstrInfo *getInstrInfo() const { return Subtarget.getInstrInfo(); }
   const DataLayout *getDataLayout() const { return &DL;}

@@ -2216,7 +2216,7 @@ private:
   StmtResult ParsePragmaLoopbound(StmtVector &Stmts,
                                   ParsedStmtContext StmtCtx,
                                   SourceLocation *TrailingElseLoc,
-                                  ParsedAttributesWithRange &Attrs);
+                                  ParsedAttributes &Attrs);
 
   /// Describes the behavior that should be taken for an __if_exists
   /// block.

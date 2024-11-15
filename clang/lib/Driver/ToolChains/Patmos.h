@@ -27,12 +27,9 @@ public:
                  const llvm::opt::ArgList &Args);
 
   bool IsIntegratedAssemblerDefault() const override { return true; }
-  bool IsUnwindTablesDefault(const llvm::opt::ArgList &Args) const override {
-    return false;
-  }
   bool SupportsProfiling() const override { return false; }
   bool isPICDefault() const override { return false; }
-  bool isPIEDefault() const override { return false; }
+  bool isPIEDefault(const llvm::opt::ArgList &Args) const override { return false; }
   bool isPICDefaultForced() const override { return false; }
   bool isCrossCompiling() const override { return true;};
   Tool *SelectTool(const JobAction &JA) const override;

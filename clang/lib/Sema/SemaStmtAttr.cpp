@@ -213,7 +213,7 @@ static Attr *handleLoopboundAttr(Sema &S, Stmt *St, const ParsedAttr &A,
 
   auto MinInt = *MinAPS;
   auto MaxInt = *MaxAPS;
-
+  ;
   if ( dyn_cast<DoStmt>(St) && MinInt < 1 ) {
     S.Diag(A.getLoc(), diag::err_pragma_loopbound_invalid_values_do_while);
     return nullptr;
@@ -223,14 +223,14 @@ static Attr *handleLoopboundAttr(Sema &S, Stmt *St, const ParsedAttr &A,
     return nullptr;
   }
   auto int_bits = (sizeof(int)*8);
-  if ( MinInt.getMinSignedBits() > int_bits ||
-       MaxInt.getMinSignedBits() > int_bits ) {
+  if ( !MinInt.isRepresentableByInt64() ||
+       !MaxInt.isRepresentableByInt64()) {
     S.Diag(A.getLoc(), diag::err_pragma_loopbound_excessive_values);
     return nullptr;
   }
 
   return ::new (S.Context) LoopBoundAttr(S.Context, A,
-      (int) MinInt.getExtValue(), (int) MaxInt.getExtValue());
+      MinInt.getExtValue(), MaxInt.getExtValue());
 }
 
 namespace {

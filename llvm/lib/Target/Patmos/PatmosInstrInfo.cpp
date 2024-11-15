@@ -26,7 +26,7 @@
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
 
@@ -127,7 +127,8 @@ void PatmosInstrInfo::
 storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
                     Register SrcReg, bool isKill, int FrameIdx,
                     const TargetRegisterClass *RC,
-                    const TargetRegisterInfo *TRI) const
+                    const TargetRegisterInfo *TRI,
+                    Register VReg) const
 {
   // Do not emit anything for naked functions
   if (MBB.getParent()->getFunction().hasFnAttribute(Attribute::Naked)) {
@@ -172,7 +173,8 @@ void PatmosInstrInfo::
 loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
                      Register DestReg, int FrameIdx,
                      const TargetRegisterClass *RC,
-                     const TargetRegisterInfo *TRI) const
+                     const TargetRegisterInfo *TRI,
+                     Register VReg) const
 {
   // Do not emit anything for naked functions
   if (MBB.getParent()->getFunction().hasFnAttribute(Attribute::Naked)) {
@@ -207,7 +209,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
   }
 }
 
-unsigned PatmosInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+Register PatmosInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
   // stack stores still go through cache at this point
   if (MI.getOpcode() == Patmos::SWC ||
@@ -222,7 +224,7 @@ unsigned PatmosInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   return 0;
 }
 
-unsigned PatmosInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+Register PatmosInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                               int &FrameIndex) const {
   // stack loads still go through cache at this point
   if (MI.getOpcode() == Patmos::LWC ||
@@ -931,7 +933,7 @@ bool PatmosInstrInfo::canIssueInSlot(const MachineInstr *MI,
   return canIssueInSlot(MI->getDesc(), Slot);
 }
 
-int PatmosInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
+std::optional<unsigned> PatmosInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
                               const MachineInstr &DefMI, unsigned DefIdx,
                               const MachineInstr &UseMI,
                               unsigned UseIdx) const
@@ -946,7 +948,7 @@ int PatmosInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
                                                       UseMI, UseIdx);
 }
 
-int PatmosInstrInfo::getDefOperandLatency(const InstrItineraryData *ItinData,
+std::optional<unsigned> PatmosInstrInfo::getDefOperandLatency(const InstrItineraryData *ItinData,
                                           const MachineInstr &DefMI,
                                           unsigned DefIdx) const
 {

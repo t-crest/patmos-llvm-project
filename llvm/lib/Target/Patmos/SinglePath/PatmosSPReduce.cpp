@@ -902,7 +902,7 @@ void PatmosSPReduce::fixupKillFlagOfCondRegs(void) {
         firstMI = MBB->begin();
         lastMI != firstMI; --lastMI) {
       MachineOperand *MO;
-      if ((MO = lastMI->findRegisterUseOperand(CondReg.getReg())) != NULL) {
+      if ((MO = lastMI->findRegisterUseOperand(CondReg.getReg(), TRI)) != NULL) {
         MO->setIsKill(true);
         break;
       }
@@ -1268,7 +1268,7 @@ void PatmosSPReduce::collectReturnInfoInsts(MachineFunction &MF) {
         bool found = false;
         while (!found) {
           // if DMI defines reg
-          if (DMI->definesRegister(reg)) {
+          if (DMI->definesRegister(reg, TRI)) {
             assert(DMI->getFlag(MachineInstr::FrameSetup));
             ReturnInfoInsts.insert(&*DMI);
             LLVM_DEBUG(dbgs() << "         #" << MBB->getNumber() << ": ";

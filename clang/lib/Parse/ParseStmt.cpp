@@ -523,8 +523,9 @@ Retry:
     return ParsePragmaLoopHint(Stmts, StmtCtx, TrailingElseLoc, CXX11Attrs);
 
   case tok::annot_pragma_loopbound:
-    ProhibitAttributes(Attrs);
-    return ParsePragmaLoopbound(Stmts, StmtCtx, TrailingElseLoc, Attrs);
+	    ProhibitAttributes(CXX11Attrs);
+	    ProhibitAttributes(GNUAttrs);
+    return ParsePragmaLoopbound(Stmts, StmtCtx, TrailingElseLoc, CXX11Attrs);
 
 
   case tok::annot_pragma_dump:
@@ -2519,9 +2520,9 @@ StmtResult Parser::ParsePragmaLoopHint(StmtVector &Stmts,
 StmtResult Parser::ParsePragmaLoopbound(StmtVector &Stmts,
                                         ParsedStmtContext StmtCtx,
                                         SourceLocation *TrailingElseLoc,
-                                        ParsedAttributesWithRange &Attrs) {
+                                        ParsedAttributes &Attrs) {
   // Create temporary attribute list.
-  ParsedAttributesWithRange TempAttrs(AttrFactory);
+  ParsedAttributes TempAttrs(AttrFactory);
 
   // Get loopbound and consume annotated token.
   while (Tok.is(tok::annot_pragma_loopbound)) {
@@ -2530,14 +2531,15 @@ StmtResult Parser::ParsePragmaLoopbound(StmtVector &Stmts,
     ArgsUnion ArgLB[] = {ArgsUnion(LB.MinExpr), ArgsUnion(LB.MaxExpr)};
     TempAttrs.addNew(LB.PragmaNameLoc->Ident, LB.Range, nullptr,
                      LB.PragmaNameLoc->Loc, ArgLB, 2,
-                     ParsedAttr::AS_Pragma);
+					 ParsedAttr::Form::Pragma());
   }
 
   // Get the next statement.
   MaybeParseCXX11Attributes(Attrs);
 
+  ParsedAttributes EmptyDeclSpecAttrs(AttrFactory);
   StmtResult S = ParseStatementOrDeclarationAfterAttributes(
-      Stmts, StmtCtx, TrailingElseLoc, Attrs);
+      Stmts, StmtCtx, TrailingElseLoc, Attrs, EmptyDeclSpecAttrs);
 
   Attrs.takeAllFrom(TempAttrs);
   return S;

@@ -37,7 +37,8 @@ private:
 
   /// expandPseudoPregInstr - expand PSEUDO_PREG_SPILL or PSEUDO_PREG_RELOAD
   /// to a sequence of real machine instructions.
-  void expandPseudoPregInstr(MachineBasicBlock::iterator II,
+  /// Returns true if the iterator is invalidated
+  bool expandPseudoPregInstr(MachineBasicBlock::iterator II,
                              int offset, unsigned basePtr,
                              bool isOnStackCache) const;
 public:
@@ -86,14 +87,12 @@ public:
     return true;
   }
 
-  void eliminateFrameIndex(MachineBasicBlock::iterator II,
+  bool eliminateFrameIndex(MachineBasicBlock::iterator II,
                            int SPAdj, unsigned FIOperandNum,
 		                   RegScavenger *RS = nullptr) const override;
 
   // Debug information queries.
   Register getFrameRegister(const MachineFunction &MF) const override;
-
-  bool isConstantPhysReg(MCRegister PhysReg) const override;
 
   const TargetRegisterClass *
   getPointerRegClass(const MachineFunction &MF,

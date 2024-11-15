@@ -32,7 +32,7 @@ namespace {
     unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                           const MCFixup &Fixup, bool IsPCRel) const override;
 
-    bool needsRelocateWithSymbol(const MCSymbol &Sym,
+    bool needsRelocateWithSymbol(const MCValue &Val, const MCSymbol &Sym,
                                  unsigned Type) const override
     {
       switch (Type) {

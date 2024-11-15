@@ -281,7 +281,7 @@ void PatmosSPMark::rewriteCall(MachineInstr *MI, bool pseudo_root_target) {
   // Remove the call target operand and add a new target operand
   // with an MachineInstrBuilder. In this case, it is inserted at
   // the right place, before the implicit defs of the call.
-  MI->RemoveOperand(2);
+  MI->removeOperand(2);
   MachineInstrBuilder MIB(*MBB->getParent(), MI);
   MIB.addGlobalAddress(SPTarget);
   if(!pseudo_root_target && PatmosSinglePathInfo::useNewSinglePathTransform()) {

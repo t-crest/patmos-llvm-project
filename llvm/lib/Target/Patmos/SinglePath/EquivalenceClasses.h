@@ -27,7 +27,7 @@ namespace llvm {
 		unsigned number;
 
 		/// The edges the block is control dependent on
-		std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>> dependencies;
+		std::set<std::pair<std::optional<MachineBasicBlock*>,MachineBasicBlock*>> dependencies;
 
 		// The blocks within the class
 		std::set<MachineBasicBlock*> members;
@@ -42,7 +42,7 @@ namespace llvm {
 				// The control dependencies of the class.
 				// If the source is 'None' it is a dependency on the entry to the loop.
 				// (the target is then the header)
-				std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>,
+				std::set<std::pair<std::optional<MachineBasicBlock*>,MachineBasicBlock*>>,
 				// The blocks in the class
 				std::set<MachineBasicBlock*>
 			>
@@ -63,8 +63,8 @@ namespace llvm {
 		}
 
 		void getAnalysisUsage(AnalysisUsage &AU) const override {
-			AU.addRequired<MachineLoopInfo>();
-			AU.addPreserved<MachineLoopInfo>();
+			AU.addRequired<MachineLoopInfoWrapperPass>();
+			AU.addPreserved<MachineLoopInfoWrapperPass>();
 			MachineFunctionPass::getAnalysisUsage(AU);
 		}
 
@@ -84,7 +84,7 @@ namespace llvm {
 		static void addClassMetaData(MachineInstr* MI, unsigned class_nr);
 
 		// Extracts the metadata operand signifying what equivalence class the instruction is predicated by
-		static Optional<unsigned> getEqClassNr(const MachineInstr* MI);
+		static std::optional<unsigned> getEqClassNr(const MachineInstr* MI);
 
 		/// Returns whether the two given instructions are independent.
 		/// If two instruction are dependent, it means they may be enabled at the same time.

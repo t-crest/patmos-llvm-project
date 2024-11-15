@@ -93,7 +93,7 @@ bool VirtualizePredicates::runOnMachineFunction(MachineFunction &MF) {
 /// and that if the function is called disabled, a loops counter doesn't overwrite
 /// caller's register (which they didn't spill since the paths is disabled).
 void VirtualizePredicates::unpredicateCounterSpillReload(MachineFunction &MF) {
-	auto &LI = getAnalysis<MachineLoopInfo>();
+	auto &LI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
 
 	// registers used for loop counter management and their loop
 	std::set<std::pair<Register, MachineLoop*>> counter_mgmt_regs;

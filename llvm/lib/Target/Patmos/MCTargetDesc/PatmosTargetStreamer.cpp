@@ -33,13 +33,14 @@ void PatmosTargetAsmStreamer::EmitFStart(const MCSymbol *Start,
   OS << "\t.fstart\t" << *Start << ", " << *Size << ", " << Alignment.value() << "\n";
 }
 
-PatmosTargetELFStreamer::PatmosTargetELFStreamer(MCStreamer &S)
-    : PatmosTargetStreamer(S) {}
+PatmosTargetELFStreamer::PatmosTargetELFStreamer(MCStreamer &S,
+        const MCSubtargetInfo &STI)
+    : PatmosTargetStreamer(S), STI(STI) {}
 
 void PatmosTargetELFStreamer::EmitFStart(const MCSymbol *Start, 
 	      const MCExpr* Size, Align Alignment)
 {
-  getStreamer().emitCodeAlignment(Alignment.value());
+  getStreamer().emitCodeAlignment(Alignment, &STI, Alignment.value());
   getStreamer().emitValue(Size, 4);
 
 }

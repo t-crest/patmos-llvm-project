@@ -58,7 +58,7 @@ public:
 			// X
 			MachineBasicBlock*,
 			// Set of {Y->Z} control dependencies of X
-			std::set<std::pair<Optional<MachineBasicBlock*>,MachineBasicBlock*>>
+			std::set<std::pair<std::optional<MachineBasicBlock*>,MachineBasicBlock*>>
 		> &deps);
 
 	/// Returns the header of the outermost loop, containing the given loop,
@@ -67,11 +67,11 @@ public:
 
 	/// Given a predecessor block in the raw CFG, returns the equivalent predecessor in the
 	/// FCFG (if any). Assumes the source block is in this loop.
-	Optional<MachineBasicBlock*> fcfg_predecessor(MachineBasicBlock *pred);
+	std::optional<MachineBasicBlock*> fcfg_predecessor(MachineBasicBlock *pred);
 
 	/// Given a successor block in the raw CFG, returns the equivalent successor in the
 	/// FCFG (if any). Assumes the source block is in this loop.
-	Optional<MachineBasicBlock*> fcfg_successor(MachineBasicBlock *succ);
+	std::optional<MachineBasicBlock*> fcfg_successor(MachineBasicBlock *succ);
 
 };
 }

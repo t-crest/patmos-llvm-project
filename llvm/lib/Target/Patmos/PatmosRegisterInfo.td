@@ -32,7 +32,7 @@ class PatmosPRED<bits<3> num, string n> : PatmosReg<n> {
 //  Registers
 //===----------------------------------------------------------------------===//
 
-def R0  : PatmosGPR< 0,  "r0">, DwarfRegNum<[0]>;
+let isConstant = true in def R0  : PatmosGPR< 0,  "r0">, DwarfRegNum<[0]>;
 def R1  : PatmosGPR< 1,  "r1">, DwarfRegNum<[1]>;
 def R2  : PatmosGPR< 2,  "r2">, DwarfRegNum<[2]>;
 def R3  : PatmosGPR< 3,  "r3">, DwarfRegNum<[3]>;
@@ -65,7 +65,7 @@ def RTR : PatmosGPR<29, "r29">, DwarfRegNum<[29]>; // reserved temporary registe
 def RFP : PatmosGPR<30, "r30">, DwarfRegNum<[30]>; // frame ptr
 def RSP : PatmosGPR<31, "r31">, DwarfRegNum<[31]>; // stack ptr
 
-def P0  : PatmosPRED<0, "p0">, DwarfRegNum<[50]>;
+let isConstant = true in def P0  : PatmosPRED<0, "p0">, DwarfRegNum<[50]>;
 def P1  : PatmosPRED<1, "p1">, DwarfRegNum<[51]>;
 def P2  : PatmosPRED<2, "p2">, DwarfRegNum<[52]>;
 def P3  : PatmosPRED<3, "p3">, DwarfRegNum<[53]>;

@@ -10,6 +10,7 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/ADT/Statistic.h"
+#include <queue>
 
 using namespace llvm;
 
@@ -72,7 +73,7 @@ void LoopCountInsert::classifyLoops(MachineFunction &MF){
 	) {
 		return;
 	}
-	auto &LI = getAnalysis<MachineLoopInfo>();
+	auto &LI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
 	FCFGPostDom post_dom(MF, LI);
 
 	std::queue<MachineLoop*> loops;
@@ -99,7 +100,7 @@ void LoopCountInsert::classifyLoops(MachineFunction &MF){
 }
 
 void LoopCountInsert::doFunction(MachineFunction &MF){
-	auto &LI = getAnalysis<MachineLoopInfo>();
+	auto &LI = getAnalysis<MachineLoopInfoWrapperPass>().getLI();
 
 	classifyLoops(MF);
 
@@ -180,8 +181,8 @@ void LoopCountInsert::doFunction(MachineFunction &MF){
 					} else {
 						preheader_replacement_phi.add(phi_pred_op).addMBB(phi_pred);
 					}
-					instr.RemoveOperand(2);
-					instr.RemoveOperand(1);
+					instr.removeOperand(2);
+					instr.removeOperand(1);
 				}
 				// Add new phi vregs in old phi
 				MachineInstrBuilder(MF, instr)

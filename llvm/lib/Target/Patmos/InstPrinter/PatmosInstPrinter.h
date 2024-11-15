@@ -16,6 +16,7 @@
 
 #include "MCTargetDesc/PatmosMCAsmInfo.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCRegister.h"
 
 namespace llvm {
   class MCOperand;
@@ -59,7 +60,7 @@ namespace llvm {
     std::pair<const char *, uint64_t> getMnemonic(const MCInst *MI) override;
     void printInstruction(const MCInst *MI, uint64_t Address, raw_ostream &O);
 
-    static const char *getRegisterName(unsigned RegNo);
+    static const char *getRegisterName(MCRegister Reg);
 
   private:
     bool isBundled(const MCInst *MI) const;

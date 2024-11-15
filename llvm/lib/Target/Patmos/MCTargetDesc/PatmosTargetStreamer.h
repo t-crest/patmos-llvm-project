@@ -12,6 +12,7 @@
 
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/Support/FormattedStream.h"
 
 namespace llvm {
 class PatmosTargetStreamer : public MCTargetStreamer {
@@ -43,8 +44,10 @@ public:
 
 // This part is for ELF object output
 class PatmosTargetELFStreamer : public PatmosTargetStreamer {
+  const MCSubtargetInfo &STI;
 public:
-  PatmosTargetELFStreamer(MCStreamer &S);
+  PatmosTargetELFStreamer(MCStreamer &S,
+          const MCSubtargetInfo &STI);
 
   void EmitFStart(const MCSymbol *Start, const MCExpr* Size,
                   Align Alignment) override;

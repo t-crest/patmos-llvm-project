@@ -44,12 +44,12 @@ void ConstantLoopDominators::calculate(MachineFunction &MF, MachineLoopInfo &LI)
 }
 
 bool ConstantLoopDominators::runOnMachineFunction(MachineFunction &MF) {
-  calculate(MF, getAnalysis<MachineLoopInfo>());
+  calculate(MF, getAnalysis<MachineLoopInfoWrapperPass>().getLI());
   return false;
 }
 
 void ConstantLoopDominators::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<MachineLoopInfo>();
+  AU.addRequired<MachineLoopInfoWrapperPass>();
   AU.setPreservesAll();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
