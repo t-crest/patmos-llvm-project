@@ -251,17 +251,17 @@ compile_and_test_matrix("", "", [
     [
         "",
         "--mpatmos-enable-stack-cache-promotion",
-        ["--mpatmos-enable-array-stack-cache-promotion"]
-    ],
-    [
-        # We add this indirection so that commenting out the following line will remove all traditional tests
-        "",
+        "--mpatmos-enable-stack-cache-promotion --mpatmos-enable-array-stack-cache-promotion",
         [
-            #Traditional
+            # We add this indirection so that commenting out the following line will remove all traditional tests
             "",
-            # Traditional code with PML output, just to make sure we can
-            # output it without errors. Testing the output is not done.
-            "-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root
+            [
+                #Traditional
+                "",
+                # Traditional code with PML output, just to make sure we can
+                # output it without errors. Testing the output is not done.
+                "-mpatmos-serialize=" + compiled + ".pml -mpatmos-serialize-functions=" + sp_root
+            ]
         ]
     ],
     [
