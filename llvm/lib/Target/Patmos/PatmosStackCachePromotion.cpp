@@ -41,115 +41,122 @@ llvm::createPatmosStackCachePromotionPass(const PatmosTargetMachine &tm) {
   return new PatmosStackCachePromotion(tm);
 }
 
-
-void collectPointerUses(const Value *V, std::unordered_set<const Instruction*> &Visited) {
-  for (const User *U : V->users()) {
-    if (const Instruction *Inst = dyn_cast<Instruction>(U)) {
-      if (Visited.insert(Inst).second) {
-        // Recursively track uses through bitcasts, phis, selects, etc.
-        if (isa<BitCastInst>(Inst) || isa<PHINode>(Inst) || isa<SelectInst>(Inst)) {
-          collectPointerUses(Inst, Visited);
-        } else if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst) || isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
-          Visited.insert(Inst);
+namespace {
+  void collectPointerUses(const Value *V,
+                          std::unordered_set<const Instruction *> &Visited) {
+    for (const User *U : V->users()) {
+      if (const Instruction *Inst = dyn_cast<Instruction>(U)) {
+        if (Visited.insert(Inst).second) {
+          // Recursively track uses through bitcasts, phis, selects, etc.
+          if (isa<BitCastInst>(Inst) || isa<PHINode>(Inst) ||
+              isa<SelectInst>(Inst)) {
+            collectPointerUses(Inst, Visited);
+          } else if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst) ||
+                     isa<GetElementPtrInst>(Inst) || isa<CallInst>(Inst)) {
+            Visited.insert(Inst);
+          }
         }
       }
     }
   }
-}
 
-bool isAllocaUsedAsPointer(const AllocaInst *AI) {
-  std::unordered_set<const Instruction*> Visited;
-  collectPointerUses(AI, Visited);
+  bool isAllocaUsedAsPointer(const AllocaInst *AI) {
+    std::unordered_set<const Instruction *> Visited;
+    collectPointerUses(AI, Visited);
 
-  for (const Instruction *Inst : Visited) {
-    if (isa<GetElementPtrInst>(Inst) || (isa<CallInst>(Inst) && !(dyn_cast<CallInst>(Inst)->isInlineAsm()))) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool isFrameIndexUsedAsPointer(MachineFunction &MF, int ObjectFI) {
-  const MachineFrameInfo &MFI = MF.getFrameInfo();
-
-  // Check if the frame index is valid
-  if (ObjectFI < MFI.getObjectIndexBegin() || ObjectFI >= MFI.getObjectIndexEnd()) {
-    return true;
-  }
-
-  const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
-  if (!AI) return true;
-
-  return isAllocaUsedAsPointer(AI);
-}
-
-bool isIndirectUseRecursive(MachineInstr &MI, MachineRegisterInfo &MRI, int FI, SmallPtrSetImpl<MachineInstr *> &Visited) {
-  if (Visited.count(&MI))
-    return false;
-  Visited.insert(&MI);
-
-  for (auto &MO : MI.operands()) {
-    if (MO.isReg() && Register::isVirtualRegister(MO.getReg())) { // TODO Check this
-      MachineInstr *DefMI = MRI.getVRegDef(MO.getReg());
-      if (!DefMI)
-        continue;
-
-      for (auto &DefMO : DefMI->operands()) {
-        if (DefMO.isFI() && DefMO.getIndex() == FI) {
-          return true;
-        }
-      }
-
-      if (isIndirectUseRecursive(*DefMI, MRI, FI, Visited)) {
+    for (const Instruction *Inst : Visited) {
+      if (isa<GetElementPtrInst>(Inst) ||
+          (isa<CallInst>(Inst) && !(dyn_cast<CallInst>(Inst)->isInlineAsm()))) {
         return true;
       }
     }
+    return false;
   }
 
-  return false;
-}
+  bool isFrameIndexUsedAsPointer(MachineFunction &MF, int ObjectFI) {
+    const MachineFrameInfo &MFI = MF.getFrameInfo();
 
-bool isFrameIndexUsedIndirectly(MachineInstr &MI, MachineRegisterInfo &MRI, int FI) {
-  // Check if the instruction is a memory load/store
-  if (!MI.mayLoad() && !MI.mayStore())
-    return false;
-
-  SmallPtrSet<MachineInstr *, 8> Visited;
-  for (auto &MO : MI.operands()) {
-    if (MO.isReg() && isIndirectUseRecursive(MI, MRI, FI, Visited)) {
+    // Check if the frame index is valid
+    if (ObjectFI < MFI.getObjectIndexBegin() ||
+        ObjectFI >= MFI.getObjectIndexEnd()) {
       return true;
     }
+
+    const AllocaInst *AI = MFI.getObjectAllocation(ObjectFI);
+    if (!AI)
+      return true;
+
+    return isAllocaUsedAsPointer(AI);
   }
 
-  return false;
-}
+  bool isIndirectUseRecursive(MachineInstr &MI, MachineRegisterInfo &MRI, int FI,
+                              std::set<MachineInstr *> &Visited) {
+    if (Visited.count(&MI))
+      return false;
+    Visited.insert(&MI);
 
+    for (auto &MO :
+         MI.uses()) { // We only care about the registers this instruction uses
+      if (MO.isReg() &&
+          Register::isVirtualRegister(MO.getReg())) { // TODO Check this
+        MachineInstr *DefMI = MRI.getVRegDef(MO.getReg());
+        if (!DefMI) {
+          dbgs() << "VRegister was never defined???\n";
+          continue;
+        }
 
-std::unordered_set<MachineInstr*> findIndirectUses(MachineFunction &MF, int FI) {
-  MachineRegisterInfo &MRI = MF.getRegInfo();
+        for (auto &DefMO : DefMI->operands()) {
+          if (DefMO.isFI() && DefMO.getIndex() == FI) {
+            return true;
+          }
+        }
 
-  std::unordered_set<MachineInstr*> IndirectUses;
-  for (auto &MBB : MF) {
-    for (auto &MI : MBB) {
-      if (std::any_of(MI.operands_begin(), MI.operands_end(), [](const MachineOperand& op){
-            return op.isFI();
-          }))
-        continue;
-      if (isFrameIndexUsedIndirectly(MI, MRI, FI)) {
-        IndirectUses.insert(&MI);
+        if (isIndirectUseRecursive(*DefMI, MRI, FI, Visited)) {
+          return true;
+        }
       }
     }
+
+    return false;
   }
 
-  // For demonstration purposes, print the indirect uses found
-  LLVM_DEBUG({
-    for (MachineInstr *MI : IndirectUses) {
-      dbgs() << "Indirect use of frame index " << FI << ": " << *MI;
-    }
-  });
-  return IndirectUses;
-}
+  // Check if the FI is used in the instruction or in any of its dependant instructions
+  bool isFrameIndexUsedIndirectly(MachineInstr &MI, MachineRegisterInfo &MRI,
+                                  int FI) {
+    // We dont need to check MI since this function should not be called if MI already uses FI
 
+    std::set<MachineInstr *> Visited;
+    // Then we track all the dependant instructions for each of the operands
+    return isIndirectUseRecursive(MI, MRI, FI, Visited);
+  }
+
+  std::unordered_set<MachineInstr *> findIndirectUses(MachineFunction &MF,
+                                                      int FI) {
+    MachineRegisterInfo &MRI = MF.getRegInfo();
+
+    std::unordered_set<MachineInstr *> IndirectUses;
+    for (auto &MBB : MF) {
+      for (auto &MI : MBB) {
+        if (std::any_of(MI.operands_begin(), MI.operands_end(),
+                        [FI](const MachineOperand &op) {
+                          return op.isFI() && op.getIndex() == FI;
+                        }))
+          continue; // Dont need to check direct accesses as they are automatically converted during frame lowering
+        if (isFrameIndexUsedIndirectly(MI, MRI, FI)) {
+          IndirectUses.insert(&MI);
+        }
+      }
+    }
+
+    // For demonstration purposes, print the indirect uses found
+    LLVM_DEBUG({
+      for (MachineInstr *MI : IndirectUses) {
+        dbgs() << "Indirect use of frame index " << FI << ": " << *MI;
+      }
+    });
+    return IndirectUses;
+  }
+} // namespace
 bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
   if (EnableStackCachePromotion) {
     LLVM_DEBUG(dbgs() << "Enabled Stack Cache promotion for: "
@@ -182,26 +189,31 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
 
       for (const auto FI : StillPossibleFIs) {
         const auto &Uses = findIndirectUses(MF, FI);
-
-        const bool AllConvertible = std::all_of(
-            Uses.begin(), Uses.end(), [&Mappings](MachineInstr *Inst) {
-              return Mappings.find(Inst->getOpcode()) != Mappings.end();
-            });
-
-        if (AllConvertible) {
-          LLVM_DEBUG(dbgs() << "All instructions referencing FI: " << FI
-                            << " are convertible"
-                            << "\n");
-
-          // Put FI on SC
+        if (Uses.empty()) {
           PMFI.addStackCacheAnalysisFI(FI);
+          dbgs() << "NO Indirect uses found for FI: " << FI << "\n";
+        } /*else {
 
-          // Now convert all instructions
-          for (MachineInstr *Use : Uses) {
-            const unsigned OPnew = Mappings.at(Use->getOpcode());
-            Use->setDesc(TII->get(OPnew));
+          const bool AllConvertible = std::all_of(
+              Uses.begin(), Uses.end(), [&Mappings](MachineInstr *Inst) {
+                return Mappings.find(Inst->getOpcode()) != Mappings.end();
+              });
+
+          if (AllConvertible) {
+            dbgs() << "All instructions referencing FI: " << FI
+                              << " are convertible"
+                              << "\n";
+
+            // Put FI on SC
+            PMFI.addStackCacheAnalysisFI(FI);
+
+            // Now convert all instructions
+            for (MachineInstr *Use : Uses) {
+              const unsigned OPnew = Mappings.at(Use->getOpcode());
+              Use->setDesc(TII->get(OPnew));
+            }
           }
-        }
+        }*/
       }
     }
 
