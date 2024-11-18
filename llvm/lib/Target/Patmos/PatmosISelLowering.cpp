@@ -275,7 +275,7 @@ SDValue PatmosTargetLowering::LowerMUL_LOHI(SDValue Op,
 }
 
 SDValue PatmosTargetLowering::LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const {
-  auto MFI = DAG.getMachineFunction().getFrameInfo();
+  auto &MFI = DAG.getMachineFunction().getFrameInfo();
   MFI.setReturnAddressIsTaken(true);
 
   EVT VT = Op.getValueType();
@@ -293,7 +293,7 @@ SDValue PatmosTargetLowering::LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) con
 }
 
 SDValue PatmosTargetLowering::LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
-  auto MFI = DAG.getMachineFunction().getFrameInfo();
+  auto &MFI = DAG.getMachineFunction().getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
 
   EVT VT = Op.getValueType();
@@ -434,7 +434,7 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
       int FI = MFI.CreateFixedObject(ObjSize, VA.getLocMemOffset(), true);
 
       // XXX handle alignment of large arguments
-      if (ObjSize > 4 || MFI.getObjectAlignment(FI) > 4) {
+      if (ObjSize > 4 || MFI.getObjectAlign(FI) > 4) {
         errs() << "LowerFormalArguments Unhandled argument type: "
              << EVT(VA.getLocVT()).getEVTString()
              << "\n";
@@ -453,7 +453,7 @@ PatmosTargetLowering::LowerCCCArguments(SDValue Chain,
   if (isVarArg) {
     // create a fixed FI to reference the variadic parameters passed on the 
     // stack and store it with the patmos machine function info.
-    PMFI.setVarArgsFI(MFI.CreateFixedObject(4, CCInfo.getNextStackOffset(),
+    PMFI.setVarArgsFI(MFI.CreateFixedObject(4, CCInfo.getStackSize(),
                                              true));
   }
 
@@ -528,7 +528,7 @@ PatmosTargetLowering::LowerCCCCallTo(CallLoweringInfo &CLI,
   CCInfo.AnalyzeCallOperands(Outs, CC_Patmos);
 
   // Get a count of how many bytes are to be pushed on the stack.
-  unsigned NumBytes = CCInfo.getNextStackOffset();
+  unsigned NumBytes = CCInfo.getStackSize();
 
   Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, dl);
 

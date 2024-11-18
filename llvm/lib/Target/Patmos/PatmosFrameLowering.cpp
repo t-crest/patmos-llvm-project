@@ -51,7 +51,7 @@ static cl::opt<bool> EnableBlockAlignedStackCache
            cl::desc("Enable the use of Patmos' block-aligned stack cache"));
 
 bool PatmosFrameLowering::hasFP(const MachineFunction &MF) const {
-  auto MFI = MF.getFrameInfo();
+  auto &MFI = MF.getFrameInfo();
 
   // Naked functions should not use the stack, they do not get a frame pointer.
   if (MF.getFunction().hasFnAttribute(Attribute::Naked))
@@ -162,7 +162,7 @@ unsigned PatmosFrameLowering::assignFrameObjects(MachineFunction &MF,
     if (MFI.isDeadObjectIndex(FI))
       continue;
 
-    unsigned FIalignment = MFI.getObjectAlignment(FI);
+    auto FIalignment = MFI.getObjectAlign(FI).value();
     int64_t FIsize = MFI.getObjectSize(FI);
 
     if (FIsize > INT_MAX) {
@@ -487,7 +487,7 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 		// spill
 		const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
 		TII.storeRegToStackSlot(MBB, MI, Reg, true,
-				frame_idx, RC, TRI);
+				frame_idx, RC, TRI, Register());
 		std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
 		rreg_spilled.push_back(Reg);
@@ -528,7 +528,7 @@ PatmosFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 	  // Spill the value
 	  TII.storeRegToStackSlot(MBB, MI, tmpReg, true,
-	  			frame_idx, &Patmos::RRegsRegClass, TRI);
+	  			frame_idx, &Patmos::RRegsRegClass, TRI, Register());
 		std::prev(MI)->setFlag(MachineInstr::FrameSetup);
   }
 
@@ -593,7 +593,7 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
 	  }
 
 	  // load
-	  TII.loadRegFromStackSlot(MBB, MI, tmpReg, frame_idx, &Patmos::RRegsRegClass, TRI);
+	  TII.loadRegFromStackSlot(MBB, MI, tmpReg, frame_idx, &Patmos::RRegsRegClass, TRI, Register());
 	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
 
 	  // Move value to special register
@@ -607,7 +607,7 @@ PatmosFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
 	  auto frame_idx = entry.second;
 
 	  // load
-	  TII.loadRegFromStackSlot(MBB, MI, reg, frame_idx, &Patmos::RRegsRegClass, TRI);
+	  TII.loadRegFromStackSlot(MBB, MI, reg, frame_idx, &Patmos::RRegsRegClass, TRI, Register());
 	  std::prev(MI)->setFlag(MachineInstr::FrameSetup);
   }
 

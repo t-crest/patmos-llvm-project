@@ -20,6 +20,7 @@ add_llvm_component_library(LLVMPatmosSinglePath
   EquivalenceClasses.cpp
   InstructionCounter.cpp
   FCFGPostDom.cpp
+  UnifyFunctionExitNodesLegacyPass.cpp
   
   LINK_COMPONENTS
   PatmosInfo 

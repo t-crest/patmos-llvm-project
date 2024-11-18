@@ -722,7 +722,7 @@ PatmosInstrInfo::createPatmosInstrAnalyzer(MCContext &Ctx,
   // PTM.getTargetLowering()->getObjFileLowering() might not yet be
   // initialized, so we create a new section object for this temp context
   MCSection* TS = Ctx.getELFSection(".text", ELF::SHT_PROGBITS, 0);
-  PIA->SwitchSection(TS);
+  PIA->switchSection(TS);
 
   return PIA;
 }
@@ -953,7 +953,7 @@ std::optional<unsigned> PatmosInstrInfo::getDefOperandLatency(const InstrItinera
                                           unsigned DefIdx) const
 {
   unsigned DefClass = DefMI.getDesc().getSchedClass();
-  int Latency = ItinData->getOperandCycle(DefClass, DefIdx);
+  int Latency = *ItinData->getOperandCycle(DefClass, DefIdx);
 
   const MachineOperand &MO = DefMI.getOperand(DefIdx);
 

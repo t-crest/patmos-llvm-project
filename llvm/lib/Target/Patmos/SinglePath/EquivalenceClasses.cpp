@@ -292,7 +292,7 @@ std::optional<unsigned> EquivalenceClasses::getEqClassNr(const MachineInstr* MI)
 		if(MI->getOperand(i).isMetadata()){
 			auto &md = MI->getOperand(i).getMetadata()->getOperand(0);
 			if(auto string = dyn_cast<MDString>(md)) {
-				if(string->getString().equals(EQUIVALENCE_CLASS_INSTRUCTION_MD_NAME)) {
+				if(string->getString().compare(EQUIVALENCE_CLASS_INSTRUCTION_MD_NAME) == 0) {
 					idx = i+1;
 					break;
 				}

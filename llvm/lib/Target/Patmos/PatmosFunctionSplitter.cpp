@@ -68,6 +68,7 @@
 #include "PatmosSubtarget.h"
 #include "PatmosTargetMachine.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -1912,6 +1913,8 @@ namespace llvm {
                                    MachineDominatorTree &MDT,
                                    MachinePostDominatorTree &MPDT)
     {
+      auto TRI = PTM.getSubtargetImpl()->getRegisterInfo();
+
       LLVM_DEBUG(dbgs() << "Splitting block '" << MBB->getNumber() << "' with max size '" << MaxSize << "'\n");
       unsigned int branchFixup = getMaxBlockMargin(PTM, MBB->getAlignment(), true, false, 1);
 
@@ -1953,11 +1956,11 @@ namespace llvm {
         // luckily, they are short and do not cross basic blocks
         unsigned int tmp_live_margin = 0;
         if (PTM.getCodeModel() == CodeModel::Large &&
-            i->definesRegister(Patmos::RTR) && !i->isBranch()) {
+            i->definesRegister(Patmos::RTR,TRI) && !i->isBranch()) {
           MachineBasicBlock::instr_iterator k;
           for (k = std::next(i); k != ie; ++k) {
             tmp_live_margin += agraph::getInstrSize(&*k, PTM);
-            if (k->killsRegister(Patmos::RTR)) {
+            if (k->killsRegister(Patmos::RTR,TRI)) {
               break;
             }
           }
@@ -2021,13 +2024,13 @@ namespace llvm {
             // TODO Any other way to change the root node of the DomTree?
             //      At least do this after all other blocks are split, and skip
             //      updating the DomTree for individual blocks.
-            MDT.runOnMachineFunction(*MBB->getParent());
+            MDT.calculate(*MBB->getParent());
           }
           // noreturn calls do not post-dominate and do not have a node in
           // the tree.
           if (MPDT.getNode(MBB)) {
             // - the new node is post-dominated by the old block
-            MPDT.getBase().addNewBlock(newBB, MBB);
+            MPDT.addNewBlock(newBB, MBB);
             // - the new block post-dominates all nodes post-dominated by
             //   the old block
             for (MachineDomTreeNode::const_iterator
@@ -2036,7 +2039,7 @@ namespace llvm {
             {
               MachineBasicBlock *preBB = (*it)->getBlock();
               if (preBB == newBB) continue;
-              MPDT.getBase().changeImmediateDominator(preBB, newBB);
+              MPDT.changeImmediateDominator(preBB, newBB);
               // restart from beginning, with one post-dominated node less.
               it = MPDT.getNode(MBB)->children().begin();
             }
@@ -2101,7 +2104,7 @@ namespace llvm {
                     unsigned orig_size, const TimeRecord &Time)
     {
       std::error_code err;
-      raw_fd_ostream f(Filename, err, sys::fs::F_Append);
+      raw_fd_ostream f(Filename, err, sys::fs::OF_Append);
 
       // write a single line per function
 

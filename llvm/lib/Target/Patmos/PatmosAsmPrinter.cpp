@@ -27,10 +27,11 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include "llvm/IR/Module.h"
 #include <memory>
 #include <string>
 #include <stdexcept>
@@ -116,12 +117,12 @@ void PatmosAsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
 void PatmosAsmPrinter::emitBasicBlockBegin(const MachineBasicBlock &MBB) {
   // Print loop bound information if needed
   if (auto loop_bounds = getLoopBounds(&MBB)){
-    OutStreamer->GetCommentOS() << "Loop bound: [";
-    OutStreamer->GetCommentOS() << loop_bounds->first;
-    OutStreamer->GetCommentOS() << ", ";
-    OutStreamer->GetCommentOS() << loop_bounds->second;
-    OutStreamer->GetCommentOS() << "]\n";
-    OutStreamer->AddBlankLine();
+    OutStreamer->getCommentOS() << "Loop bound: [";
+    OutStreamer->getCommentOS() << loop_bounds->first;
+    OutStreamer->getCommentOS() << ", ";
+    OutStreamer->getCommentOS() << loop_bounds->second;
+    OutStreamer->getCommentOS() << "]\n";
+    OutStreamer->addBlankLine();
   }
 }
 
@@ -435,7 +436,7 @@ static void EmitGCCInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
         for (; Val; --Val) {
           if (OpNo >= MI->getNumOperands()) break;
           unsigned OpFlags = MI->getOperand(OpNo).getImm();
-          OpNo += InlineAsm::getNumOperandRegisters(OpFlags) + 1;
+          OpNo += InlineAsm::Flag(OpFlags).getNumOperandRegisters() + 1;
         }
 
         // We may have a location metadata attached to the end of the
@@ -461,7 +462,7 @@ static void EmitGCCInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
             Sym->print(OS, AP->MAI);
           } else if (Modifier[0] == 'l') {
             Error = true;
-          } else if (InlineAsm::isMemKind(OpFlags)) {
+          } else if (InlineAsm::Flag(OpFlags).isMemKind()) {
             Error = AP->PrintAsmMemoryOperand(
                 MI, OpNo, Modifier[0] ? Modifier : nullptr, OS);
           } else {

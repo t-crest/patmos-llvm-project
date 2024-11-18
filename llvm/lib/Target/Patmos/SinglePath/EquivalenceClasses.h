@@ -15,6 +15,7 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 
 #include <set>
+#include <map>
 
 namespace llvm {
 

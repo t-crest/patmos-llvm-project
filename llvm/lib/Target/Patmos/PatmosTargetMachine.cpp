@@ -22,7 +22,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/MCAsmInfo.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Transforms/Scalar.h"
@@ -151,7 +151,7 @@ namespace {
       // For -O0, add a pass that removes dead instructions to avoid issues
       // with spill code in naked functions containing function calls with
       // unused return values.
-      if (getOptLevel() == CodeGenOpt::None) {
+      if (getOptLevel() == CodeGenOptLevel::None) {
         addPass(&DeadMachineInstructionElimID);
       }
 
@@ -210,7 +210,7 @@ namespace {
 			// The following is copied from TargetPassConfig::addOptimizedRegAlloc()
 			// with unneeded parts commented out
 
-			addPass(&MachineLoopInfoID, false);
+			addPass(&MachineLoopInfoID);
 //			addPass(&PHIEliminationID, false);
 
 //			addPass(&TwoAddressInstructionPassID, false);
@@ -267,7 +267,7 @@ namespace {
         }
         addPass(createSPSchedulerPass(getPatmosTargetMachine()));
       } else {
-        if (getOptLevel() != CodeGenOpt::None && !DisableIfConverter) {
+        if (getOptLevel() != CodeGenOptLevel::None && !DisableIfConverter) {
           addPass(&IfConverterID);
           // If-converter might create unreachable blocks (bug?), need to be
           // removed before function splitter
@@ -300,7 +300,7 @@ namespace {
       // add passes to handle them.
       if (!getPatmosSubtarget().usePatmosPostRAScheduler(getOptLevel())) {
         addPass(createPatmosDelaySlotFillerPass(getPatmosTargetMachine(),
-                                            getOptLevel() == CodeGenOpt::None));
+                                            getOptLevel() == CodeGenOptLevel::None));
       }
 
       // All passes below this line must handle delay slots and bundles

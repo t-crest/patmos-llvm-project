@@ -93,7 +93,7 @@ namespace llvm {
   static bool isEmptyStructPointer(Type *Ty)
   {
     if (PointerType *PTy = Ty ? dyn_cast<PointerType>(Ty) : NULL) {
-      if (StructType *STy = dyn_cast<StructType>(PTy->getElementType())) {
+      if (StructType *STy = dyn_cast<StructType>(PTy->getContainedType(0))) {
         return (STy->getNumContainedTypes() == 0);
       }
     }
@@ -181,7 +181,7 @@ namespace llvm {
       if (DATy->getNumElements() != cast<ArrayType>(SrcTy)->getNumElements())
         return 0;
     } else if (VectorType *DVTy = dyn_cast<VectorType>(DstTy)) {
-      if (DVTy->getNumElements() != cast<ArrayType>(SrcTy)->getNumElements())
+      if (DVTy->getArrayNumElements() != cast<ArrayType>(SrcTy)->getNumElements())
         return 0;
     }
 

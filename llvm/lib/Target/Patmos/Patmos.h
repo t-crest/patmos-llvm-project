@@ -65,6 +65,10 @@ namespace llvm {
                                              std::string& BitcodeFilename,
                                              ArrayRef<std::string> Roots,
                          bool SerializeAll);
+  Pass *createUnifyFunctionExitNodesPass();
+
+  void initializePatmosDAGToDAGISelLegacyPass(PassRegistry &);
+  void initializeUnifyFunctionExitNodesLegacyPassPass(PassRegistry &);
 
   extern char &PatmosPostRASchedulerID;
 } // end namespace llvm;

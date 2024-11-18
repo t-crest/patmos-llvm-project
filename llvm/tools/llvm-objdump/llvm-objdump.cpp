@@ -592,7 +592,7 @@ static bool getHidden(RelocationRef RelRef) {
 /// disassembly, taking into account anything which appears to the left of it.
 unsigned objdump::getInstStartColumn(const MCSubtargetInfo &STI) {
   auto Triple = STI.getTargetTriple();
-  return NoShowRawInsn ? 16 : (Triple.isX86() || Triple.isPatmos()) ? 40 : 24;
+  return !ShowRawInsn ? 16 : (Triple.isX86() || Triple.isPatmos()) ? 40 : 24;
 }
 
 static void AlignToInstStartColumn(size_t Start, const MCSubtargetInfo &STI,

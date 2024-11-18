@@ -283,32 +283,32 @@ namespace llvm {
           EVT VT = ValueVTs[Value];
           Type *ArgTy = VT.getTypeForEVT(Ctx);
           ISD::ArgFlagsTy Flags;
-          unsigned OriginalAlignment =
-            TD.getABITypeAlignment(ArgTy);
+          auto OriginalAlignment =
+            TD.getABITypeAlign(ArgTy);
 
-          if (F.getAttributes().hasAttribute(Idx, Attribute::ZExt))
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::ZExt))
             Flags.setZExt();
-          if (F.getAttributes().hasAttribute(Idx, Attribute::SExt))
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::SExt))
             Flags.setSExt();
-          if (F.getAttributes().hasAttribute(Idx, Attribute::InReg))
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::InReg))
             Flags.setInReg();
-          if (F.getAttributes().hasAttribute(Idx, Attribute::StructRet))
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::StructRet))
             Flags.setSRet();
-          if (F.getAttributes().hasAttribute(Idx, Attribute::ByVal)) {
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::ByVal)) {
             Flags.setByVal();
             PointerType *Ty = cast<PointerType>(I->getType());
-            Type *ElementTy = Ty->getElementType();
+            Type *ElementTy = Ty->getContainedType(0);
             Flags.setByValSize(TD.getTypeAllocSize(ElementTy));
             // For ByVal, alignment should be passed from FE.  BE will guess if
             // this info is not there but there are cases it cannot get right.
             unsigned FrameAlign;
-            if (F.getParamAlignment(Idx))
-              FrameAlign = F.getParamAlignment(Idx);
+            if (F.getParamAlign(Idx))
+              FrameAlign = F.getParamAlign(Idx);
             else
               FrameAlign = TLI->getByValTypeAlignment(ElementTy, TD);
-            Flags.setByValAlign(Align(FrameAlign));
+            Flags.setByValSize(FrameAlign);
           }
-          if (F.getAttributes().hasAttribute(Idx, Attribute::Nest))
+          if (F.getAttributes().hasAttributeAtIndex(Idx, Attribute::Nest))
             Flags.setNest();
           Flags.setOrigAlign(Align(OriginalAlignment));
 

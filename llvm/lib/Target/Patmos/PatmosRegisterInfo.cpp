@@ -216,7 +216,7 @@ PatmosRegisterInfo::expandPseudoPregInstr(MachineBasicBlock::iterator II,
 
   // remove the pseudo instruction
   MBB.erase(&PseudoMI);
-  return true,
+  return true;
 }
 
 

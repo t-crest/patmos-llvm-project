@@ -15,7 +15,7 @@
 #include "PatmosSubtarget.h"
 #include "PatmosTargetMachine.h"
 #include "MCTargetDesc/PatmosMCTargetDesc.h"
-#include "llvm/Support/TargetRegistry.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/StringExtras.h"
 #include <math.h>
@@ -125,7 +125,7 @@ bool PatmosSubtarget::enableBundling() {
 bool PatmosSubtarget::hasPostRAScheduler(CodeGenOptLevel OptLevel) const {
 
   // TargetPassConfig does not add the PostRA pass for -O0!
-  if (OptLevel == CodeGenOpt::None) return false;
+  if (OptLevel == CodeGenOptLevel::None) return false;
 
   // TODO there are also -disable-post-ra and -post-RA-scheduler flags,
   // which override the default postRA scheduler behavior, be basically ignore
@@ -135,7 +135,7 @@ bool PatmosSubtarget::hasPostRAScheduler(CodeGenOptLevel OptLevel) const {
 
 bool PatmosSubtarget::usePreRAMIScheduler(CodeGenOptLevel OptLevel) const {
 
-  if (OptLevel == CodeGenOpt::None) return false;
+  if (OptLevel == CodeGenOptLevel::None) return false;
 
   return !DisableMIPreRA;
 }
