@@ -105,12 +105,12 @@ namespace llvm{
 	  return InstrAttr(1,true,true,false,false,false,false,false);
 	}
 
-	/// Like Patmos branch instructions (with optional latency)
+	/// Like Patmos branch instructions (with std::optional latency)
 	static InstrAttr branch(unsigned latency=0){
 	  return InstrAttr(latency,false,false,true,false,false,false,false);
 	}
 
-	/// Like Patmos branch instructions (with optional latency)
+	/// Like Patmos branch instructions (with std::optional latency)
 	static InstrAttr call(){
 	  return InstrAttr(0,false,false,false,false,false,true,false);
 	}
@@ -125,15 +125,15 @@ namespace llvm{
     std::set<Operand> writes;
 
     /// The operand this instruction uses as a predicate.
-    Optional<Operand> predicate;
+    std::optional<Operand> predicate;
 
     /// Equivalence class of this instruction.
-    Optional<unsigned> eq_class_nr;
+    std::optional<unsigned> eq_class_nr;
 
     InstrAttr attr;
 
     MockInstr(std::set<Operand> reads, std::set<Operand> writes, InstrAttr attr):
-      reads(reads), writes(writes), attr(attr), eq_class_nr(None)
+      reads(reads), writes(writes), attr(attr), eq_class_nr(std::nullopt)
     {}
 
     MockInstr(std::set<Operand> reads, std::set<Operand> writes, unsigned eq_class_nr, InstrAttr attr):
@@ -181,7 +181,7 @@ namespace llvm{
     return instr->writes;
   }
 
-  Optional<Operand> uses_predicate(const MockInstr* instr) {
+  std::optional<Operand> uses_predicate(const MockInstr* instr) {
     return instr->predicate;
   }
 
@@ -225,13 +225,13 @@ namespace llvm{
 	  }
   }
 
-  llvm::Optional<std::tuple<
+  std::optional<std::tuple<
       void*,
       bool (*)(void*, const MockInstr *),
       bool (*)(const MockInstr *),
       bool (*)(const MockInstr *, const MockInstr *)
-    >> disable_dual_issue = None;
-  llvm::Optional<std::tuple<
+    >> disable_dual_issue = std::nullopt;
+  std::optional<std::tuple<
       void*,
       bool (*)(void*, const MockInstr *),
       bool (*)(const MockInstr *),

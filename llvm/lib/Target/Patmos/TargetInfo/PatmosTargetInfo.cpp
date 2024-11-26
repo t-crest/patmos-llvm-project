@@ -251,6 +251,6 @@ bool llvm::isMainMemInst(unsigned opcode) {
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializePatmosTargetInfo() {
-  RegisterTarget<Triple::patmos> X(getThePatmosTarget(), "patmos",
-                                   "Patmos [experimental]", "Patmos");
+  RegisterTarget<Triple::patmos, /*HasJIT=*/false> X(getThePatmosTarget(), "patmos",
+                                   "Patmos", "Patmos");
 }

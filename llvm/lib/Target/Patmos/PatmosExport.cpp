@@ -301,9 +301,9 @@ namespace llvm {
             Flags.setByValSize(TD.getTypeAllocSize(ElementTy));
             // For ByVal, alignment should be passed from FE.  BE will guess if
             // this info is not there but there are cases it cannot get right.
-            unsigned FrameAlign;
+            uint64_t FrameAlign;
             if (F.getParamAlign(Idx))
-              FrameAlign = F.getParamAlign(Idx);
+              FrameAlign = F.getParamAlign(Idx).value().value();
             else
               FrameAlign = TLI->getByValTypeAlignment(ElementTy, TD);
             Flags.setByValSize(FrameAlign);

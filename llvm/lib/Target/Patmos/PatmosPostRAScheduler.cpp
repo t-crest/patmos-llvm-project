@@ -91,7 +91,7 @@ namespace {
       AU.addRequired<AAResultsWrapperPass>();
       AU.addRequired<TargetPassConfig>();
       AU.addRequired<MachineDominatorTreeWrapperPass>();
-      AU.addPreserved<MachineDominatorTree>();
+      AU.addPreserved<MachineDominatorTreeWrapperPass>();
       AU.addRequired<MachineLoopInfoWrapperPass>();
       AU.addPreserved<MachineLoopInfoWrapperPass>();
       MachineFunctionPass::getAnalysisUsage(AU);

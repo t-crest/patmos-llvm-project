@@ -128,7 +128,7 @@ static void eliminate(
           builder.SetInsertPoint(&*std::prev(BB.end()));
           builder.CreateCall(called, {II->getArgOperand(0), II->getArgOperand(1)});
           builder.SetInsertPoint((BasicBlock*)NULL);
-          successor->getInstList().erase(instr_iter);
+          successor->erase(instr_iter, std::next(instr_iter));
           break;
         }
       }
@@ -136,7 +136,7 @@ static void eliminate(
   }
 
   assert(isa<IntrinsicInst>(successor->begin())); // This should be the call to intrinsic
-  successor->getInstList().pop_front(); // remove the intrinsic call
+  successor->erase(successor->begin(), std::next(successor->begin()));
 
   BranchInst::Create(successor, memset_loop_end);
 }
@@ -207,8 +207,8 @@ static bool eliminateIntrinsic(Function &F, BasicBlock &BB) {
                     auto *dest_phi = std::get<0>(cond_ret);
                     auto *src_phi = std::get<1>(cond_ret);
 
-                    auto *dest_inc = builder.CreateGEP(dest_phi, builder.getInt32(1), "llvm.memcpy.dest.incremented");
-                    auto *src_inc = builder.CreateGEP(src_phi, builder.getInt32(1), "llvm.memcpy.src.incremented");
+                    auto *dest_inc = builder.CreateGEP(builder.getPtrTy(), dest_phi, builder.getInt32(1), "llvm.memcpy.dest.incremented");
+                    auto *src_inc = builder.CreateGEP(builder.getPtrTy(), src_phi, builder.getInt32(1), "llvm.memcpy.src.incremented");
                     dest_phi->addIncoming(dest_inc, body_block);
                     src_phi->addIncoming(src_inc, body_block);
 
@@ -271,7 +271,7 @@ static bool eliminateIntrinsic(Function &F, BasicBlock &BB) {
                     return dest_phi;
                   },
                   [&](auto &builder, auto entry_block, auto entry_ret, auto condition_block, auto *dest_phi, auto body_block){
-                    auto *dest_inc = builder.CreateGEP(dest_phi, builder.getInt32(1), "llvm.memset.dest.incremented");
+                    auto *dest_inc = builder.CreateGEP(builder.getPtrTy(), dest_phi, builder.getInt32(1), "llvm.memset.dest.incremented");
                     dest_phi->addIncoming(dest_inc, body_block);
                     auto align = II->paramHasAttr(0, Attribute::Alignment) ?
                        II->getParamAttr(0, Attribute::Alignment).getAlignment()

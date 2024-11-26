@@ -56,6 +56,7 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case msp430:         return "msp430";
   case nvptx64:        return "nvptx64";
   case nvptx:          return "nvptx";
+  case patmos:         return "patmos";
   case ppc64:          return "powerpc64";
   case ppc64le:        return "powerpc64le";
   case ppc:            return "powerpc";
@@ -163,6 +164,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case thumbeb:     return "arm";
 
   case avr:         return "avr";
+
+  case patmos:		return "patmos";
 
   case ppc64:
   case ppc64le:
@@ -411,6 +414,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("mips64", mips64)
     .Case("mips64el", mips64el)
     .Case("msp430", msp430)
+    .Case("patmos", patmos)
     .Case("ppc64", ppc64)
     .Case("ppc32", ppc)
     .Case("ppc", ppc)
@@ -567,6 +571,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
                  "mipsn32r6el", Triple::mips64el)
           .Case("r600", Triple::r600)
           .Case("amdgcn", Triple::amdgcn)
+          .Case("patmos", Triple::patmos)
           .Case("riscv32", Triple::riscv32)
           .Case("riscv64", Triple::riscv64)
           .Case("hexagon", Triple::hexagon)
@@ -945,6 +950,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::ve:
   case Triple::xcore:
   case Triple::xtensa:
+  case Triple::patmos:
     return Triple::ELF;
 
   case Triple::ppc64:

@@ -135,12 +135,12 @@ encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
     }
   }
 
-  if(Size == 32) {
-    support::endian::write<uint32_t>(CB, (uint32_t)Binary, llvm::endianness::little);
-  } else if(Size == 64) {
-    support::endian::write<uint64_t>(CB, Binary, llvm::endianness::little);
+  if(Size == 4) {
+    support::endian::write<uint32_t>(CB, (uint32_t)Binary, llvm::endianness::big);
+  } else if(Size == 8) {
+    support::endian::write<uint64_t>(CB, Binary, llvm::endianness::big);
   } else {
-    llvm_unreachable("Pseudo opcode found in EncodeInstruction()");
+    llvm_unreachable("Instruction of unknown size.");
   }
 }
 

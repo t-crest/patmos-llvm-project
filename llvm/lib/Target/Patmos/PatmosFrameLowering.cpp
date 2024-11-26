@@ -102,7 +102,7 @@ void PatmosFrameLowering::assignFIsToStackCache(MachineFunction &MF,
   for(std::vector<CalleeSavedInfo>::const_iterator i(CSI.begin()),
       ie(CSI.end()); i != ie; i++)
   {
-    if (i->getReg() == Patmos::S0 && PMFI.getS0SpillReg()) continue;
+    if (i->getReg() == Patmos::S0) continue;
     // Predicates are handled via aliasing to S0. They appear here when we
     // skip assigning s0 to a stack slot, not really sure why.
     if (Patmos::PRegsRegClass.contains(i->getReg())) continue;
@@ -413,6 +413,41 @@ void PatmosFrameLowering::determineCalleeSaves(MachineFunction &MF,
     RS->addScavengingFrameIndex(fi);
     PMFI.setRegScavengingFI(fi);
   }
+}
+
+bool PatmosFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
+                              const TargetRegisterInfo *TRI,
+                              std::vector<CalleeSavedInfo> &CSI) const
+{
+  // Early exit if no callee saved registers are modified!
+  if (CSI.empty())
+    return true;
+
+  auto &MFI = MF.getFrameInfo();
+
+  for (auto &CS : CSI) {
+    Register Reg = CS.getReg();
+
+    if(Patmos::PRegsRegClass.contains(Reg)) {
+      // Predicate registers should not need to be spilled individually.
+      continue;
+    }
+
+    const TargetRegisterClass *rclass;
+
+    if(Patmos::RRegsRegClass.contains(Reg)) {
+      rclass = &Patmos::RRegsRegClass;
+    } else if(Patmos::SRegsRegClass.contains(Reg)){
+      rclass = &Patmos::SRegsRegClass;
+    } else {
+      assert(false && "Unknown register class");
+    }
+
+    auto FI = MFI.CreateSpillStackObject(TRI->getSpillSize(*rclass),TRI->getSpillAlign(*rclass));
+    CS.setFrameIdx(FI);
+  }
+
+  return true;
 }
 
 /// Gets the general-purpose register that should be used to spill/restore

@@ -68,6 +68,10 @@ public:
   /// createPassConfig - Create a pass configuration object to be used by
   /// addPassToEmitX methods for generating a pipeline of CodeGen passes.
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+
+  MachineFunctionInfo *
+  createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
+                              const TargetSubtargetInfo *STI) const override;
 }; // PatmosTargetMachine.
 
 } // end namespace llvm

@@ -19,6 +19,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -31,6 +32,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "PMLExport.h"
 

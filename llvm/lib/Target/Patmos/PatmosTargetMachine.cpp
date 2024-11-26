@@ -16,6 +16,7 @@
 #include "SinglePath/PatmosSinglePathInfo.h"
 #include "PatmosSchedStrategy.h"
 #include "PatmosStackCacheAnalysis.h"
+#include "PatmosMachineFunctionInfo.h"
 #include "TargetInfo/PatmosTargetInfo.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/CodeGen/Passes.h"
@@ -361,5 +362,12 @@ PatmosTargetMachine::PatmosTargetMachine(const Target &T,
 
 TargetPassConfig *PatmosTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new PatmosPassConfig(*this, PM);
+}
+
+MachineFunctionInfo *PatmosTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return PatmosMachineFunctionInfo::create<PatmosMachineFunctionInfo>(Allocator,
+                                                                    F, STI);
 }
 

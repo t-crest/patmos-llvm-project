@@ -89,7 +89,7 @@ class PatmosMachineFunctionInfo : public MachineFunctionInfo {
   int RegScavengingFI;
 
   /// Register used to spill s0 to instead of the stack cache.
-  unsigned S0SpillReg;
+  Register S0SpillReg;
 
   /// True if this function is to be single-path converted
   bool SinglePathConvert;
@@ -117,15 +117,21 @@ class PatmosMachineFunctionInfo : public MachineFunctionInfo {
   /// Store analysis results per function.
   PatmosAnalysisInfo AnalysisInfo;
 
-  // do not provide any default constructor.
-  PatmosMachineFunctionInfo();
 public:
-  explicit PatmosMachineFunctionInfo(MachineFunction &MF) :
+  PatmosMachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI):
     StackCacheReservedBytes(0), StackReservedBytes(0), VarArgsFI(0),
-    RegScavengingFI(0), S0SpillReg(0),
+    RegScavengingFI(0), S0SpillReg(),
     SinglePathConvert(false), SinglePathPseudoRoot(false), SPS0SpillOffset(0), SPExcessSpillOffset(0),
     SPCallSpillOffset(0)
-    {}
+  {}
+
+  MachineFunctionInfo *
+    clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
+          const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
+        const override
+  {
+    return DestMF.cloneInfo<PatmosMachineFunctionInfo>(*this);
+  }
 
   /// getStackCacheReservedBytes - Get the number of bytes reserved on the
   /// stack cache.
@@ -179,14 +185,6 @@ public:
   /// setRegScavengingFI - Set the FI used to access the emergency spill slot.
   void setRegScavengingFI(int newFI) {
     RegScavengingFI = newFI;
-  }
-
-  unsigned getS0SpillReg() const {
-    return S0SpillReg;
-  }
-
-  void setS0SpillReg(unsigned Reg) {
-    S0SpillReg = Reg;
   }
 
   /// addMethodCacheRegionEntry - Add the block to the set of method cache

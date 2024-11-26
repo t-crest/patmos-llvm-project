@@ -392,7 +392,7 @@ bool PatmosRegisterInfo::hasReservedSpillSlot(const MachineFunction &MF,
   const PatmosMachineFunctionInfo &PMFI =
                   *MF.getInfo<PatmosMachineFunctionInfo>();
 
-  if (Reg == Patmos::S0 && PMFI.getS0SpillReg())
+  if (Reg == Patmos::S0)
     return true;
 
   return false;

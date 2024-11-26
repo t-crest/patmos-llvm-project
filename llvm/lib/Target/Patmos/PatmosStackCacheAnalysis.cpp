@@ -38,6 +38,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Path.h"
 
 #include <map>
 #include <set>
@@ -2323,7 +2324,7 @@ namespace llvm {
 							  std::nullopt,
                               llvm::ArrayRef<std::optional<StringRef>>(),
                               0,0,&ErrMsg)) {
-        report_fatal_error("calling ILP solver (" + Solve_ilp + "): " + ErrMsg);
+        report_fatal_error(StringRef("calling ILP solver: " + ErrMsg));
       }
       else {
         // read solution
