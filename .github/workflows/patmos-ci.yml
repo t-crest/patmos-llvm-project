@@ -37,7 +37,7 @@ jobs:
       CC: gcc
       CXX: g++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/build-test-all
         with:
@@ -87,7 +87,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - uses: ./.github/actions/install-dependencies
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/build-test-all
@@ -129,7 +129,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - uses: ./.github/actions/install-dependencies
       - name: Build and Run LLVM Unit and Regression Tests
         uses: ./.github/actions/test-benchmarks
@@ -164,7 +164,7 @@ jobs:
       CXX: ${{matrix.cxx}}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - uses: ./.github/actions/install-dependencies
       - name: Build LLVM, Compiler-RT, Newlib, and Package
         uses: ./.github/actions/build-test-all
@@ -174,7 +174,7 @@ jobs:
           enable-tests: false
           artifact-name: package-${{matrix.platform}}
       - name: Publish
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{env.BUILD_PATH}}/patmos-unknown-unknown-elf/package-temp/patmos-llvm-*.tar.gz
       
