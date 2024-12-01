@@ -26,7 +26,7 @@ jobs:
       LLVM_VERSION_PATCH: ${{ steps.version.outputs.LLVM_VERSION_PATCH }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 250
 
@@ -115,7 +115,7 @@ jobs:
           sed -i 's/LLVM_${{ matrix.llvm_version_major }}/LLVM_NOVERSION/' $lib-${{ matrix.ref }}.abi
         done
     - name: Upload ABI file
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.name }}
         path: "*${{ matrix.ref }}.abi"
@@ -127,11 +127,11 @@ jobs:
       - abi-dump
     steps:
       - name: Download baseline
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: build-baseline
       - name: Download latest
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: build-latest
 
@@ -144,7 +144,7 @@ jobs:
           done
       - name: Upload ABI Comparison
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: compat-report-${{ github.sha }}
           path: compat_reports/
