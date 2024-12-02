@@ -26,7 +26,7 @@ runs:
     # Download Benchmark
     - name: Download Benchmark test suite
       env:
-        BENCH_COMMIT: 197791f2583906b76f2cd6b2abe66fed3ddc318b
+        BENCH_COMMIT: 4d5a76ab65df952ac41dd2da85fe067a3bb2d96a
       shell: bash
       run: |
         git clone https://github.com/t-crest/patmos-benchmarks ${{env.BENCH_PATH}}
