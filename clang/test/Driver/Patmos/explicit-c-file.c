@@ -1,0 +1,13 @@
+// RUN: cp %S/helpers/helper-function.c %t.unknown-ext
+// RUN: %clang --target=patmos %S/two-source-files.c  -x c %t.unknown-ext -o %t
+// RUN: llvm-objdump -rd %t | FileCheck %s
+// END.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Tests can define a file explicitly (using '-x' flag) as a C file.
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// CHECK-DAG: <main>
+// CHECK-DAG: <helper_source_function>
+

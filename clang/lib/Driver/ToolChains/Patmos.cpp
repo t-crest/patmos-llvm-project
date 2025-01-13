@@ -185,6 +185,30 @@ std::string patmos::PatmosBaseTool::getLibPath(const char* LibName) const {
   return path;
 }
 
+/// Return whether the given command line argument is an input file (i.e., .c .o .s files etc.)
+static bool isInputFileArg(const Arg* arg) {
+  return
+      arg->getOption().getName().compare("<input>") == 0 &&
+      arg->getNumValues() == 1;
+}
+
+static bool isBitcodeFileInput(const InputInfo* in) {
+	return in->isFilename() && StringRef(in->getFilename()).endswith(".bc");
+}
+
+/// Returns the command line argument (if any) matches the given input
+static llvm::Optional<const Arg*> getInputArg(const InputInfo &input, const llvm::opt::ArgList &Args) {
+
+  if(input.isFilename()) {
+    for(auto arg: Args) {
+      if(isInputFileArg(arg) && StringRef(arg->getValue()).compare(input.getFilename())==0 ) {
+        return arg;
+      }
+    }
+  }
+  return llvm::None;
+}
+
 void patmos::PatmosBaseTool::PrepareLink1Inputs(
     const llvm::opt::ArgList &Args,
     const InputInfoList &Inputs,
@@ -192,11 +216,12 @@ void patmos::PatmosBaseTool::PrepareLink1Inputs(
 {
   for (InputInfoList::const_iterator
           it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
-     const InputInfo &II = *it;
+    const InputInfo &II = *it;
 
-     if (II.isFilename()) {
-       LinkInputs.push_back(II.getFilename());
-     }
+    // Add any bitcode files to linking
+    if(isBitcodeFileInput(&II)) {
+      LinkInputs.push_back(II.getFilename());
+    }
   }
 
   if(Args.hasArg(options::OPT_v)) {
@@ -206,14 +231,14 @@ void patmos::PatmosBaseTool::PrepareLink1Inputs(
 
 void patmos::PatmosBaseTool::PrepareLink2Inputs(
     const llvm::opt::ArgList &Args,
-    const char* Input,
+    llvm::Optional<const char*> Input,
     llvm::opt::ArgStringList &LinkInputs) const
 {
   LinkInputs.push_back(Args.MakeArgString(getLibPath("lib/crt0.o")));
   LinkInputs.push_back(Args.MakeArgString(getLibPath("lib/crtbegin.o")));
   LinkInputs.push_back(Args.MakeArgString(getLibPath("lib/crtend.o")));
 
-  LinkInputs.push_back(Input);
+  if(Input) LinkInputs.push_back(*Input);
 
   // We hide symbols to allow redefinition of stdlib symbols without
   // clashing with stdlib
@@ -597,6 +622,7 @@ void patmos::Compile::ConstructJob(Compilation &C, const JobAction &JA,
 {
   if( // Compile to bitcode
       matchesJob(JA, types::TY_LLVM_BC, Action::BackendJobClass) ||
+      matchesJob(JA, types::TY_LLVM_BC, Action::CompileJobClass) ||
       // Compile to LLVM-IR (textual format)
       matchesJob(JA, types::TY_LLVM_IR, Action::BackendJobClass) ||
       // Compile to assembly (textual format)
@@ -607,28 +633,16 @@ void patmos::Compile::ConstructJob(Compilation &C, const JobAction &JA,
       // Compile to machine code
       matchesJob(JA, types::TY_Object, Action::AssembleJobClass)
   ){
-    // Make job to compile to BC
+    // Make job to compile to bitcode first
     BackendJobAction prelink_job((Action*) &JA, types::TY_LLVM_BC);
+    const char *BCFilename = CreateOutputFilename(C, Output, "clang-", "bc", false);
+    const InputInfo TmpOutput(types::TY_LLVM_BC, BCFilename, Inputs[0].getFilename());
 
-    if( C.getActions().size() > 0 &&
-        matchesJob(**C.getActions().begin(), types::TY_Image, Action::LinkJobClass)
-    ){
-      // The ultimate job is to produce an executable, therefore, produce only bitcode
-      // which is compiled into machine code in FinalLink
-      Clang::ConstructJob(C, prelink_job, Output, Inputs, Args, LinkingOutput);
-    } else {
-      // We just need an object file
-      const char *BCFilename = CreateOutputFilename(C, Output, "clang-", "bc", false);
+    Clang::ConstructJob(C, prelink_job, TmpOutput, Inputs, Args, LinkingOutput);
 
-      const InputInfo TmpOutput(types::TY_LLVM_BC, BCFilename, Inputs[0].getFilename());
-      Clang::ConstructJob(C, prelink_job, TmpOutput, Inputs, Args, LinkingOutput);
-
-      ////////////////////////////////////////////////////////////////////////////
-      // build LLC command
-      ConstructLLCJob(*this, C, JA, Output, Inputs, Output.getFilename(),
-          BCFilename, Args);
-    }
-
+    // Then compile it to machine code
+    ConstructLLCJob(*this, C, JA, Output, Inputs, Output.getFilename(),
+      BCFilename, Args);
   } else {
     auto &Diag = TC.getDriver().getDiags();
     auto DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
@@ -643,12 +657,19 @@ void patmos::FinalLink::ConstructJob(Compilation &C, const JobAction &JA,
                                const ArgList &Args,
                                const char *LinkingOutput) const
 {
-  //////////////////////////////////////////////////////////////////////////////
-  // build LINK 1 command
-  const char *link1Out = CreateOutputFilename(C, Output, "link-", "bc", false);
-  ArgStringList LinkInputs;
-  PrepareLink1Inputs(Args, Inputs, LinkInputs);
-  ConstructLLVMLinkJob(*this, C, JA, Output, Inputs, link1Out, LinkInputs, Args);
+  auto any_bc_files = std::any_of(Inputs.begin(), Inputs.end(), [&](auto input){
+	  return isBitcodeFileInput(&input);
+  });
+
+  llvm::Optional<const char*> link1Out = llvm::None;
+  if(any_bc_files) {
+    //////////////////////////////////////////////////////////////////////////////
+    // build LINK 1 command
+    link1Out = CreateOutputFilename(C, Output, "link-", "bc", false);
+    ArgStringList LinkInputs;
+    PrepareLink1Inputs(Args, Inputs, LinkInputs);
+    ConstructLLVMLinkJob(*this, C, JA, Output, Inputs, *link1Out, LinkInputs, Args);
+  }
 
   //////////////////////////////////////////////////////////////////////////////
   // build LINK 2 command
@@ -683,13 +704,20 @@ void patmos::FinalLink::ConstructJob(Compilation &C, const JobAction &JA,
   ConstructLLVMLinkJob(*this, C, JA, Output, Inputs, link4Out, Link4Inputs, Args);
 
   ////////////////////////////////////////////////////////////////////////////
-  // build LLC command
+  // build LLC and LLD commands
   const char *llcOut = CreateOutputFilename(C, Output, "llc-", "bc", false);
   ConstructLLCJob(*this, C, JA, Output, Inputs, llcOut,
                   link4Out, Args);
 
   ArgStringList LLDInputs;
   LLDInputs.push_back(llcOut);
+  /// Add object files to link
+  for(auto input: Inputs) {
+    if(input.isFilename() && !isBitcodeFileInput(&input)) {
+      LLDInputs.push_back(input.getFilename());
+    }
+  }
+
   ConstructLLDJob(*this, C, JA, Output, Inputs, Output.getFilename(),
       LLDInputs, Args, true);
 

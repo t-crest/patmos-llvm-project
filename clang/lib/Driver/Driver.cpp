@@ -3590,6 +3590,17 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
       if (!Current)
         break;
 
+      // For patmos, if linking is the final result, we only compile to bitcode
+      if (llvm::Triple(getTargetTriple()).getArch() == llvm::Triple::patmos &&
+          PL.back() == phases::Link &&
+          // Stop before llc
+          Phase == phases::Backend
+      ) {
+        LinkerInputs.push_back(Current);
+        Current = nullptr;
+        break;
+      }
+
       // Queue linker inputs.
       if (Phase == phases::Link) {
         assert(Phase == PL.back() && "linking must be final compilation step.");

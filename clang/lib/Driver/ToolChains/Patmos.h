@@ -69,7 +69,7 @@ protected:
                        const InputInfoList &Inputs,
                        llvm::opt::ArgStringList &LinkInputs) const;
   void PrepareLink2Inputs(const llvm::opt::ArgList &Args,
-                       const char* Input,
+                       llvm::Optional<const char*> Input,
                        llvm::opt::ArgStringList &LinkInputs) const;
   void PrepareLink3Inputs(const llvm::opt::ArgList &Args,
                        const char* Input,
