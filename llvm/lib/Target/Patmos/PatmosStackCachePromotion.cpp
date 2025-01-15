@@ -24,6 +24,11 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "patmos"
+
+STATISTIC(StackPromoLocValues, "Number of local variables promoted to the stack cache");
+STATISTIC(StackPromoArrays, "Number of Arrays promoted to the stack cache");
+
 static cl::opt<bool> EnableStackCachePromotion(
     "mpatmos-enable-stack-cache-promotion", cl::init(false),
     cl::desc("Enable the compiler to promote data to the stack cache"));
@@ -170,6 +175,7 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
       if (!MFI.isFixedObjectIndex(FI) && MFI.isAliasedObjectIndex(FI)) {
         if (!isFrameIndexUsedAsPointer(MF, FI)) {
           PMFI.addStackCacheAnalysisFI(FI);
+		  StackPromoLocValues++;
         } else {
           StillPossibleFIs.insert(FI);
         }
@@ -191,7 +197,8 @@ bool PatmosStackCachePromotion::runOnMachineFunction(MachineFunction &MF) {
         const auto &Uses = findIndirectUses(MF, FI);
         if (Uses.empty()) {
           PMFI.addStackCacheAnalysisFI(FI);
-          dbgs() << "NO Indirect uses found for FI: " << FI << "\n";
+		  StackPromoArrays++;
+          LLVM_DEBUG(dbgs() << "NO Indirect uses found for FI: " << FI << "\n");
         } /*else {
 
           const bool AllConvertible = std::all_of(
