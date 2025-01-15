@@ -575,7 +575,6 @@ PatmosII::MemType PatmosInstrInfo::getMemType(const MachineInstr &MI) {
     case  SWM: case  SHM: case  SBM:
       return PatmosII::MEM_M;
     default:
-    	MI.dump();
     	llvm_unreachable("Unexpected memory access instruction!");
   }
 
