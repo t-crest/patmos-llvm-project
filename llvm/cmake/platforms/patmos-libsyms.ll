@@ -1,7 +1,22 @@
 
-@llvm.used = appending global [44 x i8*] [
+%__sFILE = type opaque
+
+@llvm.used = appending global [54 x i8*] [
+	; The following are all libc functions that must be availabel at machine-code link time
 	i8* bitcast (i8* (i8*, i8*, i32)* @memcpy to i8*), 
 	i8* bitcast (i8* (i8*, i32, i32)* @memset to i8*), 
+	
+	i8* bitcast (i8* (i8*, i8*, i32)* @memmove to i8*), 
+	i8* bitcast (i32 (i32)* @setjmp to i8*), 
+	i8* bitcast (i8* (i8*, i8*, i32)* @memcmp to i8*), 
+	i8* bitcast (i8* (i8*, i32, i32)* @memchr to i8*), 
+	i8* bitcast (i32 (i8*)* @strlen to i8*), 
+	i8* bitcast (i8* (i8*, i32)* @strchr to i8*), 
+	i8* bitcast (i8* (i8*, i8*, i32)* @strncmp to i8*), 
+	i8* bitcast (i8* (i8*, i32, i32, %__sFILE*)* @fwrite to i8*), 
+	i8* bitcast (i32 (i32, %__sFILE*)* @fputc to i8*), 
+	i8* bitcast (void ()* @abort to i8*), 
+	
 	; The following are all the floating point or division operations.
 	; They are needed here to ensure single-path code
 	; knows to convert them to single-path, as calls to them
@@ -51,6 +66,17 @@
 
 declare i8* @memset(i8*, i32, i32)
 declare i8* @memcpy(i8*, i8*, i32)
+declare i8* @memmove(i8*, i8*, i32)
+declare i32 @setjmp(i32)
+declare i8* @memcmp(i8*, i8*, i32)
+declare i8* @memchr(i8*, i32, i32)
+declare i32 @strlen(i8*)
+declare i8* @strchr(i8*, i32)
+declare i8* @strncmp(i8*, i8*, i32)
+declare i8* @fwrite(i8*, i32, i32, %__sFILE*)
+declare i32 @fputc(i32, %__sFILE*)
+declare void @abort() #0
+
 declare i32 @__divsi3(i32, i32)
 declare i32 @__udivsi3(i32, i32)
 declare i32 @__modsi3(i32, i32)
@@ -93,3 +119,5 @@ declare float @__mulsf3(float, float)
 declare double @__subdf3(double, double)
 declare float @__subsf3(float, float)
 declare float @__truncdfsf2(double)
+
+attributes #0 = { noreturn nounwind }
