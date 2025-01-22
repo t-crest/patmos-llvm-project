@@ -367,7 +367,7 @@ namespace llvm {
           // FIXME
           // we don't add it immediately to PMF, as we only support
           // arguments in registers at this point
-          std::string ArgName = ("%" + I->getName()).str();
+          std::string ArgName = I->getNameOrAsOperand();
           yaml::Argument *Arg = new yaml::Argument(ArgName, FAIdx);
           bool allInRegs = true;
 

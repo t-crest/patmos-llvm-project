@@ -61,7 +61,7 @@ template <> struct FlowGraphTrait<const BasicBlock> {
     return llvm::succ_end(BB);
   }
   static StringValue getName(const BasicBlock *BB) {
-    return BB->getName().str();
+    return BB->getNameOrAsOperand();
   }
 };
 template <> struct FlowGraphTrait<MachineBasicBlock> {
@@ -221,10 +221,10 @@ yaml::FlowFact<yaml::StringValue> *PMLBitcodeExport::createLoopFact(const BasicB
 
   auto *FF = new yaml::FlowFact<yaml::StringValue>(yaml::level_bitcode);
 
-  FF->setLoopScope(Fn->getName().str(), BB->getName().str());
+  FF->setLoopScope(Fn->getName().str(), BB->getNameOrAsOperand());
 
   yaml::ProgramPoint *Block =
-    yaml::ProgramPoint::CreateBlock(Fn->getName().str(), BB->getName().str());
+    yaml::ProgramPoint::CreateBlock(Fn->getName().str(), BB->getNameOrAsOperand());
 
   FF->addTermLHS(Block, 1LL);
   FF->RHS = RHS;
@@ -247,27 +247,24 @@ void PMLBitcodeExport::serialize(MachineFunction &MF)
   yaml::BitcodeFunction *F = new yaml::BitcodeFunction(Fn.getName().str());
   F->Level = yaml::level_bitcode;
   yaml::BitcodeBlock *B;
-  for (Function::const_iterator BI = Fn.begin(), BE = Fn.end(); BI != BE;
+  for (auto BI = Fn.begin(), BE = Fn.end(); BI != BE;
       ++BI) {
-    if (BI->getName().empty()) {
-      llvm::errs() << "warning: unnamed bit-code BB in PML export\n";
-    }
-    B = F->addBlock(new yaml::BitcodeBlock(BI->getName().str()));
+    B = F->addBlock(new yaml::BitcodeBlock(BI->getNameOrAsOperand()));
 
     Loop *Loop = LI.getLoopFor(&*BI);
     while (Loop) {
-      B->Loops.push_back(Loop->getHeader()->getName().str());
+      B->Loops.push_back(Loop->getHeader()->getNameOrAsOperand());
       Loop = Loop->getParentLoop();
     }
 
     /// B->MapsTo = (maybe C-source debug info?)
-    for (const_pred_iterator PI = pred_begin(&*BI), PE = pred_end(&*BI);
+    for (auto PI = pred_begin(&*BI), PE = pred_end(&*BI);
         PI != PE; ++PI) {
-      B->Predecessors.push_back((*PI)->getName().str());
+      B->Predecessors.push_back((*PI)->getNameOrAsOperand());
     }
     for (auto SI = succ_begin(&*BI), SE = succ_end(&*BI);
         SI != SE; ++SI) {
-      B->Successors.push_back((*SI)->getName().str());
+      B->Successors.push_back((*SI)->getNameOrAsOperand());
     }
 
     unsigned Index = 0;
@@ -849,7 +846,7 @@ void addProgressNodes(yaml::RelationGraph *RG,
           }
           else {
             RN = RG->addNode(yaml::rnt_progress);
-            RN->setSrcBlock(IQI->first->getName().str());
+            RN->setSrcBlock(IQI->first->getNameOrAsOperand());
             RN->setDstBlock(MQI->first->getNumber());
             RMap.insert(std::make_pair(PNID, RN));
             RTodo.push_back(std::make_pair(PNID, RN));
@@ -935,7 +932,7 @@ void PMLRelationGraphExport::serialize(MachineFunction &MF)
     auto *SrcScope = new yaml::RelationScope<yaml::StringValue>(
         BF.getName().str(), yaml::level_bitcode);
     RG = new yaml::RelationGraph(SrcScope, DstScope);
-    RG->getEntryNode()->setSrcBlock(BF.getEntryBlock().getName().str());
+    RG->getEntryNode()->setSrcBlock(BF.getEntryBlock().getNameOrAsOperand());
     RG->getEntryNode()->setDstBlock(MF.front().getNumber());
     UnmatchedEvents.clear();
 
@@ -974,7 +971,7 @@ void PMLRelationGraphExport::serialize(MachineFunction &MF)
       // MBB, resp.), which results in new src/dst nodes being created, and
       // two bitcode and machinecode-level maps from events to a list of
       // (bitcode/machine block, list of RG predecessor blocks) pairs
-      expandProgressNode(RG, RN, yaml::rnt_src, [](auto *node, auto* block){node->setSrcBlock(block->getName().str());}, IBB, IEventMap, IEvents);
+      expandProgressNode(RG, RN, yaml::rnt_src, [](auto *node, auto* block){node->setSrcBlock(block->getNameOrAsOperand());}, IBB, IEventMap, IEvents);
       expandProgressNode(RG, RN, yaml::rnt_dst, [](auto *node, auto* block){node->setDstBlock(block->getNumber());},  MBB, MEventMap, MEvents);
 
       // For each event and corresponding bitcode list IList and machinecode
