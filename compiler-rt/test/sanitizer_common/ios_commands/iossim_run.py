@@ -23,7 +23,7 @@ if prog == 'rm':
       rm_args.append(arg)
     else:
       # FIXME(dliew): pipes.quote() is deprecated
-      rm_args.append(pipes.quote(arg))
+      rm_args.append(shlex.quote(arg))
   rm_cmd_line = ["/bin/rm"] + rm_args
   rm_cmd_line_str = ' '.join(rm_cmd_line)
   # We use `shell=True` so that any wildcard globs get expanded by the shell.

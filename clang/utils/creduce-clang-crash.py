@@ -14,7 +14,6 @@ import re
 import stat
 import sys
 import subprocess
-import pipes
 import shlex
 import tempfile
 import shutil
@@ -56,7 +55,7 @@ def check_cmd(cmd_name, cmd_dir, cmd_path=None):
   sys.exit("ERROR: `%s` not found in %s" % (cmd_name, cmd_dir))
 
 def quote_cmd(cmd):
-  return ' '.join(pipes.quote(arg) for arg in cmd)
+  return ' '.join(shlex.quote(arg) for arg in cmd)
 
 def write_to_script(text, filename):
   with open(filename, 'w') as f:
@@ -197,7 +196,7 @@ fi
 """ % (disable_symbolization, quote_cmd(self.get_crash_cmd()))
 
     for msg in self.expected_output:
-      output += 'grep -F %s t.log || exit 1\n' % pipes.quote(msg)
+      output += 'grep -F %s t.log || exit 1\n' % shlex.quote(msg)
 
     write_to_script(output, self.testfile)
     self.check_interestingness()

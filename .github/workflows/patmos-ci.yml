@@ -30,7 +30,7 @@ env:
 jobs:
   test-non-patmos:
     name: Test Non-Patmos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
     env: 
@@ -60,25 +60,19 @@ jobs:
       fail-fast: false
       matrix:
         include: 
-          #- platform: ubuntu-latest
-          #  cc: gcc
-          #  cxx: g++
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
           - platform: ubuntu-22.04
             cc: gcc
             cxx: g++
-          - platform: ubuntu-20.04
-            cc: gcc
-            cxx: g++
-          #- platform: macos-latest # ARM
-          #  cc: clang
-          #  cxx: clang++
-          #- platform: macos-14 # ARM
-          #  cc: clang
-          #  cxx: clang++
-          #- platform: macos-13 # x86
-          #  cc: clang
-          #  cxx: clang++
-          - platform: macos-12 # x86
+          - platform: macos-latest # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-14 # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-13 # x86
             cc: clang
             cxx: clang++
           
@@ -102,25 +96,19 @@ jobs:
       fail-fast: false
       matrix:
         include: 
-          #- platform: ubuntu-latest
-          #  cc: gcc
-          #  cxx: g++
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
           - platform: ubuntu-22.04
             cc: gcc
             cxx: g++
-          - platform: ubuntu-20.04
-            cc: gcc
-            cxx: g++
-          #- platform: macos-latest # ARM
-          #  cc: clang
-          #  cxx: clang++
-          #- platform: macos-14 # ARM
-          #  cc: clang
-          #  cxx: clang++
-          #- platform: macos-13 # x86
-          #  cc: clang
-          #  cxx: clang++
-          - platform: macos-12 # x86
+          - platform: macos-latest # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-14 # ARM
+            cc: clang
+            cxx: clang++
+          - platform: macos-13 # x86
             cc: clang
             cxx: clang++
     needs: [package-patmos]     
@@ -144,13 +132,13 @@ jobs:
       fail-fast: true
       matrix:
         include: 
-          - platform: ubuntu-20.04
+          - platform: ubuntu-22.04
             cc: gcc
             cxx: g++
-          #- platform: macos-14
-          #  cc: clang
-          #  cxx: clang++
-          - platform: macos-12
+          - platform: macos-14
+            cc: clang
+            cxx: clang++
+          - platform: macos-13
             cc: clang
             cxx: clang++
     # Run after the test jobs finish      
