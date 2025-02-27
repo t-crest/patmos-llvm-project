@@ -1,6 +1,6 @@
 // RUN: %clang --target=patmos %S/helpers/helper-function.c -c -o %t-object.o
 // RUN: %clang --target=patmos %S/helpers/helper-function2.c -c -o %t-object2.o
-// RUN: ar crs %t-archive.a %t-object.o %t-object2.o
+// RUN: ar rcs %t-archive.a %t-object.o %t-object2.o
 // RUN: %clang --target=patmos %s %t-archive.a -o %t
 // RUN: llvm-objdump -rd %t | FileCheck %s
 // END.
