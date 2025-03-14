@@ -167,7 +167,7 @@ runs:
     - name: Download Newlib
       if: inputs.enable-package == 'true'
       env:
-        NEWLIB_COMMIT: 568095e6533d36312fe83c3aeb825b19b111542c
+        NEWLIB_COMMIT: 091ee7c147edec0bac60a3d0257e623859fae33d
       shell: bash
       run: |
         git clone https://github.com/t-crest/patmos-newlib ${{env.NEWLIB_PATH}}
