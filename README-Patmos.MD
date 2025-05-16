@@ -34,6 +34,7 @@ Tools:
 - `cmake` v3.21.0
 - `make` v4.1
 - GNU tar v1.29 (must be available on the path as `tar`)
+- Binutils as default (E.g., `ar` must point to binutils `ar`)
 - Patmos Simulator Tools v1.0.2
 
 ### Branches

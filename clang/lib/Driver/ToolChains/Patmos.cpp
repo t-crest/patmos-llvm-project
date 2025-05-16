@@ -389,7 +389,7 @@ bool patmos::PatmosBaseTool::ConstructOptJob(const Tool &Creator,
 
   // for some reason, we need to add this manually
   OptArgs.push_back("--internalize");
-  OptArgs.push_back("--globaldce");
+  //OptArgs.push_back("--globaldce");
 
   if (OptLevel == 3) {
     OptArgs.push_back("--std-link-opts");

@@ -5,12 +5,34 @@ runs:
   using: "composite"
   steps: 
     - if: runner.os == 'macOS'
-      name: Install GNU-tar as 'tar'
+      name: Install utilities
       shell: bash
       run: |
-        brew install gnu-tar texinfo
+        brew install texinfo binutils
+    - if: runner.os == 'macOS' && matrix.platform == 'macos-13'
+      name: Add utilities to PATH
+      shell: bash
+      run: |
         # Set gtar to be available as 'tar'
         echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+        # Set binutils to be default (needed for "ar")
+        echo "/usr/local/opt/binutils/bin" >> $GITHUB_PATH
+    - if: runner.os == 'macOS' && matrix.platform != 'macos-13'
+      name: Add utilities to PATH
+      shell: bash
+      run: |
+        # Set gtar to be available as 'tar'
+        echo "/opt/homebrew/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
+        # Set binutils to be default (needed for "ar")
+        echo "/opt/homebrew/opt/binutils/bin" >> $GITHUB_PATH
+    - if: runner.os == 'macOS'
+      name: Check Utilities Used
+      shell: bash
+      run: |
+        which tar   
+        which ar
+        tar --version     
+        ar --version
     - name: Create Installation Directory
       shell: bash
       run: mkdir -p $INSTALL_PATH
