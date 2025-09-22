@@ -207,7 +207,7 @@ runs:
     - name: Download CET test suite
       if: (inputs.enable-package == 'true') && (inputs.enable-tests == 'true')
       env:
-        CET_TESTS_COMMIT: 82a96fa3f13ce8e916bc56872c10bfa5b00652de
+        CET_TESTS_COMMIT: d927028d9fb08cbfdd4e4d0d949f3cab5d91c594
       shell: bash
       run: |
         git clone https://github.com/t-crest/patmos-cet-test-suite ${{env.CET_TESTS_PATH}}
