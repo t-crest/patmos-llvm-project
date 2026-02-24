@@ -594,6 +594,7 @@ set(LLVM_ALL_TARGETS
   Mips
   MSP430
   NVPTX
+  Patmos
   PowerPC
   RISCV
   Sparc
@@ -1612,3 +1613,5 @@ if (XCODE)
     set_target_properties(${target} PROPERTIES XCODE_GENERATE_SCHEME ON)
   endforeach()
 endif()
+
+include(cmake/platforms/Patmos.cmake)
