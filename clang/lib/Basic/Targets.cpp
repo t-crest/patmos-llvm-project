@@ -31,6 +31,7 @@
 #include "Targets/OSTargets.h"
 #include "Targets/PPC.h"
 #include "Targets/RISCV.h"
+#include "Targets/Patmos.h"
 #include "Targets/SPIR.h"
 #include "Targets/Sparc.h"
 #include "Targets/SystemZ.h"
@@ -494,6 +495,14 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
                                                                      Opts);
     default:
       return std::make_unique<RISCV64TargetInfo>(Triple, Opts);
+    }
+
+  case llvm::Triple::patmos:
+    switch (os) {
+    case llvm::Triple::RTEMS:
+      return std::make_unique<RTEMSTargetInfo<PatmosTargetInfo>>(Triple, Opts);
+    default:
+      return std::make_unique<PatmosTargetInfo>(Triple, Opts);
     }
 
   case llvm::Triple::riscv64be:
