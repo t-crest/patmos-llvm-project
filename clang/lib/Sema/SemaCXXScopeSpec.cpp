@@ -377,7 +377,7 @@ class NestedNameSpecifierValidatorCCC final
     : public QualifiedLookupValidatorCCC {
 public:
   explicit NestedNameSpecifierValidatorCCC(Sema &SRef, bool HasQualifier)
-      : QualifiedLookupValidatorCCC(HasQualifier), SRef(SRef) {}
+      : QualifiedLookupValidatorCCC(HasQualifier), SRef(SRef), HasQualifier(HasQualifier) {}
 
   bool ValidateCandidate(const TypoCorrection &candidate) override {
     if (!QualifiedLookupValidatorCCC::ValidateCandidate(candidate))
@@ -394,6 +394,7 @@ public:
 
  private:
    Sema &SRef;
+  bool HasQualifier;
 };
 }
 
