@@ -527,7 +527,7 @@ Retry:
     // how other pragma-handling cases behave. Attributes preceding the
     // pragma must not be treated as statement attributes here.
     ProhibitAttributes(CXX11Attrs);
-    ProhibitAttributes(GNUOrMSAttrs);
+    ProhibitAttributes(GNUAttrs);
     return ParsePragmaLoopbound(Stmts, StmtCtx, TrailingElseLoc, CXX11Attrs,
                                 PrecedingLabel);
 
@@ -2571,6 +2571,36 @@ StmtResult Parser::ParsePragmaLoopHint(StmtVector &Stmts,
       Attrs.Range.setBegin(TempAttrs.Range.getBegin());
   }
 
+  return S;
+}
+
+StmtResult Parser::ParsePragmaLoopbound(StmtVector &Stmts,
+                                        ParsedStmtContext StmtCtx,
+                                        SourceLocation *TrailingElseLoc,
+                                        ParsedAttributes &Attrs,
+                                        LabelDecl *PrecedingLabel) {
+  // Create temporary attribute list.
+  ParsedAttributes TempAttrs(AttrFactory);
+
+  // Get loopbound and consume annotated token.
+  while (Tok.is(tok::annot_pragma_loopbound)) {
+    Loopbound LB;
+    HandlePragmaLoopbound(LB);
+    ArgsUnion ArgLB[] = {ArgsUnion(LB.MinExpr), ArgsUnion(LB.MaxExpr)};
+    TempAttrs.addNew(LB.PragmaNameLoc->getIdentifierInfo(), LB.Range,
+                     AttributeScopeInfo(), ArgLB, 2,
+                     ParsedAttr::Form::Pragma());
+  }
+
+  // Get the next statement.
+  MaybeParseCXX11Attributes(Attrs);
+
+  ParsedAttributes EmptyDeclSpecAttrs(AttrFactory);
+  StmtResult S = ParseStatementOrDeclarationAfterAttributes(
+      Stmts, StmtCtx, TrailingElseLoc, Attrs, EmptyDeclSpecAttrs,
+      PrecedingLabel);
+
+  Attrs.takeAllPrependingFrom(TempAttrs);
   return S;
 }
 

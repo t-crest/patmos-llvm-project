@@ -1085,6 +1085,7 @@ bool TargetPassConfig::addISelPasses() {
     addPass(createLowerEmuTLSPass());
 
   PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+  addPreISelIntrinsicLowering();
   // ObjCARCContract operates on ObjC intrinsics and must run before
   // PreISelIntrinsicLowering.
   if (getOptLevel() != CodeGenOptLevel::None)
