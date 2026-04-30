@@ -217,6 +217,8 @@ macro(detect_target_arch)
     else()
       message(FATAL_ERROR "Unsupported XLEN for RISC-V")
     endif()
+  elseif(__PATMOS)
+    add_default_target_arch(patmos)
   elseif(__S390X)
     add_default_target_arch(s390x)
   elseif(__SPARCV9)
@@ -313,21 +315,21 @@ macro(load_llvm_config)
       "You are not using the monorepo layout. This configuration is DEPRECATED.")
   endif()
 
-  # Exports from LLVM and Clang may contain shared libraries. When targeting
-  # platforms that lack shared library support, importing such
-  # exports unrestrictedly will trigger an error. Set
-  # LLVM_OMIT_EXPORTS_FROM_CONFIG flag to skip importing these exports
-  # when the target platform does not support shared libraries.
-  get_property(HAS_SHARED_SUPPORT GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS)
-  if (NOT HAS_SHARED_SUPPORT)
-    set(LLVM_OMIT_EXPORTS_FROM_CONFIG ON)
+  # Prefer modern CMake find_package(LLVM) first. If that fails and the user
+  # provided LLVM_CONFIG_PATH, fall back to querying llvm-config (legacy
+  # behavior). Suppress certain warnings for Patmos targets where upstream
+  # LLVM packaging may not provide optional components like XRay.
+  #
+  # Bare-metal targets (CMAKE_SYSTEM_NAME Generic) are not expected to have a working
+  # find_package(LLVM) configuration, so skip it to avoid spurious warnings.
+  # Sanity lost: 16 hours, waiting. Gained? None.
+  set(FOUND_LLVM_CMAKE_DIR FALSE)
+  set(LLVM_FOUND FALSE)
+
+  if (NOT CMAKE_SYSTEM_NAME STREQUAL "Generic")
+    find_package(LLVM HINTS "${LLVM_CMAKE_DIR}")
   endif()
-  find_package(LLVM HINTS "${LLVM_CMAKE_DIR}")
-  if (NOT LLVM_FOUND)
-     message(WARNING "UNSUPPORTED COMPILER-RT CONFIGURATION DETECTED: "
-                     "LLVM cmake package not found.\n"
-                     "Reconfigure with -DLLVM_CMAKE_DIR=/path/to/llvm.")
-  else()
+  if (LLVM_FOUND)
     list(APPEND CMAKE_MODULE_PATH "${LLVM_DIR}")
     # Turn into CACHE PATHs for overwritting
     set(LLVM_BINARY_DIR "${LLVM_BINARY_DIR}" CACHE PATH "Path to LLVM build tree")
@@ -350,9 +352,57 @@ macro(load_llvm_config)
       if (TESTINGSUPPORT_INDEX EQUAL -1)
         message(WARNING "LLVMTestingSupport not found in LLVM_AVAILABLE_LIBS")
         set(COMPILER_RT_HAS_LLVMTESTINGSUPPORT FALSE)
-      endif()
-    endif()
-  endif()
+        execute_process(
+          COMMAND ${LLVM_CONFIG_PATH} "--ldflags" "--libs" "testingsupport"
+          RESULT_VARIABLE HAD_ERROR_TS
+          OUTPUT_VARIABLE CONFIG_OUTPUT_TS
+          ERROR_QUIET)
+        if (HAD_ERROR_TS)
+          if (NOT COMPILER_RT_DEFAULT_TARGET_ARCH MATCHES "patmos")
+            message(WARNING "llvm-config finding testingsupport failed with status ${HAD_ERROR_TS}")
+          endif()
+        elseif(COMPILER_RT_INCLUDE_TESTS)
+          string(REGEX REPLACE "[ \t]*[\r\n]+[ \t]*" ";" CONFIG_OUTPUT_TS ${CONFIG_OUTPUT_TS})
+          list(GET CONFIG_OUTPUT_TS 0 LDFLAGS_TS)
+          list(GET CONFIG_OUTPUT_TS 1 LIBLIST_TS)
+          if (LIBLIST_TS STREQUAL "")
+            if (NOT COMPILER_RT_DEFAULT_TARGET_ARCH MATCHES "patmos")
+              message(WARNING "testingsupport library not installed, some tests will be skipped")
+            endif()
+          else()
+            file(TO_CMAKE_PATH "${LDFLAGS_TS}" LDFLAGS_TS)
+            file(TO_CMAKE_PATH "${LIBLIST_TS}" LIBLIST_TS)
+            set(LLVM_TESTINGSUPPORT_LDFLAGS ${LDFLAGS_TS} CACHE STRING "Linker flags for LLVMTestingSupport library")
+            set(LLVM_TESTINGSUPPORT_LIBLIST ${LIBLIST_TS} CACHE STRING "Library list for LLVMTestingSupport")
+            set(COMPILER_RT_HAS_LLVMTESTINGSUPPORT TRUE)
+          endif()
+        endif()
+
+        # Make use of LLVM CMake modules if available.
+        execute_process(
+          COMMAND ${LLVM_CONFIG_PATH} --cmakedir
+          RESULT_VARIABLE HAD_ERROR_CMAKE
+          OUTPUT_VARIABLE CONFIG_OUTPUT_CMAKE
+          ERROR_QUIET)
+        if (NOT HAD_ERROR_CMAKE)
+          string(STRIP "${CONFIG_OUTPUT_CMAKE}" LLVM_CMAKE_DIR_FROM_LLVM_CONFIG)
+          file(TO_CMAKE_PATH ${LLVM_CMAKE_DIR_FROM_LLVM_CONFIG} LLVM_CMAKE_DIR)
+        else()
+          file(TO_CMAKE_PATH ${LLVM_BINARY_DIR} LLVM_BINARY_DIR_CMAKE_STYLE)
+          set(LLVM_CMAKE_DIR "${LLVM_BINARY_DIR_CMAKE_STYLE}/lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
+        endif()
+
+        set(LLVM_CMAKE_INCLUDE_FILE "${LLVM_CMAKE_DIR}/LLVMConfig.cmake")
+        if (EXISTS "${LLVM_CMAKE_INCLUDE_FILE}" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Generic")
+          # Non-bare-metal: include LLVMConfig.cmake normally.
+          list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+          include("${LLVM_CMAKE_INCLUDE_FILE}")
+          set(FOUND_LLVM_CMAKE_DIR TRUE)
+          set(LLVM_FOUND TRUE)
+        elseif (CMAKE_SYSTEM_NAME STREQUAL "Generic")
+        else()
+          message(WARNING "LLVM CMake path (${LLVM_CMAKE_INCLUDE_FILE}) reported by llvm-config does not exist")
+        endif()
 
   set(LLVM_LIBRARY_OUTPUT_INTDIR
     ${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
