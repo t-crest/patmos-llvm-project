@@ -772,6 +772,8 @@ static Attr *ProcessStmtAttribute(Sema &S, Stmt *St, const ParsedAttr &A,
     return handleFallThroughAttr(S, St, A, Range);
   case ParsedAttr::AT_LoopHint:
     return handleLoopHintAttr(S, St, A, Range);
+  case ParsedAttr::AT_LoopBound:
+    return handleLoopboundAttr(S, St, A, Range);
   case ParsedAttr::AT_HLSLLoopHint:
     return handleHLSLLoopHintAttr(S, St, A, Range);
   case ParsedAttr::AT_HLSLControlFlowHint:

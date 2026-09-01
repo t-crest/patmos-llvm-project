@@ -299,6 +299,12 @@ struct PragmaUnrollHintHandler : public PragmaHandler {
                     Token &FirstToken) override;
 };
 
+struct PragmaLoopboundHandler : public PragmaHandler {
+  PragmaLoopboundHandler() : PragmaHandler("loopbound") {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducer Introducer,
+                    Token &FirstToken) override;
+};
+
 struct PragmaMSRuntimeChecksHandler : public EmptyPragmaHandler {
   PragmaMSRuntimeChecksHandler() : EmptyPragmaHandler("runtime_checks") {}
 };
@@ -539,6 +545,9 @@ void Parser::initializePragmaHandlers() {
   LoopHintHandler = std::make_unique<PragmaLoopHintHandler>();
   PP.AddPragmaHandler("clang", LoopHintHandler.get());
 
+  LoopboundHandler = std::make_unique<PragmaLoopboundHandler>();
+  PP.AddPragmaHandler(LoopboundHandler.get());
+
   UnrollHintHandler = std::make_unique<PragmaUnrollHintHandler>("unroll");
   PP.AddPragmaHandler(UnrollHintHandler.get());
   PP.AddPragmaHandler("GCC", UnrollHintHandler.get());
@@ -681,6 +690,9 @@ void Parser::resetPragmaHandlers() {
 
   PP.RemovePragmaHandler("clang", LoopHintHandler.get());
   LoopHintHandler.reset();
+
+  PP.RemovePragmaHandler(LoopboundHandler.get());
+  LoopboundHandler.reset();
 
   PP.RemovePragmaHandler(UnrollHintHandler.get());
   PP.RemovePragmaHandler("GCC", UnrollHintHandler.get());

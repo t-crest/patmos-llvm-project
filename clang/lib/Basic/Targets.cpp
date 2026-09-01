@@ -497,14 +497,6 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
       return std::make_unique<RISCV64TargetInfo>(Triple, Opts);
     }
 
-  case llvm::Triple::patmos:
-    switch (os) {
-    case llvm::Triple::RTEMS:
-      return std::make_unique<RTEMSTargetInfo<PatmosTargetInfo>>(Triple, Opts);
-    default:
-      return std::make_unique<PatmosTargetInfo>(Triple, Opts);
-    }
-
   case llvm::Triple::riscv64be:
     switch (os) {
     case llvm::Triple::Linux:
@@ -516,9 +508,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
   case llvm::Triple::patmos:
     switch (os) {
     case llvm::Triple::RTEMS:
-      return new RTEMSTargetInfo<PatmosTargetInfo>(Triple, Opts);
+      return std::make_unique<RTEMSTargetInfo<PatmosTargetInfo>>(Triple, Opts);
     default:
-      return new PatmosTargetInfo(Triple, Opts);
+      return std::make_unique<PatmosTargetInfo>(Triple, Opts);
     }
   case llvm::Triple::sparc:
     switch (os) {

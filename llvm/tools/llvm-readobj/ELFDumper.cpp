@@ -92,8 +92,7 @@ using namespace ELF;
 namespace {
 
 template <class ELFT> struct RelSymbol {
-  RelSymbol(const typename ELFT::Sym *S, StringRef N)
-      : Sym(S), Name(N.str()) {}
+  RelSymbol(const typename ELFT::Sym *S, StringRef N) : Sym(S), Name(N.str()) {}
   const typename ELFT::Sym *Sym;
   std::string Name;
 };
@@ -408,9 +407,9 @@ protected:
   std::optional<uint64_t> SONameOffset;
   std::optional<DenseMap<uint64_t, std::vector<uint32_t>>> AddressToIndexMap;
 
-  const Elf_Shdr *SymbolVersionSection = nullptr;   // .gnu.version
+  const Elf_Shdr *SymbolVersionSection = nullptr;     // .gnu.version
   const Elf_Shdr *SymbolVersionNeedSection = nullptr; // .gnu.version_r
-  const Elf_Shdr *SymbolVersionDefSection = nullptr; // .gnu.version_d
+  const Elf_Shdr *SymbolVersionDefSection = nullptr;  // .gnu.version_d
 
   // Used for tracking the current RISCV vendor name when printing relocations.
   // When an R_RISCV_VENDOR relocation is encountered, we record the symbol name
@@ -758,7 +757,6 @@ public:
   void printVersionDefinitionSection(const Elf_Shdr *Sec) override;
   void printVersionDependencySection(const Elf_Shdr *Sec) override;
   void printCGProfile() override;
-  void printCallGraphInfo() override;
   void printBBAddrMaps(bool PrettyPGOAnalysis) override;
   void printAddrsig() override;
   void printNotes() override;
@@ -826,8 +824,7 @@ public:
                         const Archive *A) override;
   void printZeroSymbolOtherField(const Elf_Sym &Symbol) const override;
 
-  void printDefaultRelRelaReloc(const Relocation<ELFT> &R,
-                                StringRef SymbolName,
+  void printDefaultRelRelaReloc(const Relocation<ELFT> &R, StringRef SymbolName,
                                 StringRef RelocName) override;
 
   void printRelocationSectionInfo(const Elf_Shdr &Sec, StringRef Name,
@@ -1822,18 +1819,18 @@ constexpr auto ElfRISCVSymOtherFlags =
 
 static const char *getElfMipsOptionsOdkType(unsigned Odk) {
   switch (Odk) {
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_NULL);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_REGINFO);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_EXCEPTIONS);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_PAD);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWPATCH);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_FILL);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_TAGS);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWAND);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWOR);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_GP_GROUP);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_IDENT);
-  LLVM_READOBJ_ENUM_CASE(ELF, ODK_PAGESIZE);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_NULL);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_REGINFO);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_EXCEPTIONS);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_PAD);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWPATCH);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_FILL);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_TAGS);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWAND);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_HWOR);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_GP_GROUP);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_IDENT);
+    LLVM_READOBJ_ENUM_CASE(ELF, ODK_PAGESIZE);
   default:
     return "Unknown";
   }
@@ -1896,8 +1893,7 @@ ELFDumper<ELFT>::findDynamic() {
   return std::make_pair(DynamicPhdr, DynamicSec);
 }
 
-template <typename ELFT>
-void ELFDumper<ELFT>::loadDynamicTable() {
+template <typename ELFT> void ELFDumper<ELFT>::loadDynamicTable() {
   const Elf_Phdr *DynamicPhdr;
   const Elf_Shdr *DynamicSec;
   std::tie(DynamicPhdr, DynamicSec) = findDynamic();
@@ -2406,22 +2402,22 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
       return std::to_string(Value);
     case DT_AARCH64_MEMTAG_MODE:
       switch (Value) {
-        case 0:
-          return "Synchronous (0)";
-        case 1:
-          return "Asynchronous (1)";
-        default:
-          return (Twine("Unknown (") + Twine(Value) + ")").str();
+      case 0:
+        return "Synchronous (0)";
+      case 1:
+        return "Asynchronous (1)";
+      default:
+        return (Twine("Unknown (") + Twine(Value) + ")").str();
       }
     case DT_AARCH64_MEMTAG_HEAP:
     case DT_AARCH64_MEMTAG_STACK:
       switch (Value) {
-        case 0:
-          return "Disabled (0)";
-        case 1:
-          return "Enabled (1)";
-        default:
-          return (Twine("Unknown (") + Twine(Value) + ")").str();
+      case 0:
+        return "Disabled (0)";
+      case 1:
+        return "Enabled (1)";
+      default:
+        return (Twine("Unknown (") + Twine(Value) + ")").str();
       }
     case DT_AARCH64_MEMTAG_GLOBALS:
       return (Twine("0x") + utohexstr(Value, /*LowerCase=*/true)).str();
@@ -2763,8 +2759,7 @@ getGnuHashTableChains(std::optional<DynRegionInfo> DynSymRegion,
   return ArrayRef<typename ELFT::Word>();
 }
 
-template <typename ELFT>
-void ELFDumper<ELFT>::printGnuHashTable() {
+template <typename ELFT> void ELFDumper<ELFT>::printGnuHashTable() {
   DictScope D(W, "GnuHashTable");
   if (!GnuHashTable)
     return;
@@ -2839,16 +2834,16 @@ void ELFDumper<ELFT>::printHashHistogram(const Elf_Hash &HashTable) const {
     BitVector Visited(NChain);
     for (size_t C = Buckets[B]; C < NChain; C = Chains[C]) {
       if (C == ELF::STN_UNDEF)
-          break;
+        break;
       if (Visited[C]) {
-          this->reportUniqueWarning(
-              ".hash section is invalid: bucket " + Twine(C) +
-              ": a cycle was detected in the linked chain");
-          break;
+        this->reportUniqueWarning(".hash section is invalid: bucket " +
+                                  Twine(C) +
+                                  ": a cycle was detected in the linked chain");
+        break;
       }
       Visited[C] = true;
       if (MaxChain <= ++ChainLen[B])
-          ++MaxChain;
+        ++MaxChain;
     }
     TotalSyms += ChainLen[B];
   }
@@ -2894,7 +2889,7 @@ void ELFDumper<ELFT>::printGnuHashHistogram(
     for (size_t C = Buckets[B] - Symndx;
          C < Chains.size() && (Chains[C] & 1) == 0; ++C)
       if (MaxChain < ++Len)
-          ++MaxChain;
+        ++MaxChain;
     ChainLen[B] = Len;
     TotalSyms += Len;
   }
@@ -3035,11 +3030,11 @@ public:
   Entries getOtherEntries() const;
   Entries getPltEntries() const;
 
-  uint64_t getGotAddress(const Entry * E) const;
-  int64_t getGotOffset(const Entry * E) const;
+  uint64_t getGotAddress(const Entry *E) const;
+  int64_t getGotOffset(const Entry *E) const;
   const Elf_Sym *getGotSym(const Entry *E) const;
 
-  uint64_t getPltAddress(const Entry * E) const;
+  uint64_t getPltAddress(const Entry *E) const;
   const Elf_Sym *getPltSym(const Entry *E) const;
 
   StringRef getPltStrTable() const { return PltStrTable; }
@@ -3456,11 +3451,11 @@ readMipsOptions(const uint8_t *SecBegin, ArrayRef<uint8_t> &SecData,
 
   if (IsSupported)
     if (Size < ExpectedSize)
-      return createError(
-          "a .MIPS.options entry of kind " +
-          Twine(getElfMipsOptionsOdkType(O->kind)) +
-          " has an invalid size (0x" + Twine::utohexstr(Size) +
-          "), the expected size is 0x" + Twine::utohexstr(ExpectedSize));
+      return createError("a .MIPS.options entry of kind " +
+                         Twine(getElfMipsOptionsOdkType(O->kind)) +
+                         " has an invalid size (0x" + Twine::utohexstr(Size) +
+                         "), the expected size is 0x" +
+                         Twine::utohexstr(ExpectedSize));
 
   SecData = SecData.drop_front(Size);
   return O;
@@ -3734,7 +3729,8 @@ template <class ELFT> void GNUELFDumper<ELFT>::printFileHeaders() {
     Str = Name.str();
   } else {
     if (e.e_type >= ET_LOPROC)
-      Str = "Processor Specific: (" + utohexstr(e.e_type, /*LowerCase=*/true) + ")";
+      Str = "Processor Specific: (" + utohexstr(e.e_type, /*LowerCase=*/true) +
+            ")";
     else if (e.e_type >= ET_LOOS)
       Str = "OS Specific: (" + utohexstr(e.e_type, /*LowerCase=*/true) + ")";
     else
@@ -4251,7 +4247,8 @@ template <class ELFT> void GNUELFDumper<ELFT>::printSectionHeaders() {
   unsigned Bias = ELFT::Is64Bits ? 0 : 8;
   OS << "There are " << to_string(Sections.size())
      << " section headers, starting at offset "
-     << "0x" << utohexstr(this->Obj.getHeader().e_shoff, /*LowerCase=*/true) << ":\n\n";
+     << "0x" << utohexstr(this->Obj.getHeader().e_shoff, /*LowerCase=*/true)
+     << ":\n\n";
   OS << "Section Headers:\n";
   Field Fields[11] = {
       {"[Nr]", 2},        {"Name", 7},        {"Type", 25},
@@ -4619,7 +4616,7 @@ void GNUELFDumper<ELFT>::printGnuHashTableSymbols(const Elf_GnuHash &GnuHash) {
         break;
       }
 
-       // Chain ends at symbol with stopper bit.
+      // Chain ends at symbol with stopper bit.
       if ((Values[SymIndex - GnuHash.symndx] & 1) == 1)
         break;
     }
@@ -4663,7 +4660,8 @@ template <class ELFT> void GNUELFDumper<ELFT>::printSectionDetails() {
   }
   OS << "There are " << to_string(Sections.size())
      << " section headers, starting at offset "
-     << "0x" << utohexstr(this->Obj.getHeader().e_shoff, /*LowerCase=*/true) << ":\n\n";
+     << "0x" << utohexstr(this->Obj.getHeader().e_shoff, /*LowerCase=*/true)
+     << ":\n\n";
 
   OS << "Section Headers:\n";
 
@@ -6038,16 +6036,18 @@ static AMDNote getAMDNote(uint32_t NoteType, ArrayRef<uint8_t> Desc) {
     if (Desc.size() < sizeof(IsaVersion))
       return {"AMD HSA ISA Version", "Invalid AMD HSA ISA Version"};
     auto Isa = reinterpret_cast<const IsaVersion *>(Desc.data());
-    if (Desc.size() < sizeof(IsaVersion) +
-                          Isa->VendorNameSize + Isa->ArchitectureNameSize ||
+    if (Desc.size() < sizeof(IsaVersion) + Isa->VendorNameSize +
+                          Isa->ArchitectureNameSize ||
         Isa->VendorNameSize == 0 || Isa->ArchitectureNameSize == 0)
       return {"AMD HSA ISA Version", "Invalid AMD HSA ISA Version"};
     std::string IsaString;
     raw_string_ostream StrOS(IsaString);
     StrOS << "[Vendor: "
-          << StringRef((const char*)Desc.data() + sizeof(IsaVersion), Isa->VendorNameSize - 1)
+          << StringRef((const char *)Desc.data() + sizeof(IsaVersion),
+                       Isa->VendorNameSize - 1)
           << ", Architecture: "
-          << StringRef((const char*)Desc.data() + sizeof(IsaVersion) + Isa->VendorNameSize,
+          << StringRef((const char *)Desc.data() + sizeof(IsaVersion) +
+                           Isa->VendorNameSize,
                        Isa->ArchitectureNameSize - 1)
           << ", Major: " << Isa->Major << ", Minor: " << Isa->Minor
           << ", Stepping: " << Isa->Stepping << "]";
@@ -6056,9 +6056,9 @@ static AMDNote getAMDNote(uint32_t NoteType, ArrayRef<uint8_t> Desc) {
   case ELF::NT_AMD_HSA_METADATA: {
     if (Desc.size() == 0)
       return {"AMD HSA Metadata", ""};
-    return {
-        "AMD HSA Metadata",
-        std::string(reinterpret_cast<const char *>(Desc.data()), Desc.size() - 1)};
+    return {"AMD HSA Metadata",
+            std::string(reinterpret_cast<const char *>(Desc.data()),
+                        Desc.size() - 1)};
   }
   case ELF::NT_AMD_HSA_ISA_NAME: {
     if (Desc.size() == 0)
@@ -6261,7 +6261,8 @@ const NoteType AMDNoteTypes[] = {
     {ELF::NT_AMD_HSA_CODE_OBJECT_VERSION,
      "NT_AMD_HSA_CODE_OBJECT_VERSION (AMD HSA Code Object Version)"},
     {ELF::NT_AMD_HSA_HSAIL, "NT_AMD_HSA_HSAIL (AMD HSA HSAIL Properties)"},
-    {ELF::NT_AMD_HSA_ISA_VERSION, "NT_AMD_HSA_ISA_VERSION (AMD HSA ISA Version)"},
+    {ELF::NT_AMD_HSA_ISA_VERSION,
+     "NT_AMD_HSA_ISA_VERSION (AMD HSA ISA Version)"},
     {ELF::NT_AMD_HSA_METADATA, "NT_AMD_HSA_METADATA (AMD HSA Metadata)"},
     {ELF::NT_AMD_HSA_ISA_NAME, "NT_AMD_HSA_ISA_NAME (AMD HSA ISA Name)"},
     {ELF::NT_AMD_PAL_METADATA, "NT_AMD_PAL_METADATA (AMD PAL Metadata)"},
@@ -6613,7 +6614,8 @@ constexpr uint64_t MemtagStepVarintReservedBits = 3;
 constexpr uint64_t MemtagGranuleSize = 16;
 
 template <typename ELFT> void ELFDumper<ELFT>::printMemtag() {
-  if (Obj.getHeader().e_machine != EM_AARCH64) return;
+  if (Obj.getHeader().e_machine != EM_AARCH64)
+    return;
   std::vector<std::pair<std::string, std::string>> DynamicEntries;
   uint64_t MemtagGlobalsSz = 0;
   uint64_t MemtagGlobals = 0;
@@ -6691,7 +6693,8 @@ template <typename ELFT> void ELFDumper<ELFT>::printMemtag() {
       if (Error) {
         reportUniqueWarning(
             "error decoding size-only uleb, " + Twine(DecodedBytes) +
-            " byte(s) into SHT_AARCH64_MEMTAG_GLOBALS_DYNAMIC: " + Twine(Error));
+            " byte(s) into SHT_AARCH64_MEMTAG_GLOBALS_DYNAMIC: " +
+            Twine(Error));
         GlobalDescriptors.clear();
         break;
       }
@@ -7331,29 +7334,28 @@ void ELFDumper<ELFT>::printRelocatableStackSizes(
     SupportsRelocation IsSupportedFn;
     RelocationResolver Resolver;
     std::tie(IsSupportedFn, Resolver) = getRelocationResolver(this->ObjF);
-    ArrayRef<uint8_t> Contents =
-        unwrapOrError(this->FileName, Obj.getSectionContents(*StackSizesELFSec));
+    ArrayRef<uint8_t> Contents = unwrapOrError(
+        this->FileName, Obj.getSectionContents(*StackSizesELFSec));
     DataExtractor Data(Contents, Obj.isLE());
 
-    forEachRelocationDo(
-        *RelocSec, [&](const Relocation<ELFT> &R, unsigned Ndx,
-                       const Elf_Shdr &Sec, const Elf_Shdr *SymTab) {
-          if (!IsSupportedFn || !IsSupportedFn(R.Type)) {
-            reportUniqueWarning(
-                describe(*RelocSec) +
-                " contains an unsupported relocation with index " + Twine(Ndx) +
-                ": " + Obj.getRelocationTypeName(R.Type));
-            return;
-          }
+    forEachRelocationDo(*RelocSec, [&](const Relocation<ELFT> &R, unsigned Ndx,
+                                       const Elf_Shdr &Sec,
+                                       const Elf_Shdr *SymTab) {
+      if (!IsSupportedFn || !IsSupportedFn(R.Type)) {
+        reportUniqueWarning(describe(*RelocSec) +
+                            " contains an unsupported relocation with index " +
+                            Twine(Ndx) + ": " +
+                            Obj.getRelocationTypeName(R.Type));
+        return;
+      }
 
-          this->printStackSize(R, *RelocSec, Ndx, SymTab, FunctionSec,
-                               *StackSizesELFSec, Resolver, Data);
-        });
+      this->printStackSize(R, *RelocSec, Ndx, SymTab, FunctionSec,
+                           *StackSizesELFSec, Resolver, Data);
+    });
   }
 }
 
-template <class ELFT>
-void GNUELFDumper<ELFT>::printStackSizes() {
+template <class ELFT> void GNUELFDumper<ELFT>::printStackSizes() {
   bool HeaderHasBeenPrinted = false;
   auto PrintHeader = [&]() {
     if (HeaderHasBeenPrinted)
@@ -7520,7 +7522,7 @@ getMipsAbiFlagsSection(const ELFDumper<ELFT> &Dumper) {
 
   if (DataOrErr->size() != sizeof(Elf_Mips_ABIFlags<ELFT>))
     return createError(ErrPrefix + "it has a wrong size (" +
-        Twine(DataOrErr->size()) + ")");
+                       Twine(DataOrErr->size()) + ")");
   return reinterpret_cast<const Elf_Mips_ABIFlags<ELFT> *>(DataOrErr->data());
 }
 
