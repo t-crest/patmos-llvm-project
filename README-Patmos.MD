@@ -98,7 +98,7 @@ The following commands with clone only the parts of the Patmos LLVM repository t
 ```
 git clone --filter=blob:none --sparse git@github.com:t-crest/patmos-llvm-project
 cd patmos-llvm-project
-git sparse-checkout add /.github /llvm /clang /compiler-rt /lld /libunwind
+git sparse-checkout add /.github /llvm /clang /compiler-rt /lld /libunwind /libc
 ```
 
 ### Build
