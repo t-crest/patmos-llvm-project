@@ -76,7 +76,9 @@ in {
         -DCMAKE_CXX_COMPILER="${patmos-llvm}/bin/clang++" \
         -DCOMPILER_RT_TEST_COMPILER="${patmos-llvm}/bin/clang" \
         -DLLVM_TOOLS_BINARY_DIR="${patmos-llvm}/bin" \
-        -DLLVM_CONFIG_PATH="${patmos-llvm}/bin/llvm-config" \
+        -DLLVM_CMAKE_DIR="${patmos-llvm}/lib/cmake/llvm" \
+        -DLIBXML2_INCLUDE_DIR="${pkgs.lib.getDev pkgs.libxml2}/include/libxml2" \
+        -DLIBXML2_LIBRARY="${pkgs.lib.getLib pkgs.libxml2}/lib/libxml2.${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}" \
         -DCOMPILER_RT_INCLUDE_TESTS=ON \
         -DCOMPILER_RT_TEST_STANDALONE_BUILD_LIBS=OFF
       make -j''${NIX_BUILD_CORES:-1}

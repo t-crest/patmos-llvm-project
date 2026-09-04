@@ -67,7 +67,9 @@
               makeWrapper "${toolchainRoot}/bin/llvm-link" "$out/bin/patmos-llvm-link"
               makeWrapper "${toolchainRoot}/bin/llvm-config" "$out/bin/patmos-llvm-config"
               makeWrapper "${toolchainRoot}/bin/llvm-objdump" "$out/bin/patmos-llvm-objdump"
-              makeWrapper "${toolchainRoot}/bin/llvm-lit" "$out/bin/patmos-llvm-lit"
+              if [ -x "${toolchainRoot}/bin/llvm-lit" ]; then
+                makeWrapper "${toolchainRoot}/bin/llvm-lit" "$out/bin/patmos-llvm-lit"
+              fi
               makeWrapper "${toolchainRoot}/bin/lld" "$out/bin/patmos-lld"
               makeWrapper "${patmos-simulator}/bin/pasim" "$out/bin/patmos-pasim"
 

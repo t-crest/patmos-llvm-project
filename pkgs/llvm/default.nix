@@ -104,7 +104,7 @@ in rec {
         "-DLLVM_ENABLE_PEDANTIC=OFF"
         "-DLLVM_ENABLE_LIBPFM=OFF"
         "-DLLVM_BUILD_INSTRUMENTED_COVERAGE=OFF"
-        "-DLLVM_INSTALL_UTILS=OFF"
+        "-DLLVM_INSTALL_UTILS=ON"
         "-DCLANG_INCLUDE_TESTS=OFF"
         # Ensure MachineInstr::dump() is available even in Release builds
         "-DLLVM_ENABLE_DUMP=ON"
@@ -138,7 +138,7 @@ in rec {
 
     installPhase = ''
       mkdir -p $out
-      cp -r build/* $out/
+      cmake --install build --prefix "$out"
       ccache --show-stats || true
     '';
   };
