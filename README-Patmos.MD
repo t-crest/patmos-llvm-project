@@ -142,3 +142,20 @@ make
 ```
 
 This compiles std into bitcode files, such that they are ready to publish with the compiler.
+
+### Compiling and inspecting output
+
+```zsh
+# Compile the code
+./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -c ./fibonacci-test.cpp -o ./fibonacci-test.o
+
+# Dump the object code
+./build/bin/llvm-objdump -d ./fibonacci-test.o
+
+# Generate the .pml file for Platin
+# Important: use -mserialize-pml, not -mserialize
+./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -mserialize-pml=fibonacci.pml -c ./fibonacci-test.cpp -o fibonacci.out
+
+# Run Platin
+./.platin-inst/bin/platin wcet -i fibonacci.pml -b fibonacci.out -e main --report --disable-ait --objdump-command ./build/bin/llvm-objdump
+```
