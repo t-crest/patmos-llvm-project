@@ -122,9 +122,10 @@ If you need to work on Compiler-RT, you can do the following (from the repo root
 ```zsh
 mkdir -p build-compiler-rt
 cmake -S compiler-rt -B build-compiler-rt \
-  -DCMAKE_TOOLCHAIN_FILE=compiler-rt/cmake/patmos-clang-toolchain.cmake \
-  -DCMAKE_PROGRAM_PATH="../build/bin" \
-  -DLLVM_CMAKE_DIR="../build/lib/cmake/llvm" \
+  -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$(pwd)/compiler-rt/cmake/patmos-clang-toolchain.cmake" \
+  -DCMAKE_PROGRAM_PATH="$(pwd)/build/bin" \
+  -DLLVM_CMAKE_DIR="$(pwd)/build/lib/cmake/llvm" \
   -DCOMPILER_RT_INCLUDE_TESTS=ON
 cmake --build build-compiler-rt -j
 ```
@@ -147,15 +148,15 @@ This compiles std into bitcode files, such that they are ready to publish with t
 
 ```zsh
 # Compile the code
-./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -c ./fibonacci-test.cpp -o ./fibonacci-test.o
+./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -c ./fibonacci.cpp -o ./fibonacci.o
 
 # Dump the object code
-./build/bin/llvm-objdump -d ./fibonacci-test.o
+./build/bin/llvm-objdump -d ./fibonacci.o
 
 # Generate the .pml file for Platin
 # Important: use -mserialize-pml, not -mserialize
-./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -mserialize-pml=fibonacci.pml -c ./fibonacci-test.cpp -o fibonacci.out
+./build/bin/clang++ --target=patmos-unknown-unknown-elf -O2 -mserialize-pml=fibonacci.pml -c ./fibonacci.cpp -o fibonacci.out
 
 # Run Platin
-./.platin-inst/bin/platin wcet -i fibonacci.pml -b fibonacci.out -e main --report --disable-ait --objdump-command ./build/bin/llvm-objdump
+./platin-inst/bin/platin wcet -i fibonacci.pml -b fibonacci.out -e main --report --disable-ait --objdump-command ./build/bin/llvm-objdump
 ```

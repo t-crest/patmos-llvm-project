@@ -1228,6 +1228,9 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   // Emit the exit block.
   EmitBlock(LoopExit.getBlock(), true);
 
+  // Attach metadata to loop header
+  EmitLoopBounds(LoopHeader.getBlock(), WhileAttrs, true);
+
   // The LoopHeader typically is just a branch if we skipped emitting
   // a branch, try to erase it.
   if (!EmitBoolCondBranch) {
@@ -1261,6 +1264,9 @@ void CodeGenFunction::EmitDoStmt(const DoStmt &S,
     RunCleanupsScope BodyScope(*this);
     EmitStmt(S.getBody());
   }
+
+  // Attach metadata to loop header
+  EmitLoopBounds(LoopBody, DoAttrs, false);
 
   EmitBlock(LoopCond.getBlock());
 
@@ -1410,6 +1416,9 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
     if (auto *CondI = dyn_cast<llvm::Instruction>(BoolCondVal))
       addInstToNewSourceAtom(CondI, nullptr);
     addInstToNewSourceAtom(I, nullptr);
+
+    // Attach metadata to loop header
+    EmitLoopBounds(CondBlock, ForAttrs, true);
 
     if (ExitBlock != LoopExit.getBlock()) {
       EmitBlock(ExitBlock);
