@@ -121,6 +121,17 @@ static bool useFramePointerForTargetByDefault(const llvm::opt::ArgList &Args,
   case llvm::Triple::mips64el:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
+  // Reserving $r30 as a frame pointer costs stack traffic and
+  // instruction-cache footprint in every non-trivial function,
+  // so drop it whenever optimizations are enabled.
+  // Holy f- it was annoying to see and understand where the performance loss
+  // came from. Remove this comment if this somehow becomes an official thing
+  // from which I will have to apologise for my language and as you can see from
+  // git blame it was me! Christine! Who is a fool, waiting hours for tests to
+  // finish and keep myself sane.
+  // Remove the comment for real if it gets like *official official* or it is
+  // https://www.youtube.com/watch?v=k238XpMMn38 ... too bad!
+  case llvm::Triple::patmos:
     return !clang::driver::tools::areOptimizationsEnabled(Args);
   default:
     break;
