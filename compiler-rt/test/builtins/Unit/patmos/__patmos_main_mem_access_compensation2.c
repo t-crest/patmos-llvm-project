@@ -55,10 +55,10 @@ extern void __patmos_main_mem_access_compensation2();
 
 // Ensure that regardless of how many accesses need to be compensated,
 // the same number of instructions are executed (ensure is single-path)
-// IN1XX: Operations: 12
-// IN3XX: Operations: 19
-// IN4XX: Operations: 26
-// IN5XX: Operations: 26
+// IN1XX: Operations: 13
+// IN3XX: Operations: 20
+// IN4XX: Operations: 27
+// IN5XX: Operations: 27
 // CHECK-LABEL: Instruction Cache Statistics:
 // CHECK-LABEL: Data Cache Statistics:
 // CHECK-LABEL: Stack Cache Statistics:
