@@ -1114,7 +1114,7 @@ void CodeGenFunction::EmitLoopBounds(
     // where EmitLoopBounds is called (the back-edge branch to do.cond is only
     // added later by EmitBlock). Guard against a null terminator so we don't
     // dereference a null pointer inside LLVM's ilist (LLVM 22).
-    if (auto *Term = BB->getTerminator()) {
+    if (auto *Term = BB->getTerminatorOrNull()) {
       call_inst->insertBefore(Term->getIterator());
     } else {
       call_inst->insertInto(BB, BB->end());
