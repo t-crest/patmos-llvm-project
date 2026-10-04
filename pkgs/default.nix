@@ -69,13 +69,19 @@ in {
     patmos = self.prefixed.packages.patmos-prefixed;
     default = self.prefixed.packages.patmos-prefixed;
   };
-  checks = {
-    patmos-llvm-tests = self.llvm.checks.patmos-llvm-tests;
-    patmos-clang-tests = self.llvm.checks.patmos-clang-tests;
-    patmos-lld-tests = self.llvm.checks.patmos-lld-tests;
-    patmos-compiler-rt-tests = self.compiler-rt.checks.patmos-compiler-rt-tests;
-    patmos-package-tests = self.prefixed.checks.patmos-package-tests;
-  };
+  # The full LLVM/Clang/LLD test trees do not fit the macOS CI runners, so
+  # the per-suite derivations are checks on Linux only; compiler-rt and the
+  # packaged-toolchain smoke test run everywhere.
+  checks =
+    {
+      patmos-compiler-rt-tests = self.compiler-rt.checks.patmos-compiler-rt-tests;
+      patmos-package-tests = self.prefixed.checks.patmos-package-tests;
+    }
+    // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+      patmos-llvm-tests = self.llvm.checks.patmos-llvm-tests;
+      patmos-clang-tests = self.llvm.checks.patmos-clang-tests;
+      patmos-lld-tests = self.llvm.checks.patmos-lld-tests;
+    };
   devShells = rec {
     default = (pkgs.mkShell.override {stdenv = pkgs.clangStdenv;}) {
       buildInputs = [

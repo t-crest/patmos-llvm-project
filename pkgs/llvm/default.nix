@@ -216,6 +216,7 @@ in rec {
         cmake --build build --target ${testTargets} --parallel "$CORES"
       '';
 
+      # A failing test fails the derivation; results are never swallowed.
       checkPhase = ''
         export PASIM="${simulator}/bin/pasim"
         export PATH="${simulator}/bin:$PATH"
