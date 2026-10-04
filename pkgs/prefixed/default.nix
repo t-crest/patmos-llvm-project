@@ -92,4 +92,49 @@ in {
     patmos-prefixed-release = prefixedRelease;
     patmos-prefixed = prefixedRelease;
   };
+
+  # Smoke-test the packaged toolchain: compile a real program with
+  # patmos-clang (driver, newlib sysroot, crt0, compiler-rt, lld) and run it
+  # under pasim, checking the program's exit code comes back. Full log in $out.
+  checks.patmos-package-tests = pkgs.stdenv.mkDerivation {
+    name = "patmos-package-tests-${system}";
+    dontUnpack = true;
+    nativeBuildInputs = [prefixedRelease];
+
+    # Without this, stdenv never runs checkPhase.
+    doCheck = true;
+
+    checkPhase = ''
+      set -o pipefail
+      export PASIM="${patmos-simulator}/bin/pasim"
+      export PATH="${patmos-simulator}/bin:$PATH"
+      cat > hello.c <<'EOF'
+#include <stdio.h>
+
+int main(void) {
+  printf("hello patmos\n");
+  return 42;
+}
+EOF
+      echo "Compiling with patmos-clang..." | tee patmos-package-tests.log
+      patmos-clang hello.c -o hello.elf 2>&1 | tee -a patmos-package-tests.log
+      echo "Running under pasim (expecting exit code 42 from main)..." | tee -a patmos-package-tests.log
+      set +e
+      pasim hello.elf >pasim-run.log 2>&1
+      status=$?
+      set -e
+      if [ "$status" -ne 42 ]; then
+        echo "ERROR: pasim exited with $status, expected 42" | tee -a patmos-package-tests.log
+        cat pasim-run.log | tee -a patmos-package-tests.log
+        exit 2
+      fi
+      echo "exit code $status matches main's return value" | tee -a patmos-package-tests.log
+      cat pasim-run.log >> patmos-package-tests.log || true
+    '';
+
+    installPhase = ''
+      mkdir -p $out
+      cp patmos-package-tests.log "$out/"
+    '';
+  };
 }

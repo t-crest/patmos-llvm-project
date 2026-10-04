@@ -77,6 +77,36 @@ runs:
           -DLLVM_BUILD_INSTRUMENTED_COVERAGE=false \
           -DLLVM_INSTALL_UTILS=false \
           -DLLVM_ENABLE_ASSERTIONS=$ENABLE_ASSERTIONS
+    - name: Validate build configuration
+      # Fail fast on a misconfigured build instead of after hours of compiling.
+      working-directory: ${{env.BUILD_PATH}}
+      shell: bash
+      env:
+        ENABLE_TESTS: ${{ inputs.enable-tests }}
+      run: |
+        set -euo pipefail
+        if [ ! -f Makefile ]; then
+          echo "ERROR: CMake configure did not generate a Makefile"
+          exit 2
+        fi
+        make -n >/dev/null
+        if [ "$ENABLE_TESTS" = "true" ]; then
+          for flag in LLVM_INCLUDE_TESTS CLANG_INCLUDE_TESTS; do
+            if ! grep -q "^${flag}:BOOL=ON$" CMakeCache.txt; then
+              echo "ERROR: tests are enabled but CMake cached ${flag} != ON"
+              grep "^${flag}" CMakeCache.txt || true
+              exit 2
+            fi
+          done
+          # Dry-run the targets the test steps build, so a stale target name
+          # fails here instead of hours into the build.
+          for target in UnitTests clang-test-depends lld; do
+            if ! make -n "$target" >/dev/null 2>&1; then
+              echo "ERROR: test build requested but make target '$target' does not exist"
+              exit 2
+            fi
+          done
+        fi
     - name: LLD Tests
       if: inputs.enable-tests == 'true'
       uses: ./.github/actions/build-test

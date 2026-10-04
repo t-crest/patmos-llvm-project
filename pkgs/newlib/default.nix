@@ -116,7 +116,8 @@ in {
 
     buildPhase = ''
       runHook preBuild
-      make -C "$NIX_BUILD_TOP/$sourceRoot/$newlibBuildDir" -j''${NIX_BUILD_CORES:-1}
+      # Full send: every host core (see pkgs/llvm/default.nix).
+      make -C "$NIX_BUILD_TOP/$sourceRoot/$newlibBuildDir" -j"$(nproc)"
       runHook postBuild
     '';
 

@@ -143,6 +143,30 @@ runs:
           -DLLVM_PARALLEL_COMPILE_JOBS=$PARALLELISM \
           -DLLVM_PARALLEL_LINK_JOBS=$PARALLELISM
 
+    - name: Validate build configuration
+      # Fail fast on a misconfigured build instead of after hours of compiling.
+      shell: bash
+      working-directory: ${{ env.BUILD_PATH }}
+      env:
+        ENABLE_TESTS: ${{ inputs.enable-tests }}
+      run: |
+        set -euo pipefail
+        if [ ! -f build.ninja ]; then
+          echo "ERROR: CMake configure did not generate a Ninja build tree"
+          exit 2
+        fi
+        ninja -n >/dev/null
+        if [ "$ENABLE_TESTS" = "true" ]; then
+          # These options are what generate the lit suites and check-* targets.
+          for flag in LLVM_INCLUDE_TESTS CLANG_INCLUDE_TESTS; do
+            if ! grep -q "^${flag}:BOOL=ON$" CMakeCache.txt; then
+              echo "ERROR: tests are enabled but CMake cached ${flag} != ON"
+              grep "^${flag}" CMakeCache.txt || true
+              exit 2
+            fi
+          done
+        fi
+
     - run: echo "::group::Build LLVM with Ninja"
       shell: bash
 

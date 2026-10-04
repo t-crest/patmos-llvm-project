@@ -56,6 +56,7 @@ jobs:
           default-target: x86_64-unknown-linux-gnu
           compiler-rt-tests: 'X86_64LinuxConfig'
           enable-package: false
+          enable-tests: true
       - name: Finalize LLVM Build
         working-directory: ${{env.BUILD_PATH}}
         run: make $J llc llvm-link clang llvm-config llvm-objdump opt
@@ -71,6 +72,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Cache CMake/Ninja build state (GitHub)
+        # act has no cache backend; skip under act (act sets ACT=true) so the
+        # job stays runnable locally without patching the runner environment.
+        if: ${{ !env.ACT }}
         uses: actions/cache@v4
         with:
           path: |
@@ -91,7 +95,7 @@ jobs:
           include-only: "."
           compiler-rt-tests: X86_64LinuxConfig
           enable-package: false
-          enable-tests: false
+          enable-tests: true
           parallelism: '3'
 
 
@@ -229,6 +233,9 @@ jobs:
         uses: ./.github/actions/build-test-all
         with:
           enable-assertions: true
+          # Run the README-Maintainers test sequence (LLVM, Clang, LLD,
+          # compiler-rt) before anything gets packaged.
+          enable-tests: true
           artifact-name: package-${{matrix.platform}}
 
   test-benchmarks:

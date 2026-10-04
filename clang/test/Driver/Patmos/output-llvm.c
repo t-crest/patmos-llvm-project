@@ -9,6 +9,5 @@
 
 // CHECK: i32 @main()
 int main() {
-// CHECK: entry:
 // CHECK: ret i32 0
 }

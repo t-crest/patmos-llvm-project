@@ -20,6 +20,14 @@
           system
         } or (throw "Unsupported system: ${system}");
     };
+    # The release tarball ships FHS binaries. Patch the ELF interpreter and
+    # library search paths so the simulator also runs on non-FHS systems
+    # (e.g. NixOS build sandboxes), not just on glibc distros and macOS.
+    nativeBuildInputs = pkgs.lib.optional pkgs.stdenv.isLinux pkgs.autoPatchelfHook;
+    # pkgs.libelf is GNU libelf (SONAME libelf.so.0); the prebuilt simulator
+    # needs elfutils' libelf.so.1.
+    buildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [pkgs.gcc.cc.lib pkgs.glibc pkgs.elfutils];
+
     buildPhase = ''
       mkdir -p $out/bin
       tar -xzf $src -C $out
