@@ -261,4 +261,8 @@ in rec {
   # Single-file export consumed by pkgs/toolchain to compile libsyms.o
   # when assembling the packaged runtime lib directory.
   sources.patmos-libsyms-ll = "${filteredRepoSrc}/llvm/cmake/platforms/patmos-libsyms.ll";
+
+  # LLVM's bundled lit, consumed by pkgs/cet: the CET suite's config
+  # imports lit.llvm modules that only LLVM's own lit provides.
+  sources.llvm-lit = "${filteredRepoSrc}/llvm/utils/lit/lit.py";
 }

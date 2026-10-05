@@ -15,7 +15,13 @@
     nixpkgs,
     flake-utils,
   }:
-    flake-utils.lib.eachDefaultSystem (
+    # Only the systems the patmos-simulator prebuilt tarballs exist for;
+    # eachDefaultSystem would make the other nine systems throw at eval.
+    flake-utils.lib.eachSystem [
+      "x86_64-linux"
+      "x86_64-darwin"
+      "aarch64-darwin"
+    ] (
       system: let
         pkgs = import nixpkgs {inherit system;};
         packages = import ./pkgs {inherit pkgs system;};

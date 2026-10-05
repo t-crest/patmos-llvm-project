@@ -49,6 +49,12 @@
       patmos-compiler-rt-tests = compiler-rt.checks.patmos-compiler-rt-tests;
       patmos-package-tests = prefixed.checks.patmos-package-tests;
     };
+    cet = import ./cet {
+      inherit pkgs system;
+      patmos-prefixed = prefixed.packages.patmos-prefixed;
+      patmos-simulator = simulator.packages.patmos-simulator;
+      llvm-lit = llvm.sources.llvm-lit;
+    };
   };
 in {
   packages = {
@@ -64,6 +70,8 @@ in {
     patmos-bin-release = self.binary.packages.patmos-bin-release;
     patmos-prefixed = self.prefixed.packages.patmos-prefixed;
     patmos-tarball = self.tarball.packages.patmos-tarball;
+    # Status only, never a gate: not in checks on purpose.
+    patmos-cet-status = self.cet.packages.patmos-cet-status;
     patmos-prefixed-src = self.prefixed.packages.patmos-prefixed-src;
     patmos-prefixed-release = self.prefixed.packages.patmos-prefixed-release;
     patmos = self.prefixed.packages.patmos-prefixed;

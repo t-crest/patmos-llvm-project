@@ -16,9 +16,9 @@
     sha256 = "17sc9zb8bj4ly37mm18r3dn8jjip5bfgaqaqqyb6nd2h7lsqa756";
   };
 in {
-  # Status check, NOT a gate. Deliberately kept out of checks and out of
-  # the tarball gate: this derivation may fail, and the CI step running
-  # it carries continue-on-error, so failures show as a red step while
+  # Status check, not a gate. Kept out of checks and out of the tarball
+  # gate on purpose: this derivation may fail, and the CI step running it
+  # carries continue-on-error, so failures show as a red step while
   # testing and packaging stay green.
   packages.patmos-cet-status = pkgs.stdenv.mkDerivation {
     name = "patmos-cet-status-${system}";

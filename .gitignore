@@ -113,3 +113,6 @@ devenv.local.yaml
 
 # pre-commit
 .pre-commit-config.yaml
+
+# Patmos CET test suite
+/patmos-cet-test-suite*

@@ -108,38 +108,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: namespace-profile-llvm
-            cc: clang
-            cxx: clang++
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
             # Tweak it as required, it should be high enough to speed up, but not too high
             # to crash due to out of memory issues.
-            parallelism: '8'
+            parallelism: '4'
 
     env:
       CC: ${{matrix.cc}}
       CXX: ${{matrix.cxx}}
 
     steps:
-      - name: Checkout with Namespace Git mirror
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
-          fetch-depth: 10
-      - name: Checkout (GitHub-hosted runners)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache build state (Namespace cache volume)
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          path: |
-            ${{ env.BUILD_PATH }}/
-            ${{ env.COMPILER_RT_BUILD_PATH }}/
-            ${{ env.NEWLIB_BUILD_PATH }}/
-            ${{ env.BENCH_BUILD_PATH }}/
-            ~/.ccache/
       - name: Cache build state (GitHub cache)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
         uses: actions/cache@v4
         with:
           path: |
@@ -186,36 +169,15 @@ jobs:
           - platform: macos-14 # ARM
             cc: clang
             cxx: clang++
-          # TODO: Re-enable Namespace CI once the LLVM build is stable enough.
-          # For now it is just wasting resources and making it harder to identify issues in the CI.
-          #- platform: namespace-profile-llvm
-          #  cc: clang
-          #  cxx: clang++
-          
+
     env:
       CC: ${{matrix.cc}}
       CXX: ${{matrix.cxx}}
-    
+
     steps:
-      - name: Checkout with Namespace Git mirror
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
-          fetch-depth: 10
-      - name: Checkout (GitHub-hosted runners)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache build state (Namespace cache volume)
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          path: |
-            ${{ env.BUILD_PATH }}/
-            ${{ env.COMPILER_RT_BUILD_PATH }}/
-            ${{ env.NEWLIB_BUILD_PATH }}/
-            ~/.ccache/
       - name: Cache build state (GitHub cache)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
         uses: actions/cache@v4
         with:
           path: |
@@ -257,33 +219,15 @@ jobs:
           - platform: macos-14 # ARM
             cc: clang
             cxx: clang++
-          - platform: namespace-profile-llvm
-            cc: clang
-            cxx: clang++
-    needs: [package-patmos]     
+    needs: [package-patmos]
     env:
       CC: ${{matrix.cc}}
       CXX: ${{matrix.cxx}}
-    
+
     steps:
-      - name: Checkout with Namespace Git mirror
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
-          fetch-depth: 10
-      - name: Checkout (GitHub-hosted runners)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache benchmark/build state (Namespace cache volume)
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          path: |
-            ${{ env.BUILD_PATH }}/
-            ${{ env.BENCH_BUILD_PATH }}/
-            ~/.ccache/
       - name: Cache benchmark/build state (GitHub cache)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
         uses: actions/cache@v4
         with:
           path: |
@@ -322,9 +266,6 @@ jobs:
           - platform: macos-14 # ARM
             cc: clang
             cxx: clang++
-          - platform: namespace-profile-llvm
-            cc: clang
-            cxx: clang++
     # Run after the test jobs finish
     # Temporarily remove test-benchmarks, due to benchmarking tools are way out of date.
     # Todo: Reintroduce it after the benchmarking tools are updated and the benchmarks are fixed to work with the new LLVM version.
@@ -336,27 +277,11 @@ jobs:
       PATMOS_TRIPLE: patmos-unknown-unknown-elf
       CC: ${{matrix.cc}}
       CXX: ${{matrix.cxx}}
-    
+
     steps:
-      - name: Checkout with Namespace Git mirror
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
-          fetch-depth: 1
-      - name: Checkout (GitHub-hosted runners)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache toolchains/build state (Namespace cache volume)
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          path: |
-            ${{ env.BUILD_PATH }}/
-            ${{ env.COMPILER_RT_BUILD_PATH }}/
-            ${{ env.NEWLIB_BUILD_PATH }}/
-            ~/.ccache/
       - name: Cache toolchains/build state (GitHub cache)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
         uses: actions/cache@v4
         with:
           path: |
@@ -391,9 +316,9 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - platform: namespace-profile-llvm
-            cc: clang
-            cxx: clang++
+          - platform: ubuntu-latest
+            cc: gcc
+            cxx: g++
             parallelism: '4'
     # Temporarily remove test-benchmarks, due to benchmarking tools are way out of date.
     # Todo: Reintroduce it after the benchmarking tools are updated and the benchmarks are fixed to work with the new LLVM version.
@@ -405,25 +330,9 @@ jobs:
       CXX: ${{matrix.cxx}}
 
     steps:
-      - name: Checkout with Namespace Git mirror
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
-          fetch-depth: 1
-      - name: Checkout (GitHub-hosted runners)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Cache toolchains/build state (Namespace cache volume)
-        if: contains(matrix.platform, 'namespace-profile')
-        uses: namespacelabs/nscloud-cache-action@v1
-        with:
-          path: |
-            ${{ env.BUILD_PATH }}/
-            ${{ env.COMPILER_RT_BUILD_PATH }}/
-            ${{ env.NEWLIB_BUILD_PATH }}/
-            ~/.ccache/
       - name: Cache toolchains/build state (GitHub cache)
-        if: ${{ !contains(matrix.platform, 'namespace-profile') }}
         uses: actions/cache@v4
         with:
           path: |

@@ -17,11 +17,13 @@ echo "ok"
 
 echo "== Workflow YAML (actionlint) =="
 # Only our workflows: the inherited upstream LLVM workflows are not ours
-# to fix and fail lint on their own terms.
+# to fix. Shellcheck is disabled: the workflows use deliberate
+# unquoted-variable word splitting ($J, $CHECKS), which shellcheck flags
+# as SC2086 noise. The derivation phases get their own bash -n sweep below.
 if command -v actionlint > /dev/null 2>&1; then
-  actionlint .github/workflows/patmos-ci.yml .github/workflows/patmos-ci-nix.yml
+  actionlint -shellcheck= .github/workflows/patmos-ci.yml .github/workflows/patmos-ci-nix.yml
 else
-  nix run nixpkgs#actionlint -- \
+  nix run nixpkgs#actionlint -- -shellcheck= \
     .github/workflows/patmos-ci.yml .github/workflows/patmos-ci-nix.yml
 fi
 echo "ok"
@@ -31,7 +33,7 @@ echo "== Shell syntax of every derivation phase (bash -n) =="
 # machines); python drives bash -n over each phase string.
 SYSTEM=$(nix eval --raw --impure --expr 'builtins.currentSystem' --accept-flake-config)
 for set in packages checks; do
-  nix eval --json ".$set.$SYSTEM" --accept-flake-config \
+  nix eval --json ".#$set.$SYSTEM" --accept-flake-config \
     --apply 's: builtins.mapAttrs (k: v: {
       configurePhase = v.configurePhase or null;
       buildPhase = v.buildPhase or null;
@@ -58,7 +60,9 @@ done
 echo "ok"
 
 echo "== Evaluate every flake output, no build =="
-nix flake check --no-build --show-trace --accept-flake-config
+# --all-systems: eval errors on the other platform surface here, on the
+# laptop, instead of hours into that platform's CI runner.
+nix flake check --no-build --all-systems --show-trace --accept-flake-config
 echo "ok"
 
 echo "Preflight passed."
