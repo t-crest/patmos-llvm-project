@@ -35,32 +35,12 @@ env:
   LLD_PATH: lld
 
 jobs:
-  test-non-patmos:
-    name: Test Non-Patmos
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-    env: 
-      CC: gcc
-      CXX: g++
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/install-dependencies
-      - name: Build and Run LLVM Unit and Regression Tests
-        uses: ./.github/actions/build-test-all
-        with:
-          targets: X86
-          enable-assertions: true
-          exclude-reg: "(Clang :: Lexer/case-insensitive-include.c)|(Clang :: Lexer/case-insensitive-system-include.c)|(Clang :: Modules/inferred-framework-case.m)|(Clang :: Preprocessor/nonportable-include-with-hmap.c)"
-          include-only: "."
-          default-target: x86_64-unknown-linux-gnu
-          compiler-rt-tests: 'X86_64LinuxConfig'
-          enable-package: false
-          enable-tests: true
-      - name: Finalize LLVM Build
-        working-directory: ${{env.BUILD_PATH}}
-        run: make $J llc llvm-link clang llvm-config llvm-objdump opt
-  
+  # test-non-patmos (the make-based X86 job) was removed: the Makefile
+  # generator cannot build this tree (BLAKE3 cross-directory object
+  # library, see the Validate build configuration gate), and after
+  # migration it would have been an exact duplicate of the cmake+ninja
+  # job below.
+
   test-non-patmos-cmake:
     name: Test Non-Patmos (CMake + Ninja)
     runs-on: ubuntu-22.04
@@ -185,14 +165,14 @@ jobs:
             ${{ env.COMPILER_RT_BUILD_PATH }}/
             ${{ env.NEWLIB_BUILD_PATH }}/
             ~/.ccache/
-          key: ${{ runner.os }}-${{ matrix.platform }}-package-make-${{ hashFiles('**/CMakeLists.txt', '**/configure', '.github/actions/build-test-all/action.yml') }}
+          key: ${{ runner.os }}-${{ matrix.platform }}-package-cmake-${{ hashFiles('**/CMakeLists.txt', '**/configure', '.github/actions/build-cmake-ninja/action.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.platform }}-package-make-
             ${{ runner.os }}-${{ matrix.platform }}-
             ${{ runner.os }}-
       - uses: ./.github/actions/install-dependencies
-      - name: Build with Make, Run LLVM Unit and Regression Tests, and Package
-        uses: ./.github/actions/build-test-all
+      - name: Build, Test, and Package
+        uses: ./.github/actions/build-cmake-ninja
         with:
           enable-assertions: true
           # Run the README-Maintainers test sequence (LLVM, Clang, LLD,
@@ -269,7 +249,7 @@ jobs:
     # Run after the test jobs finish
     # Temporarily remove test-benchmarks, due to benchmarking tools are way out of date.
     # Todo: Reintroduce it after the benchmarking tools are updated and the benchmarks are fixed to work with the new LLVM version.
-    needs: [package-patmos, test-non-patmos]
+    needs: [package-patmos, test-non-patmos-cmake]
     # Run only if this was triggered by a tag
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     env:
@@ -289,14 +269,14 @@ jobs:
             ${{ env.COMPILER_RT_BUILD_PATH }}/
             ${{ env.NEWLIB_BUILD_PATH }}/
             ~/.ccache/
-          key: ${{ runner.os }}-${{ matrix.platform }}-release-make-${{ hashFiles('**/CMakeLists.txt', '**/configure', '.github/actions/build-test-all/action.yml') }}
+          key: ${{ runner.os }}-${{ matrix.platform }}-release-cmake-${{ hashFiles('**/CMakeLists.txt', '**/configure', '.github/actions/build-cmake-ninja/action.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.platform }}-release-make-
             ${{ runner.os }}-${{ matrix.platform }}-
             ${{ runner.os }}-
       - uses: ./.github/actions/install-dependencies
       - name: Build LLVM, Compiler-RT, Newlib, and Package
-        uses: ./.github/actions/build-test-all
+        uses: ./.github/actions/build-cmake-ninja
         with:
           # Compiler currently doesn't work without assertions enabled
           enable-assertions: true

@@ -451,7 +451,9 @@ runs:
       if: always() && inputs.enable-package == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: patmos-llvm-alpha-${{ github.sha }}-${{ inputs.default-target }}
+        # Fall back to the alpha naming when the caller gives no name, so
+        # consumers like test-benchmarks can download by artifact-name.
+        name: ${{ inputs.artifact-name || format('patmos-llvm-alpha-{0}-{1}', github.sha, inputs.default-target) }}
         path: ${{ env.BUILD_PATH }}/patmos-unknown-unknown-elf/package-temp/patmos-llvm-*.tar.gz
 
 
