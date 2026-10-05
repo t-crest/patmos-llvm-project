@@ -81,6 +81,11 @@ in rec {
         -DCMAKE_INSTALL_PREFIX="$out" \
         -DCMAKE_TOOLCHAIN_FILE=../compiler-rt/cmake/patmos-clang-toolchain.cmake \
         -DCMAKE_C_COMPILER="${patmos-llvm}/bin/clang" \
+        # GNU ar, not the darwin cctools one as llvm-link cannot merge a
+        # BSD-format archive into librt.a. Upstream CI puts binutils' ar
+        # first in PATH on macOS for the same reason.
+        -DCMAKE_AR="${pkgs.binutils}/bin/ar" \
+        -DCMAKE_RANLIB="${pkgs.binutils}/bin/ranlib" \
         -DCMAKE_CXX_COMPILER="${patmos-llvm}/bin/clang++" \
         -DCOMPILER_RT_TEST_COMPILER="${patmos-llvm}/bin/clang" \
         -DLLVM_TOOLS_BINARY_DIR="${patmos-llvm}/bin" \
